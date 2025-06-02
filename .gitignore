@@ -1,0 +1,69 @@
+# ----------------- PYTHON / FLASK -----------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+instance/
+*.egg-info/
+*.egg
+
+# Environnements virtuels
+.env/
+.venv/
+env/
+venv/
+ENV/
+
+# Fichiers de configuration secrets
+.env
+.env.*
+!.env.example     # <-- On laisse un exemple propre
+secrets.*
+config.py         # Si tu y mets des secrets
+
+# Flask-Migrate / Alembic
+migrations/
+alembic.ini
+
+# ----------------- POSTGRES / BDD -----------------
+# Volume de données Docker/Postgres
+db_data/
+*.log
+
+# ----------------- DOCKER -----------------
+*.pid
+docker-compose.override.yml
+# Images/volumes temporaires
+*.bak
+
+# ----------------- VUE.JS / FRONTEND -----------------
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Builds
+/dist/
+/build/
+/coverage/
+
+# Local env
+*.local
+
+# ----------------- IDE / SYSTEME -----------------
+# VS Code, PyCharm, WebStorm, etc.
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Mac/Windows
+.DS_Store
+Thumbs.db
+
+# Autres fichiers temporaires
+*.swp
+*.tmp

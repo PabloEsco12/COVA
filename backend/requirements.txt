@@ -1,0 +1,16 @@
+# backend/requirements.txt
+Flask==2.3.3
+Flask-SQLAlchemy==3.0.5
+Flask-Migrate==4.0.4
+Flask-JWT-Extended==4.6.0
+python-dotenv==1.0.1
+psycopg2-binary==2.9.9        # client Postgres
+passlib[bcrypt]==1.7.4        # hash mot de passe
+cryptography==42.0.5          # clés RSA/ECC
+Flask-Bcrypt
+PyJWT>=2.8.0
+marshmallow==3.21.1
+marshmallow-sqlalchemy==1.0.0
+pyotp
+qrcode
+Pillow
