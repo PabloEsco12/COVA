@@ -13,7 +13,8 @@
 <script setup>
 import Sidebar from './Sidebar.vue'
 import DashboardHeader from './DashboardHeader.vue'
-import { useRouter, onMounted } from 'vue-router'
+import { useRouter } from 'vue-router'
+import { onMounted } from 'vue'   // <-- doit venir de 'vue'
 
 const router = useRouter()
 onMounted(() => {

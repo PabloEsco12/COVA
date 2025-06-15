@@ -8,21 +8,25 @@ import DashboardHome from '../components/DashboardHome.vue'
 import Messages from '../components/Messages.vue'
 import Contacts from '../components/Contacts.vue'
 import Profile from '../components/Profile.vue'
-// Ajoute les autres imports si besoin
+import ResetPassword from '../components/ResetPassword.vue'
+import NewPassword from '../components/NewPassword.vue'
+// Ajoute ici Devices, Settings, etc si tu les crées
 
 const routes = [
   { path: '/', redirect: '/login' },
   { path: '/login', component: Login },
   { path: '/register', component: Register },
+  { path: '/reset-password', component: ResetPassword },
+  { path: '/new-password', component: NewPassword },
   {
     path: '/dashboard',
     component: Dashboard,
     children: [
       { path: '', component: DashboardHome }, // /dashboard
-      { path: 'messages', component: Messages },
-      { path: 'contacts', component: Contacts },
-      { path: 'profile', component: Profile },
-      // Ajoute d'autres routes enfants ici (devices, settings, etc)
+      { path: 'messages', component: Messages }, // /dashboard/messages
+      { path: 'contacts', component: Contacts }, // /dashboard/contacts
+      { path: 'profile', component: Profile }, // /dashboard/profile
+      // Tu peux ajouter ici { path: 'devices', component: Devices }, etc.
     ]
   }
 ]
@@ -32,13 +36,14 @@ const router = createRouter({
   routes,
 })
 
-// PROTECTION : Interdit d'aller sur /dashboard si pas connecté
+// Interdiction d’accès au dashboard si non connecté
 router.beforeEach((to, from, next) => {
-  const publicPages = ['/login', '/register']
-  const authRequired = !publicPages.includes(to.path) && to.path.startsWith('/dashboard')
+  const publicPages = ['/login', '/register', '/reset-password', '/new-password']
+  const isPublic = publicPages.includes(to.path)
+  const isDashboard = to.path.startsWith('/dashboard')
   const loggedIn = !!localStorage.getItem('access_token')
 
-  if (authRequired && !loggedIn) {
+  if (isDashboard && !loggedIn) {
     return next('/login')
   }
   next()
