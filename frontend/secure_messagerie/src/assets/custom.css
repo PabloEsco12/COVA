@@ -1,0 +1,48 @@
+/* Customise Bootstrap ici */
+body {
+  background: #f5f7fb;
+  font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+}
+
+.dashboard-layout {
+  background: #f5f7fb;
+}
+
+.card {
+  border-radius: 18px !important;
+  box-shadow: 0 4px 32px 0 rgba(31,38,135,.07);
+}
+
+.sidebar {
+  background: linear-gradient(180deg, #212529 70%, #0d6efd 120%);
+  box-shadow: 2px 0 10px rgba(0,0,0,0.06);
+}
+
+.sidebar .nav-link {
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  transition: background 0.2s;
+}
+
+.sidebar .nav-link.active, .sidebar .nav-link:hover {
+  background: #0d6efd;
+  color: #fff !important;
+}
+
+header {
+  background: #fff;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.dark-mode {
+  background: #181c21 !important;
+  color: #e9ecef !important;
+}
+.dark-mode .card, .dark-mode header {
+  background: #23272c !important;
+  color: #e9ecef !important;
+  border: none;
+}
+.dark-mode .sidebar {
+  background: linear-gradient(180deg, #11131a 60%, #0d6efd 140%);
+}
