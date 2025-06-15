@@ -12,8 +12,10 @@ from datetime import datetime, timedelta
 import pyotp
 from marshmallow import ValidationError
 from .audit_utils import log_action
-from ..utils.email_utils import send_confirm_email
+from ..utils.email_utils import send_confirm_email,send_login_notification
+from ..utils.geoip_utils import geoip_lookup
 import secrets
+import requests
 
 
 auth_bp = Blueprint("auth", __name__)
@@ -90,7 +92,7 @@ def login():
     if not user or not bcrypt.check_password_hash(user.password_hash, password):
         return jsonify({"error": "Identifiants invalides"}), 401
     
-    if user and not user.is_confirmed:
+    if user and not getattr(user, "is_confirmed", True):
         return jsonify({"error": "Compte non confirmé. Vérifie tes emails."}), 403
 
     # 2. Vérifie le TOTP si activé
@@ -130,6 +132,20 @@ def login():
     token_obj = RefreshToken(jti=jti, id_user=user.id_user, expires=datetime.utcnow() + timedelta(days=30))
     db.session.add(token_obj)
     db.session.commit()
+
+    # 6. Notifie l'utilisateur par e-mail avec toutes les infos
+    ip_addr = request.remote_addr
+    ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    user_agent = request.headers.get("User-Agent", "Inconnu")
+    location = geoip_lookup(ip_addr)
+
+    send_login_notification(
+        user.email,
+        ip_addr=ip_addr,
+        ts=ts,
+        user_agent=user_agent,
+        location=location
+    )
 
     return jsonify({
         "access_token": access_token,

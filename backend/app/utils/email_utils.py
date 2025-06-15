@@ -65,7 +65,7 @@ L’équipe SecureChat
         server.send_message(msg)
 
 
-def send_login_notification(dest_email, ip_addr, ts):
+def send_login_notification(dest_email, ip_addr, ts, user_agent=None, location=None):
     SMTP_SERVER = "smtp.gmail.com"
     SMTP_PORT = 465
     SMTP_USER = "covamessages@gmail.com"
@@ -76,11 +76,19 @@ def send_login_notification(dest_email, ip_addr, ts):
     msg["To"] = dest_email
     msg["Subject"] = "Nouvelle connexion à votre compte SecureChat"
 
+    details = f"""Adresse IP : {ip_addr}
+Date et heure : {ts}
+"""
+    if user_agent:
+        details += f"Appareil : {user_agent}\n"
+    if location:
+        details += f"Localisation : {location}\n"
+
     body = f"""Bonjour,
 
-Votre compte SecureChat a été accédé depuis l’adresse IP : {ip_addr}
-Date et heure : {ts}
+Votre compte SecureChat a été accédé avec succès.
 
+{details}
 Si ce n’est pas vous, modifiez immédiatement votre mot de passe !
 
 Cordialement,

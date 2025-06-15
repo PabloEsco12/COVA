@@ -6,6 +6,7 @@ from .extensions import db, migrate, bcrypt, jwt
 from .error_handlers import register_error_handlers
 from . import models  # important : charger les modèles AVANT migrations
 from .routes import register_blueprints
+from flask_cors import CORS
 
 def create_app() -> Flask:
     app = Flask(__name__)
@@ -15,6 +16,8 @@ def create_app() -> Flask:
     migrate.init_app(app, db)
     bcrypt.init_app(app)
     jwt.init_app(app)
+
+    CORS(app, origins=["http://localhost:5173"], supports_credentials=True)
 
     register_error_handlers(app)
     register_blueprints(app)

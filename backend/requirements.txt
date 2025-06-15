@@ -14,3 +14,5 @@ marshmallow-sqlalchemy==1.0.0
 pyotp
 qrcode
 Pillow
+requests>=2.20.0
+flask-cors
