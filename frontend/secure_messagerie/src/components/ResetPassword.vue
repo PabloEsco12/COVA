@@ -36,7 +36,7 @@ async function handleReset() {
   success.value = ''
   loading.value = true
   try {
-    await axios.post('http://localhost:5000/api/reset-password', {
+    await axios.post('http://localhost:5000/api/forgot-password', {
       email: email.value,
     })
     success.value = "Si cet e-mail existe, tu recevras un lien de réinitialisation sous peu."
