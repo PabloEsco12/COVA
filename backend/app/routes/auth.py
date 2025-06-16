@@ -1,6 +1,6 @@
 # backend/app/routes/auth.py
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from ..models import Utilisateur, RefreshToken,EmailConfirmToken
 from ..extensions import db, bcrypt
 from ..schemas import RegisterSchema, LoginSchema
@@ -67,8 +67,9 @@ def register():
     db.session.commit()
 
     # 2. Envoie l’e-mail
-    FRONTEND_URL = "http://localhost:5173/confirm-email/"
-    confirm_link = f"{FRONTEND_URL}{token}"
+    frontend_url = current_app.config.get("FRONTEND_URL", "http://localhost:5173")
+    confirm_link = f"{frontend_url}/confirm-email/{token}"
+    send_confirm_email(user.email, confirm_link)
 
     return jsonify({"message": "Inscription réussie. Un e-mail de confirmation a été envoyé."}), 201
 
