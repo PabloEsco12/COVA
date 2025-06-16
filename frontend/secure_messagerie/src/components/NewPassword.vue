@@ -50,9 +50,8 @@ async function handleNewPassword() {
     return
   }
   try {
-    await axios.post('http://localhost:5000/api/reset-password/confirm', {
-      token: route.query.token,  // ou route.params.token selon ton routing
-      new_password: password.value,
+        await axios.post(`http://localhost:5000/api/reset-password/${route.query.token}`, {
+      password: password.value
     })
     success.value = "Mot de passe modifié. Tu peux te connecter !"
     password.value = password2.value = ''

@@ -61,7 +61,8 @@ def forgot_password():
         db.session.add(reset_token)
         db.session.commit()
 
-        reset_link = url_for("reset.reset_password", token=token, _external=True)
+        FRONTEND_URL = "http://localhost:5173/reset-password/"
+        reset_link = f"{FRONTEND_URL}{token}"
         send_reset_email(user.email, reset_link)
 
         # --- Log l’audit ---
