@@ -1,5 +1,5 @@
 import secrets
-from flask import Blueprint, request, jsonify, url_for
+from flask import Blueprint, request, jsonify, url_for,  current_app
 from datetime import datetime, timedelta
 from ..models import Utilisateur, PasswordResetToken, PasswordResetAttempt
 from ..extensions import db, bcrypt
@@ -61,8 +61,8 @@ def forgot_password():
         db.session.add(reset_token)
         db.session.commit()
 
-        FRONTEND_URL = "http://localhost:5173/reset-password/"
-        reset_link = f"{FRONTEND_URL}{token}"
+        frontend_url = current_app.config.get("FRONTEND_URL", "http://localhost:5173")
+        reset_link = f"{frontend_url}/new-password?token={token}"
         send_reset_email(user.email, reset_link)
 
         # --- Log l’audit ---

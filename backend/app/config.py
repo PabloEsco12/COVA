@@ -25,6 +25,9 @@ class Config:
     # SQLAlchemy
     SQLALCHEMY_DATABASE_URI: str = _get_env("DATABASE_URL")
     SQLALCHEMY_TRACK_MODIFICATIONS: bool = False
+    
+    # Frontend
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 
 def load_config(app) -> None:

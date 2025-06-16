@@ -67,10 +67,10 @@ def register():
     db.session.commit()
 
     # 2. Envoie l’e-mail
-    confirm_link = request.url_root.rstrip("/") + "/api/confirm-email/" + token
-    send_confirm_email(user.email, confirm_link)
+    FRONTEND_URL = "http://localhost:5173/confirm-email/"
+    confirm_link = f"{FRONTEND_URL}{token}"
 
-    return jsonify({"message": f"Inscription réussie, confirme ton e-mail pour activer le compte !"}), 201
+    return jsonify({"message": "Inscription réussie. Un e-mail de confirmation a été envoyé."}), 201
 
 
 @auth_bp.route("/login", methods=["POST"])

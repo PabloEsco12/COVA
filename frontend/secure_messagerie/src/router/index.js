@@ -10,6 +10,7 @@ import Contacts from '../components/Contacts.vue'
 import Profile from '../components/Profile.vue'
 import ResetPassword from '../components/ResetPassword.vue'
 import NewPassword from '../components/NewPassword.vue'
+import ConfirmEmail from '../components/ConfirmEmail.vue'
 // Ajoute ici Devices, Settings, etc si tu les crées
 
 const routes = [
@@ -26,6 +27,7 @@ const routes = [
       { path: 'messages', component: Messages }, // /dashboard/messages
       { path: 'contacts', component: Contacts }, // /dashboard/contacts
       { path: 'profile', component: Profile }, // /dashboard/profile
+      { path: '/confirm-email/:token', component: ConfirmEmail },
       // Tu peux ajouter ici { path: 'devices', component: Devices }, etc.
     ]
   }
@@ -39,7 +41,7 @@ const router = createRouter({
 // Interdiction d’accès au dashboard si non connecté
 router.beforeEach((to, from, next) => {
   const publicPages = ['/login', '/register', '/reset-password', '/new-password']
-  const isPublic = publicPages.includes(to.path)
+  const isPublic = publicPages.includes(to.path) || to.path.startsWith('/confirm-email')
   const isDashboard = to.path.startsWith('/dashboard')
   const loggedIn = !!localStorage.getItem('access_token')
 

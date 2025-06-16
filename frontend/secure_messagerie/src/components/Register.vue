@@ -50,7 +50,7 @@ async function handleRegister() {
       email: email.value,
       password: password.value,
     })
-    success.value = res.data.message || "Inscription réussie. Vérifiez vos emails pour confirmer."
+    success.value = res.data.message || "Inscription réussie. Un e-mail de confirmation a été envoyé."
     pseudo.value = email.value = password.value = ''
   } catch (err) {
     error.value = err.response?.data?.error || 'Erreur inconnue'
