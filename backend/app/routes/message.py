@@ -2,7 +2,7 @@
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from ..models import Message, Conversation, Utilisateur
+from ..models import Message, Conversation, Utilisateur, Participation
 from ..extensions import db
 from ..schemas_message import MessageSchema
 from marshmallow import ValidationError
@@ -83,5 +83,23 @@ def update_or_delete_message(conv_id, msg_id):
         db.session.delete(msg)
         db.session.commit()
         return jsonify({"message": "Message supprimé"}), 200
+    
+# ─────────────────────────── Nombre de messages non lus ──────────────────────
+@messages_bp.route("/messages/unread_count", methods=["GET", "OPTIONS"])
+@jwt_required()
+def unread_count():
+    """Retourne un compte très simple de messages non lus pour l'utilisateur"""
+    user_id = int(get_jwt_identity())
+
+    conv_ids = [p.id_conv for p in Participation.query.filter_by(id_user=user_id)]
+    if not conv_ids:
+        return jsonify({"count": 0}), 200
+
+    count = Message.query.filter(
+        Message.conv_id.in_(conv_ids),
+        Message.sender_id != user_id
+    ).count()
+
+    return jsonify({"count": count}), 200
 
 

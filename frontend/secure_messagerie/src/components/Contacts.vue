@@ -107,7 +107,7 @@ async function fetchContacts() {
     const res = await axios.get('http://localhost:5000/api/contacts', {
       headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
     })
-    contacts.value = res.data || []
+    contacts.value = res.data.contacts || []
   } catch {
     contacts.value = []
   } finally {
