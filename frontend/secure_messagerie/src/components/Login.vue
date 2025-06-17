@@ -69,7 +69,9 @@ async function handleLogin() {
     })
     localStorage.setItem('access_token', res.data.access_token)
     localStorage.setItem('refresh_token', res.data.refresh_token)
-        localStorage.setItem('pseudo', res.data.user?.pseudo || '')
+    localStorage.setItem('pseudo', res.data.user?.pseudo || '')
+    localStorage.setItem('user_id', res.data.user?.id || '')
+    localStorage.setItem('user_email', res.data.user?.email || '')
 
     try {
       const profile = await axios.get('http://localhost:5000/api/me', {
