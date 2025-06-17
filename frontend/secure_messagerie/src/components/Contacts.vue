@@ -33,7 +33,7 @@
       <ul class="list-group list-group-flush">
         <li
           v-for="contact in filteredContacts"
-          :key="contact.id"
+          :key="contact.id_contact"
           class="list-group-item d-flex align-items-center justify-content-between"
         >
           <div class="d-flex align-items-center">
@@ -107,7 +107,7 @@ async function fetchContacts() {
     const res = await axios.get('http://localhost:5000/api/contacts', {
       headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
     })
-    contacts.value = res.data.contacts || []
+    contacts.value = res.data || []
   } catch {
     contacts.value = []
   } finally {
@@ -119,7 +119,7 @@ async function removeContact(contact) {
   if (!confirm(`Supprimer ${contact.pseudo} ?`)) return
   loading.value = true
   try {
-    await axios.delete(`http://localhost:5000/api/contacts/${contact.id}`, {
+    await axios.delete(`http://localhost:5000/api/contacts/${contact.id_contact}`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
     })
     await fetchContacts()

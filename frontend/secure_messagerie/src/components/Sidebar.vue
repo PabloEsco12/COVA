@@ -22,6 +22,11 @@
         </router-link>
       </li>
       <li>
+        <router-link to="/dashboard/invitations" class="nav-link" active-class="active">
+          <i class="bi bi-person-plus me-2"></i> Invitations
+        </router-link>
+      </li>
+      <li>
         <router-link to="/dashboard/devices" class="nav-link" active-class="active">
           <i class="bi bi-phone me-2"></i> Appareils
         </router-link>

@@ -7,6 +7,7 @@ import Dashboard from '../components/Dashboard.vue'
 import DashboardHome from '../components/DashboardHome.vue'
 import Messages from '../components/Messages.vue'
 import Contacts from '../components/Contacts.vue'
+import Invitations from '../components/Invitations.vue'
 import Profile from '../components/Profile.vue'
 import ResetPassword from '../components/ResetPassword.vue'
 import NewPassword from '../components/NewPassword.vue'
@@ -26,6 +27,7 @@ const routes = [
       { path: '', component: DashboardHome }, // /dashboard
       { path: 'messages', component: Messages }, // /dashboard/messages
       { path: 'contacts', component: Contacts }, // /dashboard/contacts
+      { path: 'invitations', component: Invitations }, // /dashboard/invitations
       { path: 'profile', component: Profile }, // /dashboard/profile
       { path: '/confirm-email/:token', component: ConfirmEmail },
       // Tu peux ajouter ici { path: 'devices', component: Devices }, etc.

@@ -12,9 +12,27 @@ contacts_bp = Blueprint("contacts", __name__)
 @jwt_required()
 def add_contact():
     user_id = int(get_jwt_identity())
-    data = request.get_json()
+    data = request.get_json() or {}
     ami_id = data.get("ami_id")
-    if not ami_id or user_id == ami_id:
+    email = data.get("email")
+    pseudo = data.get("pseudo")
+
+    if not ami_id:
+        if email:
+            ami = Utilisateur.query.filter_by(email=email).first()
+        elif pseudo:
+            ami = Utilisateur.query.filter_by(pseudo=pseudo).first()
+        else:
+            return jsonify({"error": "ami_id, email ou pseudo requis"}), 400
+        if not ami:
+            return jsonify({"error": "Utilisateur introuvable"}), 404
+        ami_id = ami.id_user
+    else:
+        ami = Utilisateur.query.get(ami_id)
+        if not ami:
+            return jsonify({"error": "Utilisateur introuvable"}), 404
+
+    if user_id == ami_id:
         return jsonify({"error": "ami_id requis ou identique à soi-même"}), 400
 
     # Vérifier que le contact n'existe pas déjà dans les deux sens
@@ -65,18 +83,20 @@ def list_contacts():
     res = []
     for c in contacts:
         if c.user_id == user_id:
-            other_id = c.ami_id
+            other = c.ami
             is_sender = True
         else:
-            other_id = c.user_id
+            other = c.user
             is_sender = False
         res.append({
             "id_contact": c.id_contact,
-            "autre_utilisateur": other_id,
+            "user_id": other.id_user,
+            "pseudo": other.pseudo,
+            "email": other.email,
             "statut": c.statut,
-            "is_sender": is_sender
+            "is_sender": is_sender,
         })
-    return jsonify(res), 200
+    return jsonify({"contacts": res}), 200
 
 # Lister les invitations reçues (contacts en attente dont je suis l'ami à valider)
 @contacts_bp.route("/contacts/invitations", methods=["GET"])
@@ -84,10 +104,15 @@ def list_contacts():
 def invitations_recues():
     user_id = int(get_jwt_identity())
     invitations = Contact.query.filter_by(ami_id=user_id, statut="pending").all()
-    res = [{
-        "id_contact": c.id_contact,
-        "demandeur": c.user_id
-    } for c in invitations]
+    res = [
+        {
+            "id_contact": c.id_contact,
+            "demandeur": c.user_id,
+            "pseudo": c.user.pseudo,
+            "email": c.user.email,
+        }
+        for c in invitations
+    ]
     return jsonify(res), 200
 
 # (Optionnel) Supprimer un contact (pour l'un ou l'autre)
