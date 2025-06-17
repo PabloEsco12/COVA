@@ -1,7 +1,7 @@
 <template>
   <header class="d-flex align-items-center justify-content-between bg-white px-4 py-2 shadow-sm">
     <div>
-      <span class="fw-bold fs-5">Bienvenue sur COVA&nbsp;!</span>
+      <span class="fw-bold fs-5">Bienvenue {{ pseudo }} sur COVA&nbsp;!</span>
     </div>
     <div class="d-flex align-items-center">
       <img :src="avatarUrl" alt="Avatar" class="rounded-circle me-2" width="40" height="40" v-if="avatarUrl" />

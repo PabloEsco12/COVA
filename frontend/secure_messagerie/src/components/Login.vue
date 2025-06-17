@@ -69,6 +69,23 @@ async function handleLogin() {
     })
     localStorage.setItem('access_token', res.data.access_token)
     localStorage.setItem('refresh_token', res.data.refresh_token)
+        localStorage.setItem('pseudo', res.data.user?.pseudo || '')
+
+    try {
+      const profile = await axios.get('http://localhost:5000/api/me', {
+        headers: { Authorization: `Bearer ${res.data.access_token}` }
+      })
+      if (profile.data.avatar) {
+        localStorage.setItem(
+          'avatar_url',
+          `http://localhost:5000/static/avatars/${profile.data.avatar}`
+        )
+      } else {
+        localStorage.removeItem('avatar_url')
+      }
+    } catch (e) {
+      // ignore profile fetch errors
+    }
     router.push('/dashboard')
   } catch (err) {
     if (err.response?.data?.require_totp) {

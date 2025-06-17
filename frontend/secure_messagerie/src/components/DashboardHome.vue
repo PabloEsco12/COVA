@@ -3,7 +3,10 @@
     <div class="row justify-content-center">
       <div class="col-lg-8">
         <div class="card p-5 shadow-lg text-center animate__animated animate__fadeIn">
-          <h2 class="mb-2 display-5 fw-bold">Bienvenue sur COVA 🎉</h2>
+          <h2 class="mb-2 display-5 fw-bold">Bienvenue {{ pseudo }} 🎉</h2>
+          <div v-if="avatarUrl" class="mb-3">
+            <img :src="avatarUrl" alt="Avatar" class="avatar-lg" />
+          </div>
           <p class="lead mb-4">
             Messagerie sécurisée, simple et rapide.<br>
             Retrouvez vos messages, contacts et notifications ici.
@@ -49,8 +52,12 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios'
 
 const apiOk = ref(false)
+const pseudo = ref('Utilisateur')
+const avatarUrl = ref(null)
 
 onMounted(async () => {
+  pseudo.value = localStorage.getItem('pseudo') || 'Utilisateur'
+  avatarUrl.value = localStorage.getItem('avatar_url') || null
   try {
     await axios.get('http://localhost:5000/api/ping')
     apiOk.value = true
@@ -59,3 +66,13 @@ onMounted(async () => {
   }
 })
 </script>
+
+<style scoped>
+.avatar-lg {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 2px 8px #0002;
+}
+</style>
