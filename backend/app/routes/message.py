@@ -85,7 +85,7 @@ def update_or_delete_message(conv_id, msg_id):
         return jsonify({"message": "Message supprimé"}), 200
     
 # ─────────────────────────── Nombre de messages non lus ──────────────────────
-@messages_bp.route("/messages/unread_count", methods=["GET", "OPTIONS"])
+@messages_bp.route("/messages/unread_count", methods=["GET"])  # CORS preflight handled globally
 @jwt_required()
 def unread_count():
     """Retourne un compte très simple de messages non lus pour l'utilisateur"""
