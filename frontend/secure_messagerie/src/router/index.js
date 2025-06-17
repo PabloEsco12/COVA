@@ -12,6 +12,8 @@ import Profile from '../components/Profile.vue'
 import ResetPassword from '../components/ResetPassword.vue'
 import NewPassword from '../components/NewPassword.vue'
 import ConfirmEmail from '../components/ConfirmEmail.vue'
+import Devices from '../components/Devices.vue'
+import Settings from '../components/Settings.vue'
 // Ajoute ici Devices, Settings, etc si tu les crées
 
 const routes = [
@@ -29,6 +31,8 @@ const routes = [
       { path: 'contacts', component: Contacts }, // /dashboard/contacts
       { path: 'invitations', component: Invitations }, // /dashboard/invitations
       { path: 'profile', component: Profile }, // /dashboard/profile
+      { path: 'devices', component: Devices }, // /dashboard/devices
+      { path: 'settings', component: Settings }, // /dashboard/settings      
       { path: '/confirm-email/:token', component: ConfirmEmail },
       // Tu peux ajouter ici { path: 'devices', component: Devices }, etc.
     ]
