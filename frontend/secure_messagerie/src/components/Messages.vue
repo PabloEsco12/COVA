@@ -1,24 +1,41 @@
 <template>
-  <div class="chat-container">
-    <div class="chat-header d-flex align-items-center px-3 py-2">
-      <i class="bi bi-chat-dots fs-2 text-primary me-3"></i>
-      <div>
-        <h3 class="mb-0 fw-bold">Messagerie</h3>
-        <small class="text-muted">Discussions sécurisées sur COVA</small>
-      </div>
-      <div class="ms-3">
-        <select class="form-select form-select-sm" v-model="selectedConvId" @change="fetchMessages">
-          <option v-for="conv in conversations" :key="conv.id" :value="conv.id">
-            {{ conv.titre }}
-          </option>
-        </select>
-      </div>
-      <div class="ms-auto">
-        <button class="btn btn-outline-primary btn-sm" @click="refresh">
-          <i class="bi bi-arrow-clockwise"></i>
+<div class="messages-layout d-flex">
+    <!-- Liste des conversations -->
+    <div class="conv-list p-3">
+      <div class="d-flex align-items-center mb-3">
+        <strong class="flex-grow-1">Conversations</strong>
+        <button class="btn btn-sm btn-primary" @click="openConvModal">
+          <i class="bi bi-plus"></i>
         </button>
       </div>
+      <ul class="list-group list-group-flush">
+        <li
+          v-for="conv in conversations"
+          :key="conv.id"
+          class="list-group-item conv-item"
+          :class="{active: conv.id === selectedConvId}"
+          @click="selectConversation(conv.id)"
+        >
+          {{ conv.titre }}
+        </li>
+      </ul>
     </div>
+
+    <!-- Zone de messages -->
+    <div class="chat-container flex-grow-1">
+      <div class="chat-header d-flex align-items-center px-3 py-2">
+        <i class="bi bi-chat-dots fs-2 text-primary me-3"></i>
+        <div class="flex-grow-1">
+          <h3 class="mb-0 fw-bold">{{ currentConvTitle }}</h3>
+          <small class="text-muted">Discussions sécurisées sur COVA</small>
+        </div>
+        <div class="ms-auto">
+          <button class="btn btn-outline-primary btn-sm" @click="refresh">
+            <i class="bi bi-arrow-clockwise"></i>
+          </button>
+        </div>
+      </div>
+
 
     <div class="chat-messages p-3 flex-grow-1" ref="messagesEnd">
       <div v-if="loading" class="text-center py-5">
@@ -74,6 +91,33 @@
       </div>
     </form>
   </div>
+  
+  <!-- Modal nouvelle conversation -->
+  <div v-if="showConvModal" class="modal-backdrop-custom">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content p-3">
+        <div class="modal-header">
+          <h5 class="modal-title">Nouvelle conversation</h5>
+          <button type="button" class="btn-close" @click="showConvModal = false"></button>
+        </div>
+        <div class="modal-body">
+          <input v-model="convTitle" type="text" class="form-control mb-2" placeholder="Titre" />
+          <div v-for="c in contacts" :key="c.user_id" class="form-check">
+            <input class="form-check-input" type="checkbox" :value="c.user_id" v-model="selectedUsers">
+            <label class="form-check-label">{{ c.pseudo }}</label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="showConvModal = false">Annuler</button>
+          <button class="btn btn-primary" @click="createConversation" :disabled="creatingConv">
+            <span v-if="creatingConv" class="spinner-border spinner-border-sm"></span>
+            <span v-else>Créer</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
 </template>
 
 <script setup>
@@ -90,6 +134,12 @@ const pseudo = localStorage.getItem('pseudo') || 'Moi'
 const userId = Number(localStorage.getItem('user_id') || 0)
 const editingId = ref(null)
 const editContent = ref('')
+const showConvModal = ref(false)
+const contacts = ref([])
+const selectedUsers = ref([])
+const convTitle = ref('')
+const creatingConv = ref(false)
+const currentConvTitle = ref('')
 
 // Fonction de formatage de la date/heure
 function formatDate(ts) {
@@ -104,7 +154,7 @@ async function fetchConversations() {
     })
     conversations.value = res.data || []
     if (!selectedConvId.value && conversations.value.length) {
-      selectedConvId.value = conversations.value[0].id
+      selectConversation(conversations.value[0].id)
     }
   } catch (e) {
     conversations.value = []
@@ -137,6 +187,13 @@ async function fetchMessages() {
 function refresh() {
   fetchMessages()
 }
+
+function selectConversation(id) {
+  selectedConvId.value = id
+  const conv = conversations.value.find(c => c.id === id)
+  currentConvTitle.value = conv ? conv.titre : 'Messagerie'
+}
+
 
 // Envoi d’un message
 async function sendMessage() {
@@ -190,12 +247,63 @@ async function deleteMessage(id) {
   } catch {}
 }
 
+async function fetchContacts() {
+  try {
+    const res = await axios.get('http://localhost:5000/api/contacts?statut=accepted', {
+      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
+    })
+    contacts.value = res.data.contacts || []
+  } catch {
+    contacts.value = []
+  }
+}
+
+function openConvModal() {
+  selectedUsers.value = []
+  convTitle.value = ''
+  fetchContacts()
+  showConvModal.value = true
+}
+
+async function createConversation() {
+  if (!convTitle.value) return
+  creatingConv.value = true
+  try {
+    const res = await axios.post('http://localhost:5000/api/conversations/', {
+      titre: convTitle.value,
+      participants: selectedUsers.value,
+      is_group: selectedUsers.value.length > 1
+    }, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
+    })
+    showConvModal.value = false
+    creatingConv.value = false
+    await fetchConversations()
+    if (res.data && res.data.id) {
+      selectConversation(res.data.id)
+      await fetchMessages()
+    }
+  } catch (e) {
+    creatingConv.value = false
+  }
+}
+
+
+
 onMounted(async () => {
   await fetchConversations()
+    if (selectedConvId.value) {
+    selectConversation(selectedConvId.value)
+  }
   await fetchMessages()
 })
 
-watch(selectedConvId, fetchMessages)
+watch(selectedConvId, async (val) => {
+  if (val) {
+    selectConversation(val)
+    await fetchMessages()
+  }
+})
 </script>
 
 <style scoped>
@@ -258,5 +366,41 @@ watch(selectedConvId, fetchMessages)
 }
 .bubble-actions button {
   margin-left: 4px;
+}
+
+.messages-layout {
+  height: 75vh;
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 2px 16px #163b7c19;
+}
+
+.conv-list {
+  width: 220px;
+  border-right: 1px solid #e6eaf1;
+  overflow-y: auto;
+  background: #f7f9fb;
+  border-radius: 18px 0 0 18px;
+}
+
+.conv-item {
+  cursor: pointer;
+}
+.conv-item.active {
+  background: #0d6efd;
+  color: #fff;
+}
+
+.modal-backdrop-custom {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(30,40,100,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1050;
 }
 </style>
