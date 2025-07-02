@@ -58,7 +58,7 @@ def confirm_totp():
         return jsonify({"error": "Aucun secret TOTP"}), 404
 
     totp = pyotp.TOTP(secret.secret_base32)
-    if totp.verify(code):
+    if totp.verify(code, valid_window=1):
         secret.confirmed = True
         db.session.commit()
         return jsonify({"message": "TOTP activé avec succès"}), 200
