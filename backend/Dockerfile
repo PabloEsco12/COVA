@@ -1,9 +1,15 @@
 FROM python:3.10-slim
 
+# ─── configuration timezone ─────────────────────────────────
+ENV TZ=Europe/Paris
+
 # ─── paquets système ─────────────────────────────────────
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        libpq-dev gcc libssl-dev libffi-dev \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        tzdata \
+        libpq-dev gcc libssl-dev libffi-dev && \
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
