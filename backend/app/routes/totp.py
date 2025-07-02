@@ -16,7 +16,7 @@ totp_bp = Blueprint("totp", __name__, url_prefix="/api/auth/totp")
 @jwt_required()
 def activate_totp():
     try:
-        user_id = get_jwt_identity()
+        user_id = int(get_jwt_identity())
         user = Utilisateur.query.get(user_id)
         if not user:
             return jsonify({"error": "Utilisateur introuvable"}), 404
@@ -31,7 +31,10 @@ def activate_totp():
             db.session.add(new_secret)
             db.session.commit()
 
-        otp_uri = pyotp.totp.TOTP(secret).provisioning_uri(name=user.email, issuer_name="SecureChat")
+        otp_uri = pyotp.totp.TOTP(secret).provisioning_uri(
+            name=user.email,
+            issuer_name="COVA",
+        )
         img = qrcode.make(otp_uri)
         buf = io.BytesIO()
         img.save(buf)
@@ -45,9 +48,11 @@ def activate_totp():
 @totp_bp.route("/confirm", methods=["POST"])
 @jwt_required()
 def confirm_totp():
-    user_id = get_jwt_identity()
-    data = request.get_json()
-    code = data.get("code")
+    user_id = int(get_jwt_identity())
+    data = request.get_json() or {}
+    code = str(data.get("code", "")).strip()
+    if not code:
+        return jsonify({"error": "Code requis"}), 400
     secret = TotpSecret.query.filter_by(id_user=user_id).first()
     if not secret:
         return jsonify({"error": "Aucun secret TOTP"}), 404

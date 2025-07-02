@@ -101,7 +101,7 @@ def login():
         if not code:
             return jsonify({"require_totp": True, "message": "TOTP requis"}), 401
         totp = pyotp.TOTP(user.totp_secret.secret_base32)
-        if not totp.verify(code):
+        if not totp.verify(code, valid_window=1):
             # Incrémente le compteur d'échecs
             user.failed_totp_attempts = (user.failed_totp_attempts or 0) + 1
             if user.failed_totp_attempts >= 5:
