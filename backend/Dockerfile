@@ -1,7 +1,8 @@
 FROM python:3.10-slim
 
 # ─── configuration timezone ─────────────────────────────────
-ENV TZ=Europe/Paris
+ENV TZ=Europe/Brussels
+
 
 # ─── paquets système ─────────────────────────────────────
 RUN apt-get update && \

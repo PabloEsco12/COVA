@@ -1,17 +1,68 @@
+﻿import logging
+import os
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from flask import current_app
 
-def send_reset_email(dest_email, reset_link):
-    SMTP_SERVER = "smtp.gmail.com"
-    SMTP_PORT = 465
-    SMTP_USER = "covamessages@gmail.com"
-    SMTP_PASSWORD = "fsfrucysebbjvdqj"  # Ton mot de passe d’application
 
-    msg = MIMEMultipart("alternative")
-    msg["From"] = SMTP_USER
-    msg["To"] = dest_email
-    msg["Subject"] = "Réinitialisation de mot de passe - COVA"
+logger = logging.getLogger(__name__)
+
+
+def _get_smtp_settings():
+    """Read SMTP configuration from Flask config or environment."""
+    try:
+        app = current_app._get_current_object()  # type: ignore[attr-defined]
+    except Exception:
+        app = None
+
+    server = None
+    port = None
+    user = None
+    password = None
+
+    if app is not None:
+        server = app.config.get('SMTP_SERVER')
+        port = app.config.get('SMTP_PORT')
+        user = app.config.get('SMTP_USER')
+        password = app.config.get('SMTP_PASSWORD')
+
+    server = server or os.getenv('SMTP_SERVER', 'smtp.gmail.com')
+    port = port or os.getenv('SMTP_PORT', '465')
+    user = user or os.getenv('SMTP_USER')
+    password = password or os.getenv('SMTP_PASSWORD')
+
+    if not user or not password:
+        raise RuntimeError('Missing SMTP credentials; set SMTP_USER and SMTP_PASSWORD')
+
+    return server, int(port), user, password
+
+
+def _send_message(msg: MIMEMultipart) -> bool:
+    server, port, user, password = _get_smtp_settings()
+    try:
+        with smtplib.SMTP_SSL(server, port) as smtp:
+            smtp.login(user, password)
+            smtp.send_message(msg)
+        return True
+    except smtplib.SMTPAuthenticationError:
+        logger.exception('SMTP authentication failed for %s', user)
+    except smtplib.SMTPException:
+        logger.exception('SMTP error while sending email to %s', msg.get('To'))
+    except Exception:
+        logger.exception('Unexpected error while sending email to %s', msg.get('To'))
+    return False
+
+
+def _build_from_header():
+    return os.getenv('SMTP_FROM') or os.getenv('SMTP_USER', '')
+
+
+def send_reset_email(dest_email, reset_link) -> bool:
+    msg = MIMEMultipart('alternative')
+    msg['From'] = _build_from_header()
+    msg['To'] = dest_email
+    msg['Subject'] = 'Réinitialisation de mot de passe - COVA'
 
     html = f"""
     <html>
@@ -29,31 +80,24 @@ def send_reset_email(dest_email, reset_link):
             </a>
           </p>
           <div style="color:#8a93a3;font-size:0.99em;">
-            Ce lien est valable 1h. Si tu n’es pas à l’origine de cette demande, ignore simplement ce mail.<br><br>
+            Ce lien est valable 1h. Si tu n'es pas à l'origine de cette demande, ignore simplement ce mail.<br><br>
             Merci de ta confiance.<br>
-            <b>L’équipe COVA</b>
+            <b>L'équipe COVA</b>
           </div>
         </div>
       </body>
     </html>
     """
-    msg.attach(MIMEText(html, "html"))
+    msg.attach(MIMEText(html, 'html'))
 
-    with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
-        server.login(SMTP_USER, SMTP_PASSWORD)
-        server.send_message(msg)
+    return _send_message(msg)
 
 
-def send_confirm_email(dest_email, confirm_link):
-    SMTP_SERVER = "smtp.gmail.com"
-    SMTP_PORT = 465
-    SMTP_USER = "covamessages@gmail.com"
-    SMTP_PASSWORD = "fsfrucysebbjvdqj"  # ton mot de passe d’application
-
-    msg = MIMEMultipart("alternative")
-    msg["From"] = SMTP_USER
-    msg["To"] = dest_email
-    msg["Subject"] = "Confirmation d'inscription - COVA"
+def send_confirm_email(dest_email, confirm_link) -> bool:
+    msg = MIMEMultipart('alternative')
+    msg['From'] = _build_from_header()
+    msg['To'] = dest_email
+    msg['Subject'] = "Confirmation d'inscription - COVA"
 
     html = f"""
     <html>
@@ -79,44 +123,32 @@ def send_confirm_email(dest_email, confirm_link):
       </body>
     </html>
     """
-    msg.attach(MIMEText(html, "html"))
+    msg.attach(MIMEText(html, 'html'))
 
-    with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
-        server.login(SMTP_USER, SMTP_PASSWORD)
-        server.send_message(msg)
+    return _send_message(msg)
 
 
-def send_login_notification(dest_email, ip_addr, ts, user_agent=None, location=None):
-    SMTP_SERVER = "smtp.gmail.com"
-    SMTP_PORT = 465
-    SMTP_USER = "covamessages@gmail.com"
-    SMTP_PASSWORD = "fsfrucysebbjvdqj"
-
+def send_login_notification(dest_email, ip_addr, ts, user_agent=None, location=None) -> bool:
     msg = MIMEMultipart()
-    msg["From"] = SMTP_USER
-    msg["To"] = dest_email
-    msg["Subject"] = "Nouvelle connexion à votre compte SecureChat"
+    msg['From'] = _build_from_header()
+    msg['To'] = dest_email
+    msg['Subject'] = 'Nouvelle connexion à votre compte SecureChat'
 
-    details = f"""Adresse IP : {ip_addr}
-Date et heure : {ts}
-"""
+    details = f"Adresse IP : {ip_addr}\nDate et heure : {ts}\n"
     if user_agent:
-        details += f"Appareil : {user_agent}\n"
+        details += f"Appareil : {user_agent}\n"
     if location:
-        details += f"Localisation : {location}\n"
+        details += f"Localisation : {location}\n"
 
     body = f"""Bonjour,
 
 Votre compte SecureChat a été accédé avec succès.
 
-{details}
-Si ce n’est pas vous, modifiez immédiatement votre mot de passe !
+{details}Si ce n'est pas vous, modifiez immédiatement votre mot de passe !
 
 Cordialement,
-L’équipe SecureChat
+L'équipe SecureChat
 """
-    msg.attach(MIMEText(body, "plain"))
+    msg.attach(MIMEText(body, 'plain'))
 
-    with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
-        server.login(SMTP_USER, SMTP_PASSWORD)
-        server.send_message(msg)
+    return _send_message(msg)

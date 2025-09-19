@@ -1,4 +1,4 @@
-# backend/app/routes/auth.py
+﻿# backend/app/routes/auth.py
 
 from flask import Blueprint, request, jsonify, current_app
 from ..models import Utilisateur, RefreshToken,EmailConfirmToken
@@ -37,10 +37,10 @@ def register():
         if not admin_exists or data["email"].endswith("@tondomaine.com"):
             role = "admin"
         else:
-            return jsonify({"error": "Création admin refusée"}), 403
+            return jsonify({"error": "CrÃ©ation admin refusÃ©e"}), 403
 
     if Utilisateur.query.filter_by(email=data["email"]).first():
-        return jsonify({"error": "Email déjà utilisé"}), 409
+        return jsonify({"error": "Email dÃ©jÃ  utilisÃ©"}), 409
 
     hashed_pw = bcrypt.generate_password_hash(data["password"]).decode('utf-8')
     user = Utilisateur(
@@ -53,7 +53,7 @@ def register():
     db.session.add(user)
     db.session.commit()
 
-    # 1. Génère un token de confirmation
+    # 1. GÃ©nÃ¨re un token de confirmation
 
     token = secrets.token_urlsafe(48)
     expires = datetime.utcnow() + timedelta(hours=24)
@@ -66,12 +66,17 @@ def register():
     db.session.add(confirm_token)
     db.session.commit()
 
-    # 2. Envoie l’e-mail
+    # 2. Envoie lâ€™e-mail
     frontend_url = current_app.config.get("FRONTEND_URL", "http://localhost:5173")
     confirm_link = f"{frontend_url}/confirm-email/{token}"
-    send_confirm_email(user.email, confirm_link)
+    email_sent = send_confirm_email(user.email, confirm_link)
+    if not email_sent:
+        current_app.logger.warning(
+            'email_confirmation_send_failed',
+            extra={'user_id': user.id_user, 'email': user.email}
+        )
 
-    return jsonify({"message": "Inscription réussie. Un e-mail de confirmation a été envoyé."}), 201
+    return jsonify({"message": "Inscription rÃ©ussie. Un e-mail de confirmation a Ã©tÃ© envoyÃ©."}), 201
 
 
 @auth_bp.route("/login", methods=["POST"])
@@ -83,10 +88,10 @@ def login():
 
     user = Utilisateur.query.filter_by(email=email).first()
 
-    # 1. Vérifie blocage du TOTP
+    # 1. VÃ©rifie blocage du TOTP
     if user and user.totp_locked_until and user.totp_locked_until > datetime.utcnow():
         return jsonify({
-            "error": "Compte verrouillé suite à trop de tentatives TOTP",
+            "error": "Compte verrouillÃ© suite Ã  trop de tentatives TOTP",
             "unlock_at": user.totp_locked_until.isoformat()
         }), 403
 
@@ -94,19 +99,19 @@ def login():
         return jsonify({"error": "Identifiants invalides"}), 401
     
     if user and not getattr(user, "is_confirmed", True):
-        return jsonify({"error": "Compte non confirmé. Vérifie tes emails."}), 403
+        return jsonify({"error": "Compte non confirmÃ©. VÃ©rifie tes emails."}), 403
 
-    # 2. Vérifie le TOTP si activé
+    # 2. VÃ©rifie le TOTP si activÃ©
     if user.totp_secret and user.totp_secret.confirmed:
         if not code:
             return jsonify({"require_totp": True, "message": "TOTP requis"}), 401
         totp = pyotp.TOTP(user.totp_secret.secret_base32)
         if not totp.verify(code, valid_window=1):
-            # Incrémente le compteur d'échecs
+            # IncrÃ©mente le compteur d'Ã©checs
             user.failed_totp_attempts = (user.failed_totp_attempts or 0) + 1
             if user.failed_totp_attempts >= 5:
                 user.totp_locked_until = datetime.utcnow() + timedelta(minutes=15)
-                user.failed_totp_attempts = 0  # Remise à zéro pour le prochain essai après délai
+                user.failed_totp_attempts = 0  # Remise Ã  zÃ©ro pour le prochain essai aprÃ¨s dÃ©lai
             db.session.commit()
             log_action(user.id_user, "login_failed_totp", meta={"email": email})
             return jsonify({
@@ -115,19 +120,19 @@ def login():
                 "locked_until": user.totp_locked_until.isoformat() if user.totp_locked_until else None
             }), 401
         else:
-            # Succès TOTP : remise à zéro du compteur
+            # SuccÃ¨s TOTPâ€¯: remise Ã  zÃ©ro du compteur
             user.failed_totp_attempts = 0
             user.totp_locked_until = None
             db.session.commit()
 
-    # 3. Log la connexion réussie
+    # 3. Log la connexion rÃ©ussie
     log_action(user.id_user, "login", meta={"email": email})
 
-    # 4. Génération JWT
+    # 4. GÃ©nÃ©ration JWT
     access_token = create_access_token(identity=str(user.id_user), expires_delta=timedelta(hours=1))
     refresh_token = create_refresh_token(identity=str(user.id_user), expires_delta=timedelta(days=30))
 
-    # 5. Enregistre le refresh_token pour révocation future
+    # 5. Enregistre le refresh_token pour rÃ©vocation future
     from flask_jwt_extended.utils import get_jti
     jti = get_jti(refresh_token)
     token_obj = RefreshToken(jti=jti, id_user=user.id_user, expires=datetime.utcnow() + timedelta(days=30))
@@ -140,13 +145,18 @@ def login():
     user_agent = request.headers.get("User-Agent", "Inconnu")
     location = geoip_lookup(ip_addr)
 
-    send_login_notification(
+    notification_sent = send_login_notification(
         user.email,
         ip_addr=ip_addr,
         ts=ts,
         user_agent=user_agent,
         location=location
     )
+    if not notification_sent:
+        current_app.logger.warning(
+            'login_notification_send_failed',
+            extra={'user_id': user.id_user, 'email': user.email, 'ip': ip_addr}
+        )
 
     return jsonify({
         "access_token": access_token,
@@ -178,7 +188,7 @@ def logout():
     if token:
         token.revoked = True
         db.session.commit()
-    return jsonify({"message": "Déconnecté"}), 200
+    return jsonify({"message": "DÃ©connectÃ©"}), 200
 
 @auth_bp.route("/confirm-email/<token>", methods=["GET"])
 def confirm_email(token):
@@ -186,14 +196,16 @@ def confirm_email(token):
     from datetime import datetime
     confirm_token = EmailConfirmToken.query.filter_by(token=token, used=False).first()
     if not confirm_token or confirm_token.expires_at < datetime.utcnow():
-        return jsonify({"error": "Token invalide ou expiré"}), 400
+        return jsonify({"error": "Token invalide ou expirÃ©"}), 400
 
     user = Utilisateur.query.get(confirm_token.user_id)
     if not user:
         return jsonify({"error": "Utilisateur introuvable"}), 404
 
-    # Tu peux prévoir un champ user.is_confirmed = True dans ta table utilisateur
+    # Tu peux prÃ©voir un champ user.is_confirmed = True dans ta table utilisateur
     user.is_confirmed = True
     confirm_token.used = True
     db.session.commit()
-    return jsonify({"message": "E-mail confirmé, tu peux maintenant te connecter !"}), 200
+    return jsonify({"message": "E-mail confirmÃ©, tu peux maintenant te connecterâ€¯!"}), 200
+
+
