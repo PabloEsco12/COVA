@@ -275,3 +275,4 @@ def unread_count():
 
 
 # Utilities imported late to avoid circular import
+from werkzeug.utils import secure_filename 
