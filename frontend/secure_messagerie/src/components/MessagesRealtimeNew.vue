@@ -17,34 +17,13 @@
           placeholder="Rechercher une conversation"
         />
       </div>
-      <div class="conv-filters mb-3">
-        <button
-          v-for="filter in conversationFilters"
-          :key="filter.value"
-          type="button"
-          class="conv-filter-btn"
-          :class="{ active: conversationFilter === filter.value }"
-          :aria-pressed="conversationFilter === filter.value"
-          @click="setConversationFilter(filter.value)"
-        >
-          <span class="filter-label">
-            <i class="bi" :class="filter.icon"></i>
-            <span>{{ filter.label }}</span>
-          </span>
-          <span class="filter-count">{{ conversationFilterStats[filter.value] ?? 0 }}</span>
-        </button>
-      </div>
       <ul class="list-group list-group-flush conv-list-scroll">
         <li
           v-for="conv in filteredConversations"
           :key="conv.id"
           class="list-group-item p-0 border-0 bg-transparent"
         >
-          <div
-            class="conv-tile"
-            :class="{ active: conv.id === selectedConvId, favorite: isFavorite(conv.id) }"
-            @click="selectConversation(conv.id)"
-          >
+          <div class="conv-tile" :class="{ active: conv.id === selectedConvId }" @click="selectConversation(conv.id)">
             <div class="me-2 avatar-wrap">
               <img v-if="conv.avatar_url" :src="conv.avatar_url" class="avatar-list" alt="avatar" />
               <div v-else class="avatar-list-placeholder" :class="{ group: conv.is_group }">
@@ -56,18 +35,8 @@
               <div class="d-flex align-items-center">
                 <div class="conv-name text-truncate">{{ conv.displayName || conv.titre }}</div>
                 <div class="ms-auto d-flex align-items-center gap-2">
-                  <button
-                    type="button"
-                    class="favorite-toggle"
-                    :class="{ active: isFavorite(conv.id) }"
-                    :aria-pressed="isFavorite(conv.id)"
-                    :title="isFavorite(conv.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'"
-                    @click.stop="toggleFavorite(conv.id)"
-                  >
-                    <i class="bi" :class="isFavorite(conv.id) ? 'bi-star-fill' : 'bi-star'"></i>
-                  </button>
                   <div class="conv-time">{{ formatTime(conv.last?.ts) }}</div>
-                  <span v-if="getUnreadCount(conv)" class="badge-unread">{{ getUnreadCount(conv) }}</span>
+                  <span v-if="unreadCounts[conv.id]" class="badge-unread">{{ unreadCounts[conv.id] }}</span>
                 </div>
               </div>
               <div class="conv-preview text-truncate">
@@ -84,46 +53,60 @@
       </ul>
     </div>
 
-    <!-- Chat area -->
-    <div class="chat-container flex-grow-1">
-      <div class="chat-header d-flex align-items-center px-3 py-2">
-        <i class="bi bi-chat-dots fs-2 text-primary me-3"></i>
-        <div class="flex-grow-1">
-          <h3 class="mb-0 fw-bold">{{ currentConvTitle }}</h3>
-          <small v-if="!typingLabel" class="text-muted">Discussions sécurisées sur COVA</small>
-          <small v-else class="text-success">{{ typingLabel }}</small>
-        </div>
-        <div class="ms-auto btn-group">
-          <button class="btn btn-outline-primary btn-sm" @click="refresh" title="Rafraîchir">
-            <i class="bi bi-arrow-clockwise"></i>
-          </button>
-          <button
-            class="btn btn-outline-secondary btn-sm"
-            type="button"
-            :title="showMessageSearch ? 'Fermer la recherche' : 'Rechercher dans la conversation'"
-            @click="toggleMessageSearch"
-          >
-            <i class="bi bi-search"></i>
-          </button>
-          <button
-            class="btn btn-outline-secondary btn-sm dropdown-toggle"
-            data-bs-toggle="dropdown"
-            aria-expanded="false"
-            title="Options"
-          >
-            <i class="bi bi-three-dots"></i>
-          </button>
-          <ul class="dropdown-menu dropdown-menu-end">
-            <li><a class="dropdown-item" href="#" @click.prevent="promptRename">Renommer</a></li>
-            <li><a class="dropdown-item" href="#" @click.prevent="leaveConversation">Quitter la conversation</a></li>
-            <li><hr class="dropdown-divider" /></li>
-            <li><a class="dropdown-item text-danger" href="#" @click.prevent="deleteConversation">Supprimer</a></li>
-          </ul>
-        </div>
-      </div>
-
-      <div v-if="showMessageSearch" class="chat-search px-3 py-2 border-bottom bg-white">
-        <div class="input-group input-group-sm">
+      <!-- Chat area -->
+      <section class="chat-container">
+        <header class="chat-header">
+          <div class="chat-header-icon">
+            <i class="bi bi-chat-dots"></i>
+          </div>
+          <div class="chat-topic flex-grow-1">
+            <div class="chat-title-row">
+              <h3 class="chat-title">{{ currentConvTitle }}</h3>
+            </div>
+            <p v-if="!typingLabel" class="chat-subtitle">Discussions sécurisées sur COVA</p>
+            <p v-else class="chat-subtitle typing">{{ typingLabel }}</p>
+            <div class="chat-meta">
+              <span class="chat-meta-chip">
+                <i class="bi bi-chat-text me-1"></i>{{ displayMessages.length }} message(s)
+              </span>
+              <span v-if="lastMessageAt" class="chat-meta-chip">
+                <i class="bi bi-clock-history me-1"></i>Dernier message {{ formatDate(lastMessageAt) }}
+              </span>
+            </div>
+          </div>
+          <div class="chat-actions">
+            <button class="chat-action-btn" type="button" @click="refresh" title="Rafraîchir">
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+            <button
+              class="chat-action-btn"
+              type="button"
+              :title="showMessageSearch ? 'Fermer la recherche' : 'Rechercher dans la conversation'"
+              @click="toggleMessageSearch"
+            >
+              <i class="bi bi-search"></i>
+            </button>
+            <div class="dropdown">
+              <button
+                class="chat-action-btn dropdown-toggle"
+                type="button"
+                data-bs-toggle="dropdown"
+                aria-expanded="false"
+                title="Options"
+              >
+                <i class="bi bi-three-dots"></i>
+              </button>
+              <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="#" @click.prevent="promptRename">Renommer</a></li>
+                <li><a class="dropdown-item" href="#" @click.prevent="leaveConversation">Quitter la conversation</a></li>
+                <li><hr class="dropdown-divider" /></li>
+                <li><a class="dropdown-item text-danger" href="#" @click.prevent="deleteConversation">Supprimer</a></li>
+              </ul>
+            </div>
+          </div>
+        </header>
+      <div v-if="showMessageSearch" class="chat-search">
+        <div class="input-group input-group-sm chat-search-bar">
           <span class="input-group-text"><i class="bi bi-search"></i></span>
           <input
             v-model.trim="messageSearch"
@@ -136,7 +119,7 @@
             <i class="bi bi-x"></i>
           </button>
         </div>
-        <div class="row g-2 align-items-center mt-2">
+        <div class="row g-2 align-items-center mt-2 chat-search-grid">
           <div class="col-6 col-md-2">
             <select class="form-select form-select-sm" v-model="messageSearchAuthor">
               <option value="all">Tous</option>
@@ -154,147 +137,155 @@
             <button class="btn btn-sm btn-outline-secondary" type="button" @click="clearMessageFilters">Réinitialiser</button>
           </div>
         </div>
-        <div v-if="messageSearch" class="small text-muted mt-1">{{ displayMessages.length }} résultat(s)</div>
+        <div v-if="messageSearch" class="search-result-count small text-muted mt-1">{{ displayMessages.length }} résultat(s)</div>
       </div>
 
-      <div class="chat-messages p-3 flex-grow-1" ref="messagesBox" @scroll="onScroll">
-        <div v-if="loading" class="text-center py-5"><span class="spinner-border text-primary"></span></div>
-        <div v-else-if="messages.length === 0" class="text-center text-muted py-5">
+      <div class="chat-messages" ref="messagesBox" @scroll="onScroll">
+        <div v-if="loading" class="chat-state">
+          <span class="spinner-border text-primary"></span>
+        </div>
+        <div v-else-if="messages.length === 0" class="chat-state chat-empty">
           <i class="bi bi-inbox display-4"></i>
           <div>Aucun message pour le moment</div>
         </div>
-        <div v-else>
-          <div v-if="messageSearch && displayMessages.length === 0" class="text-center text-muted py-4">Aucun résultat</div>
-          <div v-for="msg in displayMessages" :key="msg.id_msg" class="msg-row" :class="{ sent: msg.sentByMe }">
-            <template v-if="!msg.sentByMe && partnerAvatar">
-              <img :src="partnerAvatar" class="avatar-xs me-2" alt="avatar" />
-            </template>
-            <div :class="['chat-bubble', msg.sentByMe ? 'sent' : 'received']">
-              <div class="bubble-header">
-                <span class="name">{{ msg.sentByMe ? pseudo : partnerName }}</span>
-                <span class="time">{{ formatDate(msg.ts_msg) }}</span>
-              </div>
-              <div class="bubble-body">
-                <template v-if="editingId === msg.id_msg">
-                  <input v-model="editContent" class="form-control form-control-sm mb-1" />
-                  <div class="text-end">
-                    <button class="btn btn-sm btn-success me-1" @click="confirmEdit">OK</button>
-                    <button class="btn btn-sm btn-secondary" @click="cancelEdit">Annuler</button>
-                  </div>
-                </template>
-                <template v-else>
-                  {{ msg.contenu_chiffre || (msg.files?.length ? `${msg.files.length} pièce(s) jointe(s)` : '') }}
-                </template>
-              </div>
-
-              <div v-if="msg.files && msg.files.length" class="bubble-attachments mt-2">
-                <div
-                  v-for="file in msg.files"
-                  :key="file.id_file"
-                  class="attachment-item"
-                  :class="{ preview: isInlineImage(file) }"
-                >
-                  <template v-if="isInlineImage(file)">
-                    <button
-                      type="button"
-                      class="attachment-thumb"
-                      :aria-label="`Télécharger ${file.filename}`"
-                      @click="downloadAttachment(file)"
-                    >
-                      <img
-                        v-if="attachmentPreviews[file.id_file]"
-                        :src="attachmentPreviews[file.id_file]"
-                        :alt="file.filename"
-                      />
-                      <span v-else class="spinner-border spinner-border-sm text-primary"></span>
-                    </button>
-                    <div class="attachment-meta">
-                      <div class="attachment-name" v-html="highlightFilename(file.filename)"></div>
-                      <small class="text-muted">{{ formatSize(file.taille) }}</small>
+        <div v-else class="chat-history">
+          <div v-if="messageSearch && displayMessages.length === 0" class="chat-state chat-empty">Aucun résultat</div>
+          <div v-else class="messages-stack">
+            <div v-for="msg in displayMessages" :key="msg.id_msg" class="msg-row" :class="{ sent: msg.sentByMe }">
+              <template v-if="!msg.sentByMe && partnerAvatar">
+                <img :src="partnerAvatar" class="avatar-xs me-2" alt="avatar" />
+              </template>
+              <div :class="['chat-bubble', msg.sentByMe ? 'sent' : 'received']">
+                <div class="bubble-header">
+                  <span class="name">{{ msg.sentByMe ? pseudo : partnerName }}</span>
+                  <span class="time">{{ formatDate(msg.ts_msg) }}</span>
+                </div>
+                <div class="bubble-body">
+                  <template v-if="editingId === msg.id_msg">
+                    <input v-model="editContent" class="form-control form-control-sm mb-1" />
+                    <div class="text-end">
+                      <button class="btn btn-sm btn-success me-1" @click="confirmEdit">OK</button>
+                      <button class="btn btn-sm btn-secondary" @click="cancelEdit">Annuler</button>
                     </div>
                   </template>
                   <template v-else>
-                    <i class="bi bi-paperclip me-2"></i>
-                    <button class="btn btn-link p-0 attachment-link" type="button" @click="downloadAttachment(file)">
-                      <span v-html="highlightFilename(file.filename)"></span>
-                    </button>
-                    <small class="text-muted ms-2">{{ formatSize(file.taille) }}</small>
+                    {{ msg.contenu_chiffre || (msg.files?.length ? `${msg.files.length} pièce(s) jointe(s)` : '') }}
                   </template>
                 </div>
-              </div>
 
-              <div class="reaction-strip mt-2">
-                <button
-                  v-for="reaction in reactionSummary(msg)"
-                  :key="reaction.emoji"
-                  class="reaction-chip"
-                  :class="{ mine: reaction.mine }"
-                  type="button"
-                  @click="toggleReaction(msg.id_msg, reaction.emoji)"
-                >
-                  <span class="emoji">{{ reaction.emoji }}</span>
-                  <span class="count">{{ reaction.count }}</span>
-                </button>
-                <div class="reaction-picker" v-if="reactionPickerFor === msg.id_msg">
-                  <emoji-picker
-                    class="reaction-emoji-picker"
-                    skin-tone-emoji="👍"
-                    @emoji-click="event => onReactionEmoji(msg.id_msg, event)"
-                  ></emoji-picker>
+                <div v-if="msg.files && msg.files.length" class="bubble-attachments mt-2">
+                  <div
+                    v-for="file in msg.files"
+                    :key="file.id_file"
+                    class="attachment-item"
+                    :class="{ preview: isInlineImage(file) }"
+                  >
+                    <template v-if="isInlineImage(file)">
+                      <button
+                        type="button"
+                        class="attachment-thumb"
+                        :aria-label="`Télécharger ${file.filename}`"
+                        @click="downloadAttachment(file)"
+                      >
+                        <img
+                          v-if="attachmentPreviews[file.id_file]"
+                          :src="attachmentPreviews[file.id_file]"
+                          :alt="file.filename"
+                        />
+                        <span v-else class="spinner-border spinner-border-sm text-primary"></span>
+                      </button>
+                      <div class="attachment-meta">
+                        <div class="attachment-name" v-html="highlightFilename(file.filename)"></div>
+                        <small class="text-muted">{{ formatSize(file.taille) }}</small>
+                      </div>
+                    </template>
+                    <template v-else>
+                      <i class="bi bi-paperclip me-2"></i>
+                      <button class="btn btn-link p-0 attachment-link" type="button" @click="downloadAttachment(file)">
+                        <span v-html="highlightFilename(file.filename)"></span>
+                      </button>
+                      <small class="text-muted ms-2">{{ formatSize(file.taille) }}</small>
+                    </template>
+                  </div>
                 </div>
-                <button
-                  class="btn btn-light btn-sm add-reaction"
-                  type="button"
-                  @click="toggleReactionPicker(msg.id_msg)"
-                >
-                  <i class="bi bi-emoji-smile"></i>
-                </button>
-              </div>
 
-              <div v-if="msg.sentByMe" class="bubble-actions text-end">
-                <button class="btn btn-action me-1" @click="startEdit(msg)" title="Modifier">
-                  <i class="bi bi-pencil"></i>
-                </button>
-                <button class="btn btn-action danger" @click="deleteMessage(msg.id_msg)" title="Supprimer">
-                  <i class="bi bi-trash"></i>
-                </button>
+                <div class="reaction-strip mt-2">
+                  <button
+                    v-for="reaction in reactionSummary(msg)"
+                    :key="reaction.emoji"
+                    class="reaction-chip"
+                    :class="{ mine: reaction.mine }"
+                    type="button"
+                    @click="toggleReaction(msg.id_msg, reaction.emoji)"
+                  >
+                    <span class="emoji">{{ reaction.emoji }}</span>
+                    <span class="count">{{ reaction.count }}</span>
+                  </button>
+                  <div class="reaction-picker" v-if="reactionPickerFor === msg.id_msg">
+                    <emoji-picker
+                      class="reaction-emoji-picker"
+                      skin-tone-emoji="👍"
+                      @emoji-click="event => onReactionEmoji(msg.id_msg, event)"
+                    ></emoji-picker>
+                  </div>
+                  <button
+                    class="btn btn-light btn-sm add-reaction"
+                    type="button"
+                    @click="toggleReactionPicker(msg.id_msg)"
+                  >
+                    <i class="bi bi-emoji-smile"></i>
+                  </button>
+                </div>
+
+                <div v-if="msg.sentByMe" class="bubble-actions text-end">
+                  <button class="btn btn-action me-1" @click="startEdit(msg)" title="Modifier">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                  <button class="btn btn-action danger" @click="deleteMessage(msg.id_msg)" title="Supprimer">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-
-      <form @submit.prevent="sendMessage" class="chat-input px-3 py-2">
-        <div class="input-group align-items-stretch">
-          <button
-            class="btn btn-outline-secondary"
-            type="button"
-            :disabled="loading || sendingMessage"
-            @click="triggerFilePicker"
-          >
-            <i class="bi bi-paperclip"></i>
-          </button>
-          <input ref="fileInput" type="file" class="d-none" multiple @change="handleFiles" />
-          <button
-            class="btn btn-outline-secondary"
-            type="button"
-            :disabled="loading || sendingMessage"
-            @click="toggleEmojiPicker"
-          >
-            <i class="bi bi-emoji-smile"></i>
-          </button>
-          <button
-            class="btn btn-outline-secondary"
-            type="button"
-            :disabled="loading || sendingMessage"
-            @click="toggleGifPicker"
-          >
-            <i class="bi bi-filetype-gif"></i>
-          </button>
+      <form @submit.prevent="sendMessage" class="chat-input">
+        <div class="composer-bar">
+          <div class="composer-tools">
+            <button
+              class="composer-icon"
+              type="button"
+              :disabled="loading || sendingMessage"
+              @click="triggerFilePicker"
+              aria-label="Joindre un fichier"
+            >
+              <i class="bi bi-paperclip"></i>
+            </button>
+            <input ref="fileInput" type="file" class="d-none" multiple @change="handleFiles" />
+            <button
+              class="composer-icon"
+              type="button"
+              :disabled="loading || sendingMessage"
+              @click="toggleEmojiPicker"
+              aria-label="Insérer un emoji"
+            >
+              <i class="bi bi-emoji-smile"></i>
+            </button>
+            <button
+              class="composer-icon"
+              type="button"
+              :disabled="loading || sendingMessage"
+              @click="toggleGifPicker"
+              aria-label="Ajouter un GIF"
+            >
+              <i class="bi bi-filetype-gif"></i>
+            </button>
+          </div>
           <input
             v-model="newMessage"
             type="text"
-            class="form-control"
+            class="composer-input"
             placeholder="Écrire un message..."
             :disabled="loading || sendingMessage"
             @keyup.enter="sendMessage"
@@ -302,12 +293,12 @@
             autocomplete="off"
             ref="messageInput"
           />
-          <button class="btn btn-primary" type="submit" :disabled="!canSend || loading || sendingMessage">
+          <button class="composer-send" type="submit" :disabled="!canSend || loading || sendingMessage">
             <span v-if="sendingMessage" class="spinner-border spinner-border-sm"></span>
             <i v-else class="bi bi-send"></i>
           </button>
         </div>
-        <div v-if="pendingFiles.length" class="pending-files mt-2">
+        <div v-if="pendingFiles.length" class="pending-files">
           <div v-for="(file, index) in pendingFiles" :key="`${file.name}-${index}`" class="pending-file">
             <div v-if="file.previewUrl" class="pending-thumb">
               <img :src="file.previewUrl" :alt="file.name" />
@@ -365,7 +356,7 @@
           </div>
         </div>
       </form>
-    </div>
+    </section>
   </div>
 
   <!-- Modal nouvelle conversation (améliorée) -->
@@ -600,17 +591,6 @@ const filteredConversations = computed(() => {
     const preview = (conv.last?.text || '').toLowerCase()
     return name.includes(q) || preview.includes(q)
   })
-})
-
-const conversationFilterStats = computed(() => {
-  const list = conversations.value || []
-  const stats = { all: list.length, unread: 0, favorites: 0, groups: 0 }
-  for (const conv of list) {
-    if (getUnreadCount(conv) > 0) stats.unread += 1
-    if (isFavorite(conv.id)) stats.favorites += 1
-    if (conv.is_group) stats.groups += 1
-  }
-  return stats
 })
 
 const fileInput = ref(null)
@@ -1792,45 +1772,200 @@ onUnmounted(() => {
 
 /* Chat styles */
 .chat-container {
-  background: #f7f9fb;
-  border-radius: 18px;
-  box-shadow: 0 2px 16px #163b7c19;
-  height: 75vh;
+  position: relative;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 28px;
+  border: 1px solid #d6def2;
+  box-shadow: 0 28px 60px rgba(15, 38, 105, 0.15);
   display: flex;
   flex-direction: column;
   min-width: 0;
+  overflow: hidden;
+  backdrop-filter: blur(18px);
+}
+.chat-container::before {
+  content: '';
+  position: absolute;
+  top: -120px;
+  left: -80px;
+  width: 280px;
+  height: 280px;
+  background: radial-gradient(circle, rgba(13, 110, 253, 0.18), transparent 70%);
+  opacity: 0.4;
+  pointer-events: none;
 }
 .chat-header {
-  border-bottom: 1px solid #e6eaf1;
-  background: #fff;
-  border-radius: 18px 18px 0 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1.5rem 1.75rem 1.25rem;
+  border-bottom: 1px solid #e3e8f3;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.55), rgba(239, 243, 255, 0.95));
+  z-index: 2;
+  box-shadow: 0 12px 30px rgba(15, 38, 105, 0.08);
+}
+.chat-header-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(13, 110, 253, 0.18), rgba(13, 110, 253, 0.05));
+  color: #2157d3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  box-shadow: inset 0 0 0 1px rgba(13, 110, 253, 0.12);
+}
+.chat-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.chat-title {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: #152347;
+}
+.chat-subtitle {
+  margin: 0.35rem 0 0;
+  color: #6c7898;
+  font-size: 0.95rem;
+}
+.chat-subtitle.typing {
+  color: #1f7a55;
+  font-weight: 600;
+}
+.chat-meta {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.chat-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid #dbe2f3;
+  background: rgba(13, 110, 253, 0.08);
+  color: #1f3b76;
+  font-weight: 600;
+  font-size: 0.8rem;
+  letter-spacing: 0.01em;
+}
+.chat-meta-chip i {
+  font-size: 0.9rem;
+}
+.chat-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.chat-action-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  border: 1px solid #dbe2f3;
+  background: #f6f8ff;
+  color: #1f3b76;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.chat-action-btn:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, rgba(13, 110, 253, 0.18), rgba(13, 110, 253, 0.05));
+  border-color: rgba(13, 110, 253, 0.45);
+  color: #0d6efd;
+  box-shadow: 0 12px 28px rgba(13, 110, 253, 0.18);
+}
+.chat-action-btn:focus-visible {
+  outline: 2px solid rgba(13, 110, 253, 0.3);
+  outline-offset: 2px;
+}
+.chat-action-btn.dropdown-toggle::after {
+  display: none;
+}
+.chat-actions .dropdown-menu {
+  border-radius: 16px;
+  padding: 0.35rem 0;
+  box-shadow: 0 18px 40px rgba(15, 38, 105, 0.12);
 }
 .chat-messages {
-  flex-grow: 1;
+  position: relative;
+  flex: 1;
+  padding: 2rem 2.25rem;
   overflow-y: auto;
-  background: #f7f9fb;
+  background: radial-gradient(circle at top right, rgba(13, 110, 253, 0.08), transparent 65%), #f5f7fb;
+}
+.chat-messages::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at bottom left, rgba(99, 102, 241, 0.08), transparent 60%);
+  opacity: 0.8;
+}
+.chat-messages > * {
+  position: relative;
+  z-index: 1;
+}
+.chat-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 220px;
+  color: #6c7898;
+  text-align: center;
+}
+.chat-state.chat-empty i {
+  color: #9aa4c3;
+}
+.chat-history {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.messages-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
 }
 .chat-bubble {
-  margin-bottom: 14px;
-  max-width: 78%;
-  padding: 0.8rem 1.2rem;
-  border-radius: 18px;
+  max-width: 72%;
+  padding: 1rem 1.35rem;
+  border-radius: 22px;
   word-break: break-word;
   position: relative;
-  background: #fff;
-  box-shadow: 0 2px 8px #163b7c11;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(211, 222, 243, 0.6);
+  box-shadow: 0 18px 38px rgba(15, 38, 105, 0.12);
+  backdrop-filter: blur(6px);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .chat-bubble.sent {
-  background: linear-gradient(120deg, #2157d3 55%, #0d6efd 100%);
+  background: linear-gradient(135deg, #2157d3 40%, #0d6efd 100%);
   color: #fff;
   margin-left: auto;
-  text-align: left;
+  border-color: transparent;
 }
 .chat-bubble.received {
-  background: #fff;
+  background: rgba(255, 255, 255, 0.92);
   color: #2d3245;
   margin-right: auto;
-  text-align: left;
+  border-color: rgba(211, 222, 243, 0.8);
+}
+.chat-bubble:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 22px 44px rgba(15, 38, 105, 0.18);
 }
 .bubble-header {
   display: flex;
@@ -1855,7 +1990,7 @@ onUnmounted(() => {
 }
 .bubble-body {
   font-size: 1.02em;
-  line-height: 1.6;
+  line-height: 1.65;
 }
 .chat-bubble:after {
   content: '';
@@ -1910,25 +2045,102 @@ onUnmounted(() => {
   background: rgba(255, 75, 90, 0.35);
 }
 .chat-input {
-  border-top: 1px solid #e6eaf1;
-  background: #fff;
-  border-radius: 0 0 18px 18px;
+  padding: 1.25rem 1.75rem;
+  border-top: 1px solid #e3e8f3;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 0 0 28px 28px;
   position: relative;
+  box-shadow: 0 -8px 24px rgba(15, 38, 105, 0.08);
+}
+.composer-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 18px;
+  background: rgba(248, 250, 255, 0.9);
+  border: 1px solid #dbe2f3;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65), 0 12px 30px rgba(15, 38, 105, 0.12);
+  padding: 0.6rem 0.75rem;
+}
+.composer-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.composer-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  border: 1px solid #dbe2f3;
+  background: #f6f8ff;
+  color: #1f3b76;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.composer-icon:hover:enabled {
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, rgba(13, 110, 253, 0.18), rgba(13, 110, 253, 0.05));
+  border-color: rgba(13, 110, 253, 0.4);
+  color: #0d6efd;
+  box-shadow: 0 12px 28px rgba(13, 110, 253, 0.18);
+}
+.composer-icon:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.composer-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: #1f2937;
+  font-size: 1rem;
+  padding: 0.4rem 0.5rem;
+}
+.composer-input:focus {
+  outline: none;
+  box-shadow: none;
+}
+.composer-send {
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  border: none;
+  background: linear-gradient(135deg, #2157d3, #0d6efd);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  box-shadow: 0 18px 36px rgba(13, 110, 253, 0.28);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+.composer-send:disabled {
+  opacity: 0.5;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.composer-send:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 24px 44px rgba(13, 110, 253, 0.32);
 }
 .pending-files {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
+  margin-top: 0.75rem;
 }
 .pending-file {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.4rem 0.6rem;
+  padding: 0.45rem 0.7rem;
   border: 1px solid #dbe2f3;
-  border-radius: 12px;
-  background: #f8faff;
-  box-shadow: 0 1px 3px rgba(13, 110, 253, 0.12);
+  border-radius: 14px;
+  background: rgba(248, 250, 255, 0.95);
+  box-shadow: 0 8px 20px rgba(13, 110, 253, 0.12);
 }
 .pending-thumb {
   width: 48px;
@@ -1955,8 +2167,8 @@ onUnmounted(() => {
 .emoji-popover,
 .gif-popover {
   position: absolute;
-  bottom: 70px;
-  left: 64px;
+  bottom: 90px;
+  left: 110px;
   z-index: 30;
   background: #fff;
   border-radius: 16px;
@@ -1987,13 +2199,46 @@ onUnmounted(() => {
   border-color: #dbe2f3;
 }
 .chat-search .input-group-text {
-  background: #f1f4ff;
-  border-color: #dbe2f3;
+  background: rgba(248, 250, 255, 0.95);
+  border: none;
+  color: #3d4f7c;
 }
 .chat-search .form-control,
 .chat-search .btn,
 .chat-search .form-select {
-  border-color: #dbe2f3;
+  border: none;
+  background: transparent;
+  color: #1f3b76;
+}
+.chat-search .btn {
+  color: #1f3b76;
+}
+.chat-search .btn:hover {
+  color: #0d6efd;
+}
+.chat-search {
+  padding: 1.25rem 1.75rem;
+  background: rgba(255, 255, 255, 0.9);
+  border-bottom: 1px solid #e3e8f3;
+}
+.chat-search-bar {
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 12px 28px rgba(13, 110, 253, 0.08);
+}
+.chat-search-bar .form-control {
+  padding: 0.6rem 0.9rem;
+}
+.chat-search-bar .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.chat-search-grid {
+  margin-top: 1rem !important;
+}
+.search-result-count {
+  color: #6c7898;
 }
 mark.hl {
   background: #fff3cd;
@@ -2264,52 +2509,333 @@ mark.hl {
   box-shadow: 0 4px 12px rgba(255, 193, 7, 0.18);
 }
 
-.messages-layout {
-  height: 75vh;
-  background: #fff;
-  border-radius: 18px;
-  box-shadow: 0 2px 16px #163b7c19;
+.conv-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.5rem;
 }
-.conv-list {
-  width: 240px;
-  border-right: 1px solid #e6eaf1;
-  overflow-y: auto;
-  background: #f7f9fb;
-  border-radius: 18px 0 0 18px;
-}
-.conv-search input {
+
+.conv-filter-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.35rem 0.75rem;
   border-radius: 999px;
   border: 1px solid #dbe2f3;
-  background: #fff;
+  background: linear-gradient(135deg, #f5f7ff 0%, #eef3ff 100%);
+  color: #1f3b76;
+  font-weight: 600;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  box-shadow: 0 2px 6px rgba(13, 110, 253, 0.12);
+}
+
+.conv-filter-btn .filter-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.conv-filter-btn .filter-label i {
+  font-size: 0.85rem;
+}
+
+.conv-filter-btn .filter-count {
+  background: rgba(13, 110, 253, 0.12);
+  color: #0d6efd;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.72rem;
+}
+
+.conv-filter-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(13, 110, 253, 0.22);
+}
+
+.conv-filter-btn:focus-visible {
+  outline: 2px solid rgba(13, 110, 253, 0.35);
+  outline-offset: 2px;
+}
+
+.conv-filter-btn.active {
+  background: linear-gradient(135deg, #2157d3 0%, #0d6efd 100%);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 10px 24px rgba(13, 110, 253, 0.35);
+}
+
+.conv-filter-btn.active .filter-count {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.conv-filter-btn.active .filter-label i,
+.conv-filter-btn.active .filter-label span {
+  color: inherit;
+}
+
+.favorite-toggle {
+  border: none;
+  background: transparent;
+  color: #9aa4b5;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.favorite-toggle:hover {
+  color: #f3a712;
+  background: rgba(243, 167, 18, 0.15);
+  transform: translateY(-1px);
+}
+
+.favorite-toggle:focus-visible {
+  outline: 2px solid rgba(13, 110, 253, 0.4);
+  outline-offset: 1px;
+}
+
+.favorite-toggle.active {
+  color: #f0a400;
+}
+
+.conv-tile.active .favorite-toggle {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.conv-tile.active .favorite-toggle:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.conv-tile.active .favorite-toggle.active {
+  color: #ffd976;
+}
+
+.conv-tile.favorite:not(.active) {
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.12), rgba(255, 193, 7, 0.02));
+  border-color: rgba(255, 193, 7, 0.35);
+  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.18);
+}
+
+.messages-wrapper {
+  position: relative;
+  padding: 1.75rem;
+  background: linear-gradient(135deg, rgba(13, 110, 253, 0.07), rgba(255, 255, 255, 0.9));
+  border-radius: 32px;
+  box-shadow: 0 24px 60px rgba(13, 38, 86, 0.12);
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+.messages-wrapper::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at top left, rgba(13, 110, 253, 0.12), transparent 55%),
+    radial-gradient(circle at bottom right, rgba(99, 102, 241, 0.12), transparent 45%);
+  pointer-events: none;
+}
+.messages-layout {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 1.5rem;
+  min-height: clamp(520px, 78vh, 880px);
+  width: 100%;
+}
+.conv-list {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #dbe2f3;
+  box-shadow: 0 18px 48px rgba(15, 38, 105, 0.08);
+  backdrop-filter: blur(18px);
+  overflow: hidden;
+}
+.conv-list::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  right: -60px;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(13, 110, 253, 0.15), transparent 65%);
+  opacity: 0.6;
+  pointer-events: none;
+}
+.conv-search input {
+  border-radius: 14px;
+  border: 1px solid #dbe2f3;
+  background: rgba(255, 255, 255, 0.85);
   padding-left: 2.6rem;
-  box-shadow: 0 1px 3px rgba(13, 110, 253, 0.05);
+  height: 42px;
+  box-shadow: 0 8px 24px rgba(13, 110, 253, 0.08);
 }
 .conv-search input:focus {
   border-color: #0d6efd;
-  box-shadow: 0 0 0 0.15rem rgba(13, 110, 253, 0.15);
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.18);
+  background: #fff;
 }
 .conv-list-scroll {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+.conv-list-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+.conv-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #1f3b76;
+}
+.conv-subtitle {
+  margin: 0.35rem 0 0;
+  color: #6c7898;
+  font-size: 0.9rem;
+}
+.conv-create-btn {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #2157d3, #0d6efd);
+  color: #fff;
+  border: none;
+  box-shadow: 0 18px 36px rgba(13, 110, 253, 0.26);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.conv-create-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 24px 44px rgba(13, 110, 253, 0.32);
+}
+.conv-create-btn:focus-visible {
+  outline: 2px solid rgba(13, 110, 253, 0.4);
+  outline-offset: 2px;
+}
+.conv-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+.conv-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.conv-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid #dbe2f3;
+  background: rgba(13, 110, 253, 0.08);
+  color: #1f3b76;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.conv-meta-chip i {
+  font-size: 0.85rem;
+}
+.conv-scroll {
+  flex: 1;
   overflow-y: auto;
-  padding-right: 4px;
+  margin: 0 -0.5rem;
+  padding: 0 0.5rem 0.5rem;
+}
+.conv-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.conv-name-row {
+  gap: 0.5rem;
+}
+.conv-meta-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.conv-preview {
+  font-size: 0.92rem;
+  color: #6c7898;
+}
+.conv-flags {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.conv-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(13, 110, 253, 0.12);
+  color: #1f3b76;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+.conv-flag.favorite {
+  background: rgba(255, 193, 7, 0.2);
+  color: #8f6a00;
+}
+.conv-flag i {
+  font-size: 0.75rem;
+}
+.conv-empty {
+  background: transparent;
 }
 .conv-tile {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.55rem 0.5rem;
-  border-radius: 12px;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 20px;
   border: 1px solid transparent;
-  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  background: rgba(248, 250, 255, 0.92);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, border-color 0.18s ease;
   cursor: pointer;
+  box-shadow: 0 12px 28px rgba(15, 38, 105, 0.08);
 }
 .conv-tile:hover {
-  background: #f3f6ff;
-  border-color: #e4ebff;
+  transform: translateY(-3px);
+  background: #f0f4ff;
+  border-color: rgba(13, 110, 253, 0.18);
+  box-shadow: 0 18px 36px rgba(13, 110, 253, 0.16);
 }
 .conv-tile.active {
-  background: #0d6efd;
+  background: linear-gradient(135deg, #2157d3, #0d6efd);
   color: #fff;
-  box-shadow: 0 3px 10px rgba(13, 110, 253, 0.25);
+  box-shadow: 0 22px 44px rgba(13, 110, 253, 0.35);
 }
 .avatar-list {
   width: 40px;
@@ -2365,8 +2891,21 @@ mark.hl {
   color: #6c7898;
 }
 .conv-tile.active .conv-preview {
-  color: #eaf2ff;
-  opacity: 0.9;
+  color: rgba(255, 255, 255, 0.85);
+  opacity: 1;
+}
+.conv-tile.active .conv-meta-chip,
+.conv-tile.active .conv-flag {
+  background: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.85);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.conv-tile.active .conv-meta-chip i,
+.conv-tile.active .conv-flag i {
+  color: inherit;
+}
+.conv-tile.active .conv-time {
+  color: rgba(255, 255, 255, 0.75);
 }
 .badge-unread {
   background: #ff4757;
@@ -2381,12 +2920,50 @@ mark.hl {
 .msg-row {
   display: flex;
   align-items: flex-end;
-  gap: 0.5rem;
-  margin-bottom: 10px;
+  gap: 0.75rem;
+  margin: 0;
   animation: bubbleIn 0.16s ease;
 }
 .msg-row.sent {
   justify-content: flex-end;
+}
+@media (max-width: 1200px) {
+  .messages-layout {
+    grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+  }
+}
+@media (max-width: 992px) {
+  .messages-wrapper {
+    padding: 1rem;
+  }
+  .messages-layout {
+    grid-template-columns: 1fr;
+    min-height: auto;
+    gap: 1rem;
+  }
+  .conv-list {
+    border-radius: 24px;
+  }
+  .chat-container {
+    border-radius: 24px;
+  }
+}
+@media (max-width: 576px) {
+  .chat-header {
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  .chat-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .composer-bar {
+    flex-wrap: wrap;
+    padding: 0.75rem;
+  }
+  .composer-input {
+    width: 100%;
+  }
 }
 .avatar-xs {
   width: 28px;
