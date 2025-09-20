@@ -1,57 +1,117 @@
 <template>
-  <div class="messages-layout d-flex">
-    <!-- Conversations list -->
-    <div class="conv-list p-3">
-      <div class="d-flex align-items-center mb-3">
-        <strong class="flex-grow-1">Conversations</strong>
-        <button class="btn btn-sm btn-primary" @click="openConvModal">
-          <i class="bi bi-plus"></i>
-        </button>
-      </div>
-      <div class="input-icon conv-search mb-3">
-        <i class="bi bi-search"></i>
-        <input
-          v-model.trim="conversationSearch"
-          type="text"
-          class="form-control ps-5 form-control-sm"
-          placeholder="Rechercher une conversation"
-        />
-      </div>
-      <ul class="list-group list-group-flush conv-list-scroll">
-        <li
-          v-for="conv in filteredConversations"
-          :key="conv.id"
-          class="list-group-item p-0 border-0 bg-transparent"
-        >
-          <div class="conv-tile" :class="{ active: conv.id === selectedConvId }" @click="selectConversation(conv.id)">
-            <div class="me-2 avatar-wrap">
-              <img v-if="conv.avatar_url" :src="conv.avatar_url" class="avatar-list" alt="avatar" />
-              <div v-else class="avatar-list-placeholder" :class="{ group: conv.is_group }">
-                {{ initials(conv.displayName || conv.titre) }}
-              </div>
-              <span v-if="conv.is_group" class="group-ind"><i class="bi bi-people-fill"></i></span>
-            </div>
-            <div class="flex-grow-1 overflow-hidden">
-              <div class="d-flex align-items-center">
-                <div class="conv-name text-truncate">{{ conv.displayName || conv.titre }}</div>
-                <div class="ms-auto d-flex align-items-center gap-2">
-                  <div class="conv-time">{{ formatTime(conv.last?.ts) }}</div>
-                  <span v-if="unreadCounts[conv.id]" class="badge-unread">{{ unreadCounts[conv.id] }}</span>
+  <div class="messages-wrapper">
+    <div class="messages-layout">
+      <!-- Conversations list -->
+      <aside class="conv-list">
+        <div class="conv-list-header">
+          <div>
+            <h2 class="conv-title">Conversations</h2>
+            <p class="conv-subtitle">
+              {{ totalConversations }} discussion(s) sécurisée(s)
+              <span v-if="conversationFilterStats.unread">
+                • {{ conversationFilterStats.unread }} non lue(s)
+              </span>
+            </p>
+          </div>
+          <button type="button" class="conv-create-btn" @click="openConvModal">
+            <i class="bi bi-plus-lg"></i>
+          </button>
+        </div>
+        <div class="conv-tools">
+          <div class="input-icon conv-search">
+            <i class="bi bi-search"></i>
+            <input
+              v-model.trim="conversationSearch"
+              type="text"
+              class="form-control"
+              placeholder="Rechercher une conversation"
+            />
+          </div>
+          <div class="conv-meta">
+            <span class="conv-meta-chip">
+              <i class="bi bi-funnel me-1"></i>{{ activeConversationFilter.label }}
+            </span>
+            <span class="conv-meta-chip">
+              <i class="bi bi-chat-text me-1"></i>{{ filteredConversations.length }} conversation(s)
+            </span>
+          </div>
+        </div>
+        <div class="conv-filters">
+          <button
+            v-for="filter in conversationFilters"
+            :key="filter.value"
+            type="button"
+            class="conv-filter-btn"
+            :class="{ active: conversationFilter === filter.value }"
+            :aria-pressed="conversationFilter === filter.value"
+            @click="setConversationFilter(filter.value)"
+          >
+            <span class="filter-label">
+              <i class="bi" :class="filter.icon"></i>
+              <span>{{ filter.label }}</span>
+            </span>
+            <span class="filter-count">{{ conversationFilterStats[filter.value] ?? 0 }}</span>
+          </button>
+        </div>
+        <div class="conv-scroll">
+          <ul class="list-group list-group-flush conv-list-scroll">
+            <li
+              v-for="conv in filteredConversations"
+              :key="conv.id"
+              class="list-group-item p-0 border-0 bg-transparent"
+            >
+              <div
+                class="conv-tile"
+                :class="{ active: conv.id === selectedConvId, favorite: isFavorite(conv.id) }"
+                @click="selectConversation(conv.id)"
+              >
+                <div class="me-2 avatar-wrap">
+                  <img v-if="conv.avatar_url" :src="conv.avatar_url" class="avatar-list" alt="avatar" />
+                  <div v-else class="avatar-list-placeholder" :class="{ group: conv.is_group }">
+                    {{ initials(conv.displayName || conv.titre) }}
+                  </div>
+                  <span v-if="conv.is_group" class="group-ind"><i class="bi bi-people-fill"></i></span>
+                </div>
+                <div class="flex-grow-1 overflow-hidden conv-content">
+                  <div class="conv-name-row d-flex align-items-center">
+                    <div class="conv-name text-truncate">{{ conv.displayName || conv.titre }}</div>
+                    <div class="ms-auto d-flex align-items-center gap-2 conv-meta-right">
+                      <button
+                        type="button"
+                        class="favorite-toggle"
+                        :class="{ active: isFavorite(conv.id) }"
+                        :aria-pressed="isFavorite(conv.id)"
+                        :title="isFavorite(conv.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'"
+                        @click.stop="toggleFavorite(conv.id)"
+                      >
+                        <i class="bi" :class="isFavorite(conv.id) ? 'bi-star-fill' : 'bi-star'"></i>
+                      </button>
+                      <div class="conv-time">{{ formatTime(conv.last?.ts) }}</div>
+                      <span v-if="getUnreadCount(conv)" class="badge-unread">{{ getUnreadCount(conv) }}</span>
+                    </div>
+                  </div>
+                  <div class="conv-preview text-truncate">
+                    <span v-if="conv.last && conv.last.sentByMe" class="text-muted">Vous: </span>
+                    {{ conv.last ? conv.last.text : 'Aucun message' }}
+                  </div>
+                  <div class="conv-flags" v-if="conv.is_group || isFavorite(conv.id)">
+                    <span v-if="conv.is_group" class="conv-flag">
+                      <i class="bi bi-people-fill me-1"></i>Groupe
+                    </span>
+                    <span v-if="isFavorite(conv.id)" class="conv-flag favorite">
+                      <i class="bi bi-star-fill me-1"></i>Favori
+                    </span>
+                  </div>
                 </div>
               </div>
-              <div class="conv-preview text-truncate">
-                <span v-if="conv.last && conv.last.sentByMe" class="text-muted">Vous: </span>
-                {{ conv.last ? conv.last.text : 'Aucun message' }}
-              </div>
-            </div>
-          </div>
-        </li>
-        <li v-if="!filteredConversations.length" class="list-group-item text-center text-muted py-4">
-          <i class="bi bi-search mb-2 d-block fs-4"></i>
-          <span>Aucune conversation trouvée</span>
-        </li>
-      </ul>
-    </div>
+            </li>
+            <li v-if="!filteredConversations.length" class="list-group-item text-center text-muted py-4 conv-empty">
+              <i class="bi bi-search mb-2 d-block fs-4"></i>
+              <span>Aucune conversation trouvée</span>
+            </li>
+          </ul>
+        </div>
+      </aside>
 
       <!-- Chat area -->
       <section class="chat-container">
@@ -592,6 +652,29 @@ const filteredConversations = computed(() => {
     return name.includes(q) || preview.includes(q)
   })
 })
+
+const conversationFilterStats = computed(() => {
+  const list = conversations.value || []
+  const stats = { all: list.length, unread: 0, favorites: 0, groups: 0 }
+  for (const conv of list) {
+    if (getUnreadCount(conv) > 0) stats.unread += 1
+    if (isFavorite(conv.id)) stats.favorites += 1
+    if (conv.is_group) stats.groups += 1
+  }
+  return stats
+})
+
+const totalConversations = computed(() => conversations.value.length)
+const activeConversationFilter = computed(
+  () => conversationFilters.find(filter => filter.value === conversationFilter.value) || conversationFilters[0]
+)
+const lastMessageAt = computed(() => {
+  const list = messages.value || []
+  if (!list.length) return null
+  const last = list[list.length - 1]
+  return last?.ts_msg || null
+})
+
 
 const fileInput = ref(null)
 const messageInput = ref(null)
@@ -2392,257 +2475,6 @@ mark.hl {
   font-weight: 600;
 }
 
-.conv-filters {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 0.5rem;
-}
-
-.conv-filter-btn {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem;
-  padding: 0.35rem 0.75rem;
-  border-radius: 999px;
-  border: 1px solid #dbe2f3;
-  background: linear-gradient(135deg, #f5f7ff 0%, #eef3ff 100%);
-  color: #1f3b76;
-  font-weight: 600;
-  font-size: 0.78rem;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-  box-shadow: 0 2px 6px rgba(13, 110, 253, 0.12);
-}
-
-.conv-filter-btn .filter-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.conv-filter-btn .filter-label i {
-  font-size: 0.85rem;
-}
-
-.conv-filter-btn .filter-count {
-  background: rgba(13, 110, 253, 0.12);
-  color: #0d6efd;
-  padding: 0.05rem 0.45rem;
-  border-radius: 999px;
-  font-weight: 700;
-  font-size: 0.72rem;
-}
-
-.conv-filter-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(13, 110, 253, 0.22);
-}
-
-.conv-filter-btn:focus-visible {
-  outline: 2px solid rgba(13, 110, 253, 0.35);
-  outline-offset: 2px;
-}
-
-.conv-filter-btn.active {
-  background: linear-gradient(135deg, #2157d3 0%, #0d6efd 100%);
-  color: #fff;
-  border-color: transparent;
-  box-shadow: 0 10px 24px rgba(13, 110, 253, 0.35);
-}
-
-.conv-filter-btn.active .filter-count {
-  background: rgba(255, 255, 255, 0.25);
-  color: #fff;
-}
-
-.conv-filter-btn.active .filter-label i,
-.conv-filter-btn.active .filter-label span {
-  color: inherit;
-}
-
-.favorite-toggle {
-  border: none;
-  background: transparent;
-  color: #9aa4b5;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
-}
-
-.favorite-toggle:hover {
-  color: #f3a712;
-  background: rgba(243, 167, 18, 0.15);
-  transform: translateY(-1px);
-}
-
-.favorite-toggle:focus-visible {
-  outline: 2px solid rgba(13, 110, 253, 0.4);
-  outline-offset: 1px;
-}
-
-.favorite-toggle.active {
-  color: #f0a400;
-}
-
-.conv-tile.active .favorite-toggle {
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.conv-tile.active .favorite-toggle:hover {
-  background: rgba(255, 255, 255, 0.18);
-}
-
-.conv-tile.active .favorite-toggle.active {
-  color: #ffd976;
-}
-
-.conv-tile.favorite:not(.active) {
-  background: linear-gradient(135deg, rgba(255, 193, 7, 0.12), rgba(255, 193, 7, 0.02));
-  border-color: rgba(255, 193, 7, 0.35);
-  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.18);
-}
-
-.conv-filters {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 0.5rem;
-}
-
-.conv-filter-btn {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem;
-  padding: 0.35rem 0.75rem;
-  border-radius: 999px;
-  border: 1px solid #dbe2f3;
-  background: linear-gradient(135deg, #f5f7ff 0%, #eef3ff 100%);
-  color: #1f3b76;
-  font-weight: 600;
-  font-size: 0.78rem;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-  box-shadow: 0 2px 6px rgba(13, 110, 253, 0.12);
-}
-
-.conv-filter-btn .filter-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.conv-filter-btn .filter-label i {
-  font-size: 0.85rem;
-}
-
-.conv-filter-btn .filter-count {
-  background: rgba(13, 110, 253, 0.12);
-  color: #0d6efd;
-  padding: 0.05rem 0.45rem;
-  border-radius: 999px;
-  font-weight: 700;
-  font-size: 0.72rem;
-}
-
-.conv-filter-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(13, 110, 253, 0.22);
-}
-
-.conv-filter-btn:focus-visible {
-  outline: 2px solid rgba(13, 110, 253, 0.35);
-  outline-offset: 2px;
-}
-
-.conv-filter-btn.active {
-  background: linear-gradient(135deg, #2157d3 0%, #0d6efd 100%);
-  color: #fff;
-  border-color: transparent;
-  box-shadow: 0 10px 24px rgba(13, 110, 253, 0.35);
-}
-
-.conv-filter-btn.active .filter-count {
-  background: rgba(255, 255, 255, 0.25);
-  color: #fff;
-}
-
-.conv-filter-btn.active .filter-label i,
-.conv-filter-btn.active .filter-label span {
-  color: inherit;
-}
-
-.favorite-toggle {
-  border: none;
-  background: transparent;
-  color: #9aa4b5;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
-}
-
-.favorite-toggle:hover {
-  color: #f3a712;
-  background: rgba(243, 167, 18, 0.15);
-  transform: translateY(-1px);
-}
-
-.favorite-toggle:focus-visible {
-  outline: 2px solid rgba(13, 110, 253, 0.4);
-  outline-offset: 1px;
-}
-
-.favorite-toggle.active {
-  color: #f0a400;
-}
-
-.conv-tile.active .favorite-toggle {
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.conv-tile.active .favorite-toggle:hover {
-  background: rgba(255, 255, 255, 0.18);
-}
-
-.conv-tile.active .favorite-toggle.active {
-  color: #ffd976;
-}
-
-.conv-tile.favorite:not(.active) {
-  background: linear-gradient(135deg, rgba(255, 193, 7, 0.12), rgba(255, 193, 7, 0.02));
-  border-color: rgba(255, 193, 7, 0.35);
-  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.18);
-}
-
-.messages-wrapper {
-  position: relative;
-  padding: 1.75rem;
-  background: linear-gradient(135deg, rgba(13, 110, 253, 0.07), rgba(255, 255, 255, 0.9));
-  border-radius: 32px;
-  box-shadow: 0 24px 60px rgba(13, 38, 86, 0.12);
-  overflow: hidden;
-  margin-bottom: 1.5rem;
-}
-.messages-wrapper::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at top left, rgba(13, 110, 253, 0.12), transparent 55%),
-    radial-gradient(circle at bottom right, rgba(99, 102, 241, 0.12), transparent 45%);
-  pointer-events: none;
-}
 .messages-layout {
   position: relative;
   z-index: 1;
