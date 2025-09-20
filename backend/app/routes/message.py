@@ -1,27 +1,94 @@
-# backend/app/routes/messages.py
+from __future__ import annotations
 
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from ..models import Message, Conversation, Participation
-from ..extensions import db, socketio, limiter
-from ..schemas_message import MessageSchema
+import hashlib
+import os
+from typing import Iterable, Tuple
+from uuid import uuid4
+
+from flask import Blueprint, current_app, jsonify, request, send_from_directory
+from flask_jwt_extended import get_jwt_identity, jwt_required
 from marshmallow import ValidationError
 
+from ..extensions import db, limiter, socketio
+from ..models import Conversation, File, Message, Participation, Reaction
+from ..schemas_message import MessageSchema
+
 messages_bp = Blueprint("messages", __name__)
+
+
+def _message_schema(user_id: int | None = None, *, many: bool = False) -> MessageSchema:
+    context = {"user_id": user_id} if user_id is not None else {}
+    return MessageSchema(many=many, context=context)
+
+
+def _user_is_participant(conv: Conversation, user_id: int) -> bool:
+    return any(p.id_user == user_id for p in conv.participations)
+
+
+def _original_name(path: str) -> str:
+    _, _, original = path.partition("_")
+    return original or path
+
+
+def _extract_payload_and_files() -> Tuple[dict, list]:
+    if request.content_type and request.content_type.startswith("multipart/form-data"):
+        payload = {"contenu_chiffre": request.form.get("contenu_chiffre", "")}
+        files = request.files.getlist("files")
+    else:
+        payload = request.get_json() or {}
+        files = []
+    return payload, files
+
+
+def _store_uploaded_file(upload) -> dict | None:
+    if upload is None or not getattr(upload, "filename", ""):
+        return None
+    filename = upload.filename
+    safe_name = secure_filename(filename or "")
+    if not safe_name:
+        return None
+    data = upload.read()
+    if not data:
+        return None
+    stored_name = f"{uuid4().hex}_{safe_name}"
+    upload_dir = current_app.config.get("UPLOAD_FOLDER", "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+    destination = os.path.join(upload_dir, stored_name)
+    with open(destination, "wb") as fh:
+        fh.write(data)
+    return {
+        "stored_name": stored_name,
+        "mime": upload.mimetype,
+        "size": len(data),
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "original": filename,
+    }
+
+
+def _delete_files_from_storage(files: Iterable[File]) -> None:
+    upload_dir = current_app.config.get("UPLOAD_FOLDER", "uploads")
+    for file_obj in files or []:
+        stored_name = getattr(file_obj, "path", None)
+        if not stored_name:
+            continue
+        full_path = os.path.join(upload_dir, stored_name)
+        try:
+            os.remove(full_path)
+        except FileNotFoundError:
+            continue
+        except OSError:
+            continue
 
 
 # Lister les messages d'une conversation
 @messages_bp.route("/conversations/<int:conv_id>/messages/", methods=["GET"])
 @jwt_required()
 def list_messages(conv_id):
-    # Vérification que la conversation existe et que l'utilisateur y participe
     user_id = int(get_jwt_identity())
     conv = Conversation.query.get(conv_id)
     if not conv:
         return jsonify({"error": "Conversation introuvable"}), 404
-
-    # Optionnel: vérifier la participation
-    if not any(p.id_user == user_id for p in conv.participations):
+    if not _user_is_participant(conv, user_id):
         return jsonify({"error": "Accès refusé"}), 403
 
     messages = (
@@ -29,7 +96,8 @@ def list_messages(conv_id):
         .order_by(Message.ts_msg.asc())
         .all()
     )
-    return jsonify(MessageSchema(many=True).dump(messages)), 200
+    schema = _message_schema(user_id, many=True)
+    return jsonify(schema.dump(messages)), 200
 
 
 # Envoyer un message
@@ -41,27 +109,42 @@ def send_message(conv_id):
     conv = Conversation.query.get(conv_id)
     if not conv:
         return jsonify({"error": "Conversation introuvable"}), 404
-
-    # Optionnel: vérifier la participation
-    if not any(p.id_user == user_id for p in conv.participations):
+    if not _user_is_participant(conv, user_id):
         return jsonify({"error": "Accès refusé"}), 403
 
-    data = request.get_json()
+    raw_payload, uploaded_files = _extract_payload_and_files()
     try:
-        data = MessageSchema().load(data)
+        data = MessageSchema().load(raw_payload)
     except ValidationError as err:
         return jsonify({"error": "Validation", "messages": err.messages}), 422
+
+    if not data.get("contenu_chiffre", "").strip() and not uploaded_files:
+        return jsonify({"error": "Message vide"}), 400
 
     msg = Message(
         contenu_chiffre=data["contenu_chiffre"],
         sender_id=user_id,
         conv_id=conv_id,
-        ts_msg=None,  # valeur par défaut (maintenant)
+        ts_msg=None,
     )
     db.session.add(msg)
-    db.session.commit()
+    db.session.flush()
 
-    payload = MessageSchema().dump(msg)
+    for upload in uploaded_files:
+        saved = _store_uploaded_file(upload)
+        if not saved:
+            continue
+        file_rec = File(
+            id_msg=msg.id_msg,
+            path=saved["stored_name"],
+            mime=saved.get("mime"),
+            taille=saved.get("size"),
+            sha256=saved.get("sha256"),
+        )
+        db.session.add(file_rec)
+
+    db.session.commit()
+    payload = _message_schema(user_id).dump(msg)
     socketio.emit("message_created", payload, to=f"conv_{conv_id}")
     return jsonify(payload), 201
 
@@ -74,26 +157,100 @@ def update_or_delete_message(conv_id, msg_id):
     if not msg:
         return jsonify({"error": "Message introuvable"}), 404
 
-    # Ensuite selon la méthode...
     if request.method == "PUT":
         if msg.sender_id != user_id:
             return jsonify({"error": "Non autorisé"}), 403
-        data = request.get_json()
+        data = request.get_json() or {}
+        if "contenu_chiffre" not in data:
+            return jsonify({"error": "Contenu manquant"}), 400
         msg.contenu_chiffre = data["contenu_chiffre"]
         db.session.commit()
-        return jsonify(MessageSchema().dump(msg)), 200
-    elif request.method == "DELETE":
-        is_author = msg.sender_id == user_id
-        is_admin = any(
-            p.id_user == user_id and p.role == "admin"
-            for p in (msg.conversation.participations if msg.conversation else [])
-        )
+        return jsonify(_message_schema(user_id).dump(msg)), 200
 
-        if not (is_author or is_admin):
-            return jsonify({"error": "Non autorisé"}), 403
-        db.session.delete(msg)
-        db.session.commit()
-        return jsonify({"message": "Message supprimé"}), 200
+    is_author = msg.sender_id == user_id
+    is_admin = any(
+        p.id_user == user_id and p.role == "admin"
+        for p in (msg.conversation.participations if msg.conversation else [])
+    )
+    if not (is_author or is_admin):
+        return jsonify({"error": "Non autorisé"}), 403
+
+    _delete_files_from_storage(msg.files)
+    db.session.delete(msg)
+    db.session.commit()
+    return jsonify({"message": "Message supprimé"}), 200
+
+
+@messages_bp.route("/messages/files/<int:file_id>", methods=["GET"])
+@jwt_required()
+def download_file(file_id):
+    user_id = int(get_jwt_identity())
+    file_obj = File.query.get(file_id)
+    if not file_obj or not file_obj.message:
+        return jsonify({"error": "Fichier introuvable"}), 404
+
+    conv = file_obj.message.conversation
+    if not conv or not _user_is_participant(conv, user_id):
+        return jsonify({"error": "Accès refusé"}), 403
+
+    upload_dir = current_app.config.get("UPLOAD_FOLDER", "uploads")
+    stored_name = file_obj.path
+    if not stored_name:
+        return jsonify({"error": "Fichier introuvable"}), 404
+    original = _original_name(stored_name)
+    try:
+        return send_from_directory(
+            upload_dir,
+            stored_name,
+            mimetype=file_obj.mime or None,
+            as_attachment=True,
+            download_name=original,
+        )
+    except FileNotFoundError:
+        return jsonify({"error": "Fichier introuvable"}), 404
+
+
+@messages_bp.route("/messages/<int:msg_id>/reactions", methods=["POST"])
+@jwt_required()
+@limiter.limit("60/minute")
+def toggle_reaction(msg_id):
+    user_id = int(get_jwt_identity())
+    msg = Message.query.get(msg_id)
+    if not msg:
+        return jsonify({"error": "Message introuvable"}), 404
+    conv = msg.conversation
+    if not conv or not _user_is_participant(conv, user_id):
+        return jsonify({"error": "Accès refusé"}), 403
+
+    data = request.get_json() or {}
+    emoji = (data.get("emoji") or "").strip()
+    if not emoji:
+        return jsonify({"error": "Emoji requis"}), 400
+    if len(emoji) > 8:
+        return jsonify({"error": "Emoji invalide"}), 400
+
+    existing = Reaction.query.filter_by(id_msg=msg_id, id_user=user_id, emoji=emoji).first()
+    if existing:
+        db.session.delete(existing)
+        action = "removed"
+    else:
+        new_reaction = Reaction(id_msg=msg_id, id_user=user_id, emoji=emoji)
+        db.session.add(new_reaction)
+        action = "added"
+
+    db.session.commit()
+    schema = _message_schema(user_id)
+    message_payload = schema.dump(msg)
+    payload = {
+        "message_id": msg_id,
+        "status": action,
+        "reactions": message_payload.get("reactions", []),
+        "reaction_summary": message_payload.get("reaction_summary", []),
+        "conv_id": msg.conv_id,
+        "user_id": user_id,
+    }
+    socketio.emit("reaction_updated", payload, to=f"conv_{msg.conv_id}")
+    return jsonify(payload), 200
 
 
 # Nombre de messages non lus
@@ -101,7 +258,6 @@ def update_or_delete_message(conv_id, msg_id):
 @jwt_required()
 @limiter.limit("60/minute")
 def unread_count():
-    """Retourne un compte simple de messages non lus pour l'utilisateur"""
     user_id = int(get_jwt_identity())
 
     conv_ids = [p.id_conv for p in Participation.query.filter_by(id_user=user_id)]
@@ -117,3 +273,6 @@ def unread_count():
 
     return jsonify({"count": count}), 200
 
+
+# Utilities imported late to avoid circular import
+from werkzeug.utils import secure_filename  # noqa: E402  pylint: disable=wrong-import-position
