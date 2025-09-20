@@ -168,6 +168,52 @@ const { isDark } = toRefs(props)
 const router = useRouter()
 
 const unreadCount = ref(0)
+const pseudo = ref('Utilisateur')
+const avatarUrl = ref(null)
+const isOnline = ref(typeof navigator !== 'undefined' ? navigator.onLine : true)
+const securitySettings = ref({
+  totpEnabled: false,
+  notificationLogin: false
+})
+const lastAuditLog = ref(null)
+
+const initials = computed(() => (pseudo.value ? pseudo.value.charAt(0).toUpperCase() : 'U'))
+const lastAuditText = computed(() => {
+  if (!lastAuditLog.value) return ''
+  const { timestamp, ip } = lastAuditLog.value
+  const relative = formatRelativeTime(timestamp)
+  if (relative && ip) {
+    return `${relative} • IP ${ip}`
+  }
+  return relative || (ip ? `IP ${ip}` : '')
+})
+
+const updateNetworkStatus = () => {
+  if (typeof navigator !== 'undefined') {
+    isOnline.value = navigator.onLine
+  }
+}
+
+const startConversation = () => {
+  router.push({ path: '/dashboard/messages', query: { compose: 'new' } })
+}
+
+const inviteContact = () => {
+  router.push({ path: '/dashboard/contacts', query: { add: '1' } })
+}
+
+const goToSecurity = () => {
+  router.push({ path: '/dashboard/settings', query: { section: 'security' } })
+}
+
+const onAvatarError = () => {
+  avatarUrl.value = null
+  try {
+    localStorage.removeItem('avatar_url')
+  } catch (e) {
+    /* ignore */
+  }
+}
 
 onMounted(async () => {
   pseudo.value = localStorage.getItem('pseudo') || 'Utilisateur'
