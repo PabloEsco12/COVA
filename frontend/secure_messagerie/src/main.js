@@ -13,8 +13,11 @@ try {
   const saved = localStorage.getItem('theme')
   const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
   const dark = saved ? saved === 'dark' : prefersDark
-  if (dark) document.body.classList.add('dark-mode')
-} catch {}
+  document.body.classList.toggle('dark-mode', dark)
+  document.body.classList.toggle('light-mode', !dark)
+} catch {
+  document.body.classList.add('light-mode')
+}
 
 createApp(App)
   .use(router)

@@ -38,7 +38,11 @@
       </li>
     </ul>
     <div class="mt-auto text-center">
-      <button class="btn btn-outline-light btn-sm" @click="$emit('toggle-dark')">
+      <button
+        class="btn btn-sm theme-toggle"
+        :class="isDark ? 'btn-outline-light' : 'btn-outline-secondary'"
+        @click="$emit('toggle-dark')"
+      >
         <i :class="isDark ? 'bi bi-sun' : 'bi bi-moon'"></i>
         {{ isDark ? 'Clair' : 'Sombre' }}
       </button>
@@ -47,12 +51,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted, defineProps } from 'vue'
+import { ref, onMounted, defineProps, toRefs } from 'vue'
 import axios from 'axios'
 
 const props = defineProps({
   isDark: Boolean
 })
+
+const { isDark } = toRefs(props)
 
 const unreadCount = ref(0)
 
@@ -90,6 +96,10 @@ onMounted(async () => {
   color: #fff;
 }
 .sidebar .mt-auto { position: sticky; bottom: 12px; }
+
+.theme-toggle {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
 </style>
 
 

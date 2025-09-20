@@ -1,5 +1,10 @@
 <template>
-  <header class="d-flex align-items-center justify-content-between bg-white px-4 py-2 shadow-sm">
+  <header
+    :class="[
+      'd-flex align-items-center justify-content-between px-4 py-2 shadow-sm header-bar',
+      isDark ? 'header-bar-dark text-light' : 'bg-white'
+    ]"
+  >
     <div>
       <span class="fw-bold fs-5">Bienvenue {{ pseudo }} sur COVA&nbsp;!</span>
     </div>
@@ -8,15 +13,29 @@
       <span class="me-3">{{ pseudo }}</span>
       <button class="btn btn-outline-danger btn-sm" @click="logout">Déconnexion</button>
     </div>
-    <button @click="toggleDarkMode" class="btn btn-outline-secondary ms-2" title="Activer/désactiver le mode sombre">
+    <button
+      @click="emit('toggle-dark')"
+      :class="['btn ms-2 theme-toggle', isDark ? 'btn-outline-light' : 'btn-outline-secondary']"
+      title="Activer/désactiver le mode sombre"
+    >
       <i :class="isDark ? 'bi bi-moon-fill' : 'bi bi-brightness-high-fill'"></i>
     </button>
   </header>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, defineProps, defineEmits, toRefs } from 'vue'
 import axios from 'axios'
+
+const props = defineProps({
+  isDark: {
+    type: Boolean,
+    default: false
+  }
+})
+
+const { isDark } = toRefs(props)
+const emit = defineEmits(['toggle-dark'])
 
 const pseudo = ref('')
 const avatarUrl = ref(null)
@@ -53,10 +72,20 @@ function logout() {
   window.location.href = '/login'
 }
 
-// Ces refs/fonctions peuvent être fournies ailleurs; laissées non définies si inutilisées
-// const isDark = ref(false)
-// function toggleDarkMode() { isDark.value = !isDark.value }
 function onAvatarError() {  try { localStorage.removeItem("avatar_url") } catch {}  avatarUrl.value = null }
 </script>
+
+<style scoped>
+.theme-toggle {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+.header-bar {
+  transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+}
+.header-bar-dark {
+  background: rgba(22, 27, 34, 0.96);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+</style>
 
 
