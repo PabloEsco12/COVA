@@ -17,13 +17,34 @@
           placeholder="Rechercher une conversation"
         />
       </div>
+      <div class="conv-filters mb-3">
+        <button
+          v-for="filter in conversationFilters"
+          :key="filter.value"
+          type="button"
+          class="conv-filter-btn"
+          :class="{ active: conversationFilter === filter.value }"
+          :aria-pressed="conversationFilter === filter.value"
+          @click="setConversationFilter(filter.value)"
+        >
+          <span class="filter-label">
+            <i class="bi" :class="filter.icon"></i>
+            <span>{{ filter.label }}</span>
+          </span>
+          <span class="filter-count">{{ conversationFilterStats[filter.value] ?? 0 }}</span>
+        </button>
+      </div>
       <ul class="list-group list-group-flush conv-list-scroll">
         <li
           v-for="conv in filteredConversations"
           :key="conv.id"
           class="list-group-item p-0 border-0 bg-transparent"
         >
-          <div class="conv-tile" :class="{ active: conv.id === selectedConvId }" @click="selectConversation(conv.id)">
+          <div
+            class="conv-tile"
+            :class="{ active: conv.id === selectedConvId, favorite: isFavorite(conv.id) }"
+            @click="selectConversation(conv.id)"
+          >
             <div class="me-2 avatar-wrap">
               <img v-if="conv.avatar_url" :src="conv.avatar_url" class="avatar-list" alt="avatar" />
               <div v-else class="avatar-list-placeholder" :class="{ group: conv.is_group }">
@@ -35,8 +56,18 @@
               <div class="d-flex align-items-center">
                 <div class="conv-name text-truncate">{{ conv.displayName || conv.titre }}</div>
                 <div class="ms-auto d-flex align-items-center gap-2">
+                  <button
+                    type="button"
+                    class="favorite-toggle"
+                    :class="{ active: isFavorite(conv.id) }"
+                    :aria-pressed="isFavorite(conv.id)"
+                    :title="isFavorite(conv.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'"
+                    @click.stop="toggleFavorite(conv.id)"
+                  >
+                    <i class="bi" :class="isFavorite(conv.id) ? 'bi-star-fill' : 'bi-star'"></i>
+                  </button>
                   <div class="conv-time">{{ formatTime(conv.last?.ts) }}</div>
-                  <span v-if="unreadCounts[conv.id]" class="badge-unread">{{ unreadCounts[conv.id] }}</span>
+                  <span v-if="getUnreadCount(conv)" class="badge-unread">{{ getUnreadCount(conv) }}</span>
                 </div>
               </div>
               <div class="conv-preview text-truncate">
@@ -467,16 +498,119 @@ let gifController = null
 const typingLabel = ref('')
 const unreadCounts = ref({})
 const conversationSearch = ref('')
+const conversationFilter = ref('all')
+const FAVORITES_STORAGE_KEY = 'favorite_conversations'
+const favoriteConversationIds = ref([])
+const conversationFilters = [
+  { value: 'all', label: 'Tout', icon: 'bi-chat-dots' },
+  { value: 'unread', label: 'Non lues', icon: 'bi-envelope-open' },
+  { value: 'favorites', label: 'Favoris', icon: 'bi-star' },
+  { value: 'groups', label: 'Groupes', icon: 'bi-people' },
+]
 const loadingPreviewIds = new Set()
+function favoriteKey(id) {
+  return String(id)
+}
+
+function isFavorite(id) {
+  const key = favoriteKey(id)
+  return favoriteConversationIds.value.includes(key)
+}
+
+function applyFavoriteStateToConversations() {
+  const set = new Set(favoriteConversationIds.value || [])
+  for (const conv of conversations.value || []) {
+    conv.isFavorite = set.has(favoriteKey(conv.id))
+  }
+}
+
+function loadFavorites() {
+  try {
+    const raw = localStorage.getItem(FAVORITES_STORAGE_KEY)
+    if (!raw) {
+      favoriteConversationIds.value = []
+      return
+    }
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      const unique = Array.from(new Set(parsed.map(value => favoriteKey(value))))
+      favoriteConversationIds.value = unique
+    } else if (parsed && typeof parsed === 'object') {
+      const keys = Object.keys(parsed).filter(key => parsed[key]).map(key => favoriteKey(key))
+      favoriteConversationIds.value = Array.from(new Set(keys))
+    } else {
+      favoriteConversationIds.value = []
+    }
+  } catch {
+    favoriteConversationIds.value = []
+  }
+  applyFavoriteStateToConversations()
+}
+
+function saveFavorites() {
+  try {
+    localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favoriteConversationIds.value))
+  } catch {}
+}
+
+function toggleFavorite(id) {
+  const key = favoriteKey(id)
+  const set = new Set(favoriteConversationIds.value || [])
+  if (set.has(key)) set.delete(key)
+  else set.add(key)
+  favoriteConversationIds.value = Array.from(set)
+  applyFavoriteStateToConversations()
+  saveFavorites()
+}
+
+function removeFavorite(id) {
+  const key = favoriteKey(id)
+  if (!favoriteConversationIds.value.includes(key)) return
+  favoriteConversationIds.value = favoriteConversationIds.value.filter(item => item !== key)
+  applyFavoriteStateToConversations()
+  saveFavorites()
+}
+
+function setConversationFilter(value) {
+  conversationFilter.value = value
+}
+
+function getUnreadCount(conv) {
+  if (!conv) return 0
+  const key = favoriteKey(conv.id)
+  const stored = Number(unreadCounts.value?.[key] || 0)
+  const fromConv = Number(conv.unread_count || 0)
+  return Math.max(stored, fromConv)
+}
+
 const filteredConversations = computed(() => {
   const q = conversationSearch.value.trim().toLowerCase()
-  const list = conversations.value || []
+  const filter = conversationFilter.value
+  let list = conversations.value || []
+  if (filter === 'unread') {
+    list = list.filter(conv => getUnreadCount(conv) > 0)
+  } else if (filter === 'favorites') {
+    list = list.filter(conv => isFavorite(conv.id))
+  } else if (filter === 'groups') {
+    list = list.filter(conv => conv.is_group)
+  }
   if (!q) return list
   return list.filter(conv => {
     const name = (conv.displayName || conv.titre || '').toLowerCase()
     const preview = (conv.last?.text || '').toLowerCase()
     return name.includes(q) || preview.includes(q)
   })
+})
+
+const conversationFilterStats = computed(() => {
+  const list = conversations.value || []
+  const stats = { all: list.length, unread: 0, favorites: 0, groups: 0 }
+  for (const conv of list) {
+    if (getUnreadCount(conv) > 0) stats.unread += 1
+    if (isFavorite(conv.id)) stats.favorites += 1
+    if (conv.is_group) stats.groups += 1
+  }
+  return stats
 })
 
 const fileInput = ref(null)
@@ -780,6 +914,7 @@ async function fetchConversations() {
     })
     conversations.value = (res.data || []).map(c => ({ ...c }))
     await enrichConversations()
+    applyFavoriteStateToConversations()
     if (!selectedConvId.value && conversations.value.length) {
       selectConversation(conversations.value[0].id)
     }
@@ -858,7 +993,8 @@ function selectConversation(id) {
   }
   const conv = conversations.value.find(c => c.id === id)
   currentConvTitle.value = conv ? conv.displayName || conv.titre : 'Messagerie'
-  const key = String(id)
+  if (conv) conv.unread_count = 0
+  const key = favoriteKey(id)
   if (unreadCounts.value[key]) {
     unreadCounts.value[key] = 0
     saveUnread()
@@ -905,6 +1041,7 @@ async function promptRename() {
 
 async function leaveConversation() {
   if (!selectedConvId.value) return
+  const convId = selectedConvId.value
   if (!confirm('Quitter cette conversation ?')) return
   try {
     await axios.post(
@@ -912,7 +1049,8 @@ async function leaveConversation() {
       {},
       { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } },
     )
-    conversations.value = conversations.value.filter(c => c.id !== selectedConvId.value)
+    removeFavorite(convId)
+    conversations.value = conversations.value.filter(c => c.id !== convId)
     selectedConvId.value = null
     messages.value = []
     if (conversations.value.length) selectConversation(conversations.value[0].id)
@@ -921,12 +1059,14 @@ async function leaveConversation() {
 
 async function deleteConversation() {
   if (!selectedConvId.value) return
+  const convId = selectedConvId.value
   if (!confirm('Supprimer définitivement cette conversation ?')) return
   try {
     await axios.delete(`http://localhost:5000/api/conversations/${selectedConvId.value}`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
     })
-    conversations.value = conversations.value.filter(c => c.id !== selectedConvId.value)
+    removeFavorite(convId)
+    conversations.value = conversations.value.filter(c => c.id !== convId)
     selectedConvId.value = null
     messages.value = []
     if (conversations.value.length) selectConversation(conversations.value[0].id)
@@ -1412,6 +1552,12 @@ function handleIncomingMessage(payload) {
     })
     return
   }
+  const convEntry = conversations.value.find(c => c.id === normalized.conv_id)
+  if (convEntry) {
+    const text = (normalized.contenu_chiffre || '').trim()
+    const fallback = normalized.files.length ? `${normalized.files.length} pièce(s) jointe(s)` : ''
+    convEntry.last = { text: text || fallback || 'Message', ts: normalized.ts_msg, sentByMe: normalized.sentByMe }
+  }
   if (normalized.conv_id === selectedConvId.value) {
     messages.value.push(normalized)
     nextTick().then(() => {
@@ -1424,15 +1570,25 @@ function handleIncomingMessage(payload) {
       showNotification('Nouveau message', text || fallback)
     }
   } else if (normalized.sender_id !== userId) {
-    const key = String(normalized.conv_id)
-    unreadCounts.value[key] = (unreadCounts.value[key] || 0) + 1
+    const key = favoriteKey(normalized.conv_id)
+    const nextCount = (unreadCounts.value[key] || 0) + 1
+    unreadCounts.value[key] = nextCount
+    if (convEntry) convEntry.unread_count = nextCount
     saveUnread()
+  } else if (convEntry) {
+    convEntry.unread_count = 0
+    const key = favoriteKey(normalized.conv_id)
+    if (unreadCounts.value[key]) {
+      unreadCounts.value[key] = 0
+      saveUnread()
+    }
   }
 }
 
 onMounted(async () => {
   requestNotificationPermission()
   loadUnread()
+  loadFavorites()
   await fetchContacts()
   await fetchConversations()
   if (selectedConvId.value) selectConversation(selectedConvId.value)
@@ -1989,6 +2145,123 @@ mark.hl {
 .attachment-item:not(.preview) .attachment-link {
   font-size: 0.95rem;
   font-weight: 600;
+}
+
+.conv-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.5rem;
+}
+
+.conv-filter-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid #dbe2f3;
+  background: linear-gradient(135deg, #f5f7ff 0%, #eef3ff 100%);
+  color: #1f3b76;
+  font-weight: 600;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  box-shadow: 0 2px 6px rgba(13, 110, 253, 0.12);
+}
+
+.conv-filter-btn .filter-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.conv-filter-btn .filter-label i {
+  font-size: 0.85rem;
+}
+
+.conv-filter-btn .filter-count {
+  background: rgba(13, 110, 253, 0.12);
+  color: #0d6efd;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.72rem;
+}
+
+.conv-filter-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(13, 110, 253, 0.22);
+}
+
+.conv-filter-btn:focus-visible {
+  outline: 2px solid rgba(13, 110, 253, 0.35);
+  outline-offset: 2px;
+}
+
+.conv-filter-btn.active {
+  background: linear-gradient(135deg, #2157d3 0%, #0d6efd 100%);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 10px 24px rgba(13, 110, 253, 0.35);
+}
+
+.conv-filter-btn.active .filter-count {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.conv-filter-btn.active .filter-label i,
+.conv-filter-btn.active .filter-label span {
+  color: inherit;
+}
+
+.favorite-toggle {
+  border: none;
+  background: transparent;
+  color: #9aa4b5;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.favorite-toggle:hover {
+  color: #f3a712;
+  background: rgba(243, 167, 18, 0.15);
+  transform: translateY(-1px);
+}
+
+.favorite-toggle:focus-visible {
+  outline: 2px solid rgba(13, 110, 253, 0.4);
+  outline-offset: 1px;
+}
+
+.favorite-toggle.active {
+  color: #f0a400;
+}
+
+.conv-tile.active .favorite-toggle {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.conv-tile.active .favorite-toggle:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.conv-tile.active .favorite-toggle.active {
+  color: #ffd976;
+}
+
+.conv-tile.favorite:not(.active) {
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.12), rgba(255, 193, 7, 0.02));
+  border-color: rgba(255, 193, 7, 0.35);
+  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.18);
 }
 
 .messages-layout {
