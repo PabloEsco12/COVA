@@ -278,4 +278,7 @@ def unread_count():
 from werkzeug.utils import secure_filename  # noqa: E402  pylint: disable=wrong-import-position
 
 # Utilities imported late to avoid circular import
+from werkzeug.utils import secure_filename  # noqa: E402  pylint: disable=wrong-import-position
+
+# Utilities imported late to avoid circular import
 from werkzeug.utils import secure_filename 
