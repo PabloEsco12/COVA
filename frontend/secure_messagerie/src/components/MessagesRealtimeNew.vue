@@ -67,6 +67,14 @@
             <i class="bi bi-arrow-clockwise"></i>
           </button>
           <button
+            class="btn btn-outline-secondary btn-sm"
+            type="button"
+            :title="showMessageSearch ? 'Fermer la recherche' : 'Rechercher dans la conversation'"
+            @click="toggleMessageSearch"
+          >
+            <i class="bi bi-search"></i>
+          </button>
+          <button
             class="btn btn-outline-secondary btn-sm dropdown-toggle"
             data-bs-toggle="dropdown"
             aria-expanded="false"
@@ -83,6 +91,41 @@
         </div>
       </div>
 
+      <div v-if="showMessageSearch" class="chat-search px-3 py-2 border-bottom bg-white">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input
+            v-model.trim="messageSearch"
+            type="text"
+            class="form-control"
+            placeholder="Rechercher dans la conversation"
+            autocomplete="off"
+          />
+          <button class="btn btn-outline-secondary" type="button" @click="messageSearch = ''" :disabled="!messageSearch">
+            <i class="bi bi-x"></i>
+          </button>
+        </div>
+        <div class="row g-2 align-items-center mt-2">
+          <div class="col-6 col-md-2">
+            <select class="form-select form-select-sm" v-model="messageSearchAuthor">
+              <option value="all">Tous</option>
+              <option value="me">Moi</option>
+              <option value="others">Autres</option>
+            </select>
+          </div>
+          <div class="col-6 col-md-2">
+            <input type="date" class="form-control form-control-sm" v-model="messageSearchFrom" />
+          </div>
+          <div class="col-6 col-md-2">
+            <input type="date" class="form-control form-control-sm" v-model="messageSearchTo" />
+          </div>
+          <div class="col-6 col-md-2 text-end">
+            <button class="btn btn-sm btn-outline-secondary" type="button" @click="clearMessageFilters">Réinitialiser</button>
+          </div>
+        </div>
+        <div v-if="messageSearch" class="small text-muted mt-1">{{ displayMessages.length }} résultat(s)</div>
+      </div>
+
       <div class="chat-messages p-3 flex-grow-1" ref="messagesBox" @scroll="onScroll">
         <div v-if="loading" class="text-center py-5"><span class="spinner-border text-primary"></span></div>
         <div v-else-if="messages.length === 0" class="text-center text-muted py-5">
@@ -90,7 +133,8 @@
           <div>Aucun message pour le moment</div>
         </div>
         <div v-else>
-          <div v-for="msg in messages" :key="msg.id_msg" class="msg-row" :class="{ sent: msg.sentByMe }">
+          <div v-if="messageSearch && displayMessages.length === 0" class="text-center text-muted py-4">Aucun résultat</div>
+          <div v-for="msg in displayMessages" :key="msg.id_msg" class="msg-row" :class="{ sent: msg.sentByMe }">
             <template v-if="!msg.sentByMe && partnerAvatar">
               <img :src="partnerAvatar" class="avatar-xs me-2" alt="avatar" />
             </template>
@@ -134,14 +178,14 @@
                       <span v-else class="spinner-border spinner-border-sm text-primary"></span>
                     </button>
                     <div class="attachment-meta">
-                      <div class="attachment-name">{{ file.filename }}</div>
+                      <div class="attachment-name" v-html="highlightFilename(file.filename)"></div>
                       <small class="text-muted">{{ formatSize(file.taille) }}</small>
                     </div>
                   </template>
                   <template v-else>
                     <i class="bi bi-paperclip me-2"></i>
                     <button class="btn btn-link p-0 attachment-link" type="button" @click="downloadAttachment(file)">
-                      {{ file.filename }}
+                      <span v-html="highlightFilename(file.filename)"></span>
                     </button>
                     <small class="text-muted ms-2">{{ formatSize(file.taille) }}</small>
                   </template>
@@ -440,17 +484,95 @@ const messageInput = ref(null)
 const pendingFiles = ref([])
 const showEmojiPicker = ref(false)
 const showGifPicker = ref(false)
+const showMessageSearch = ref(false)
+const messageSearch = ref('')
+const messageSearchAuthor = ref('all') // all | me | others
+const messageSearchFrom = ref('') // yyyy-mm-dd
+const messageSearchTo = ref('') // yyyy-mm-dd
 const reactionPickerFor = ref(null)
 const gifSearchTerm = ref('')
 const gifResults = ref([])
 const gifLoading = ref(false)
 const gifError = ref('')
 const attachmentPreviews = ref({})
-const TENOR_API_KEY = 'LIVDSRZULELA'
+// Tenor API key can be configured via Vite env (VITE_TENOR_API_KEY). If absent, we fallback to v1 endpoint.
+const TENOR_API_KEY = (import.meta?.env?.VITE_TENOR_API_KEY || '').trim()
 const TENOR_CLIENT_KEY = 'cova_messaging_ui'
 const GIF_PAGE_LIMIT = 24
 
 const canSend = computed(() => newMessage.value.trim().length > 0 || pendingFiles.value.length > 0)
+
+const displayMessages = computed(() => {
+  let list = messages.value || []
+  // Author filter
+  if (messageSearchAuthor.value === 'me') list = list.filter(m => m.sender_id === userId)
+  else if (messageSearchAuthor.value === 'others') list = list.filter(m => m.sender_id !== userId)
+  // Date filters
+  if (messageSearchFrom.value) {
+    const from = new Date(messageSearchFrom.value)
+    from.setHours(0, 0, 0, 0)
+    list = list.filter(m => m.ts_msg && new Date(m.ts_msg) >= from)
+  }
+  if (messageSearchTo.value) {
+    const to = new Date(messageSearchTo.value)
+    to.setHours(23, 59, 59, 999)
+    list = list.filter(m => m.ts_msg && new Date(m.ts_msg) <= to)
+  }
+  // Text search
+  const q = (messageSearch.value || '').toLowerCase().trim()
+  if (!q) return list
+  const tokens = q.split(/\s+/).filter(Boolean)
+  return list.filter(m => {
+    const text = (m.contenu_chiffre || '').toLowerCase()
+    const inFiles = (m.files || []).some(f => (f.filename || '').toLowerCase().includes(q))
+    const tokenMatch = tokens.every(t => text.includes(t))
+    return tokenMatch || inFiles
+  })
+})
+
+function clearMessageFilters() {
+  messageSearch.value = ''
+  messageSearchAuthor.value = 'all'
+  messageSearchFrom.value = ''
+  messageSearchTo.value = ''
+}
+
+function escapeHtml(str) {
+  return (str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function buildHighlightRegex(q) {
+  const tokens = (q || '').toLowerCase().trim().split(/\s+/).filter(Boolean)
+  if (!tokens.length) return null
+  const escaped = tokens.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  return new RegExp('(' + escaped.join('|') + ')', 'gi')
+}
+
+function highlightMatches(text) {
+  const q = (messageSearch.value || '').trim()
+  if (!q) return escapeHtml(text || '')
+  const rx = buildHighlightRegex(q)
+  if (!rx) return escapeHtml(text || '')
+  return escapeHtml(text || '').replace(rx, '<mark class="hl">$1</mark>')
+}
+
+function highlightMessageText(text) {
+  return highlightMatches(text)
+}
+
+function highlightFilename(name) {
+  return highlightMatches(name)
+}
+
+function toggleMessageSearch() {
+  showMessageSearch.value = !showMessageSearch.value
+  if (!showMessageSearch.value) messageSearch.value = ''
+}
 
 function loadUnread() {
   try {
@@ -913,6 +1035,12 @@ async function loadGifResults(query = '') {
   gifLoading.value = true
   gifError.value = ''
   try {
+    if (!TENOR_API_KEY) {
+      // No v2 key configured: fallback to legacy v1
+      const legacy = await fetchTenorV1(search, controller.signal)
+      gifResults.value = legacy
+      return
+    }
     const endpoint = search ? 'search' : 'featured'
     const params = new URLSearchParams({
       key: TENOR_API_KEY,
@@ -924,19 +1052,56 @@ async function loadGifResults(query = '') {
     const response = await fetch(`https://tenor.googleapis.com/v2/${endpoint}?${params.toString()}`, {
       signal: controller.signal,
     })
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    if (!response.ok) {
+      // Try legacy API when v2 fails (e.g., invalid key)
+      const legacy = await fetchTenorV1(search, controller.signal)
+      gifResults.value = legacy
+      return
+    }
     const data = await response.json()
     gifResults.value = data.results || []
   } catch (error) {
     if (error.name === 'AbortError') return
     console.error('GIF search failed', error)
-    gifError.value = "Impossible de charger les GIFs pour le moment."
+    try {
+      const legacy = await fetchTenorV1(search)
+      gifResults.value = legacy
+      gifError.value = ''
+    } catch (e2) {
+      gifError.value = "Impossible de charger les GIFs pour le moment."
+    }
   } finally {
     if (gifController === controller) {
       gifLoading.value = false
       gifController = null
     }
   }
+}
+
+async function fetchTenorV1(search, signal) {
+  const endpoint = (search ? 'search' : 'trending')
+  const params = new URLSearchParams({
+    key: (import.meta?.env?.VITE_TENOR_V1_KEY || 'LIVDSRZULELA'),
+    limit: String(GIF_PAGE_LIMIT),
+    media_filter: 'minimal',
+  })
+  if (search) params.set('q', search)
+  const res = await fetch(`https://g.tenor.com/v1/${endpoint}?${params.toString()}`, { signal })
+  if (!res.ok) throw new Error(`Legacy Tenor HTTP ${res.status}`)
+  const data = await res.json()
+  return normalizeTenorV1Results(data)
+}
+
+function normalizeTenorV1Results(data) {
+  const results = data?.results || []
+  return results.map(item => {
+    const media = Array.isArray(item.media) && item.media.length ? item.media[0] : {}
+    const media_formats = {}
+    for (const key of ['gif', 'mediumgif', 'nanogif', 'tinygif', 'mp4']) {
+      if (media[key]?.url) media_formats[key] = { url: media[key].url }
+    }
+    return { id: item.id, media_formats }
+  })
 }
 
 function gifMediaUrl(gif) {
@@ -1663,6 +1828,29 @@ onUnmounted(() => {
 }
 .gif-search .form-control,
 .gif-search .btn {
+  border-color: #dbe2f3;
+}
+.chat-search .input-group-text {
+  background: #f1f4ff;
+  border-color: #dbe2f3;
+}
+.chat-search .form-control,
+.chat-search .btn,
+.chat-search .form-select {
+  border-color: #dbe2f3;
+}
+mark.hl {
+  background: #fff3cd;
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 3px;
+}
+.chat-search .input-group-text {
+  background: #f1f4ff;
+  border-color: #dbe2f3;
+}
+.chat-search .form-control,
+.chat-search .btn {
   border-color: #dbe2f3;
 }
 .gif-grid {
