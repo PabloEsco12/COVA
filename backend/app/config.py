@@ -16,6 +16,10 @@ _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _DEFAULT_UPLOAD_DIR = os.path.join(_BASE_DIR, "static", "uploads")
 
 
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_DEFAULT_UPLOAD_DIR = os.path.join(_BASE_DIR, "static", "uploads")
+
+
 def _get_env(name: str, default: str | None = None) -> str:
     val = os.getenv(name, default)
     if val is None:
