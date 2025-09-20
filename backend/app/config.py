@@ -6,6 +6,10 @@ from dataclasses import dataclass, asdict
 import os
 
 
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_DEFAULT_UPLOAD_DIR = os.path.join(_BASE_DIR, "static", "uploads")
+
+
 def _get_env(name: str, default: str | None = None) -> str:
     val = os.getenv(name, default)
     if val is None:
@@ -28,6 +32,9 @@ class Config:
     
     # Frontend
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+    # Fichiers
+    UPLOAD_FOLDER: str = os.getenv("UPLOAD_FOLDER", _DEFAULT_UPLOAD_DIR)
 
 
 def load_config(app) -> None:
