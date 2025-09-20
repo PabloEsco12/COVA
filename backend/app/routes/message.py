@@ -1,13 +1,83 @@
-# backend/app/routes/messages.py
+from __future__ import annotations
 
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from ..models import Message, Conversation, Participation
-from ..extensions import db, socketio, limiter
-from ..schemas_message import MessageSchema
+import hashlib
+import os
+from typing import Iterable, Tuple
+from uuid import uuid4
+
+from flask import Blueprint, current_app, jsonify, request, send_from_directory
+from flask_jwt_extended import get_jwt_identity, jwt_required
 from marshmallow import ValidationError
 
+from ..extensions import db, limiter, socketio
+from ..models import Conversation, File, Message, Participation, Reaction
+from ..schemas_message import MessageSchema
+
 messages_bp = Blueprint("messages", __name__)
+
+
+def _message_schema(user_id: int | None = None, *, many: bool = False) -> MessageSchema:
+    context = {"user_id": user_id} if user_id is not None else {}
+    return MessageSchema(many=many, context=context)
+
+
+def _user_is_participant(conv: Conversation, user_id: int) -> bool:
+    return any(p.id_user == user_id for p in conv.participations)
+
+
+def _original_name(path: str) -> str:
+    _, _, original = path.partition("_")
+    return original or path
+
+
+def _extract_payload_and_files() -> Tuple[dict, list]:
+    if request.content_type and request.content_type.startswith("multipart/form-data"):
+        payload = {"contenu_chiffre": request.form.get("contenu_chiffre", "")}
+        files = request.files.getlist("files")
+    else:
+        payload = request.get_json() or {}
+        files = []
+    return payload, files
+
+
+def _store_uploaded_file(upload) -> dict | None:
+    if upload is None or not getattr(upload, "filename", ""):
+        return None
+    filename = upload.filename
+    safe_name = secure_filename(filename or "")
+    if not safe_name:
+        return None
+    data = upload.read()
+    if not data:
+        return None
+    stored_name = f"{uuid4().hex}_{safe_name}"
+    upload_dir = current_app.config.get("UPLOAD_FOLDER", "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+    destination = os.path.join(upload_dir, stored_name)
+    with open(destination, "wb") as fh:
+        fh.write(data)
+    return {
+        "stored_name": stored_name,
+        "mime": upload.mimetype,
+        "size": len(data),
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "original": filename,
+    }
+
+
+def _delete_files_from_storage(files: Iterable[File]) -> None:
+    upload_dir = current_app.config.get("UPLOAD_FOLDER", "uploads")
+    for file_obj in files or []:
+        stored_name = getattr(file_obj, "path", None)
+        if not stored_name:
+            continue
+        full_path = os.path.join(upload_dir, stored_name)
+        try:
+            os.remove(full_path)
+        except FileNotFoundError:
+            continue
+        except OSError:
+            continue
 
 
 # Lister les messages d'une conversation
@@ -203,6 +273,9 @@ def unread_count():
 
     return jsonify({"count": count}), 200
 
+
+# Utilities imported late to avoid circular import
+from werkzeug.utils import secure_filename  # noqa: E402  pylint: disable=wrong-import-position
 
 # Utilities imported late to avoid circular import
 from werkzeug.utils import secure_filename  # noqa: E402  pylint: disable=wrong-import-position
