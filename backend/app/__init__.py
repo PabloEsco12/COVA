@@ -1,4 +1,7 @@
 # backend/app/__init__.py
+import os
+
+import os
 
 from flask import Flask
 from .config import load_config
@@ -17,6 +20,8 @@ def create_app() -> Flask:
     load_config(app)
 
     configure_json_logging(app)
+
+    os.makedirs(app.config.get("UPLOAD_FOLDER", "uploads"), exist_ok=True)
 
     db.init_app(app)
     migrate.init_app(app, db)
