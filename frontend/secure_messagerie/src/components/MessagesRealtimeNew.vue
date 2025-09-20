@@ -197,7 +197,9 @@
             <button class="btn btn-sm btn-outline-secondary" type="button" @click="clearMessageFilters">Réinitialiser</button>
           </div>
         </div>
-        <div v-if="messageSearch" class="small text-muted mt-1">{{ displayMessages.length }} résultat(s)</div>
+        <div v-if="messageSearch" class="search-result-count small text-muted mt-1">
+          {{ displayMessages.length }} résultat(s)
+        </div>
       </div>
 
       <div class="chat-messages" ref="messagesBox" @scroll="onScroll">
