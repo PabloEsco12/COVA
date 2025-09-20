@@ -197,7 +197,7 @@
             <button class="btn btn-sm btn-outline-secondary" type="button" @click="clearMessageFilters">Réinitialiser</button>
           </div>
         </div>
-        <div v-if="messageSearch" class="search-result-count small text-muted mt-1">{{ displayMessages.length }} résultat(s)</div>
+        <div v-if="messageSearch" class="small text-muted mt-1">{{ displayMessages.length }} résultat(s)</div>
       </div>
 
       <div class="chat-messages" ref="messagesBox" @scroll="onScroll">
@@ -490,7 +490,9 @@
                     {{ byId(uid)?.pseudo || uid }}
                     <i class="bi bi-x ms-1" role="button" aria-label="Retirer" @click="removeSelected(uid)"></i>
                   </span>
-                  <div v-if="selectedUsers.length === 0" class="text-muted small">Sélectionnez au moins un contact à gauche</div>
+                  <div v-if="selectedUsers.length === 0" class="text-muted small">
+                    Sélectionnez au moins un contact à gauche
+                  </div>
                 </div>
               </div>
 
@@ -514,6 +516,7 @@
       </div>
     </div>
   </div>
+</div>
 </template>
 
 <script setup>
@@ -2475,6 +2478,140 @@ mark.hl {
   font-weight: 600;
 }
 
+.conv-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.5rem;
+}
+
+.conv-filter-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid #dbe2f3;
+  background: linear-gradient(135deg, #f5f7ff 0%, #eef3ff 100%);
+  color: #1f3b76;
+  font-weight: 600;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  box-shadow: 0 2px 6px rgba(13, 110, 253, 0.12);
+}
+
+.conv-filter-btn .filter-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.conv-filter-btn .filter-label i {
+  font-size: 0.85rem;
+}
+
+.conv-filter-btn .filter-count {
+  background: rgba(13, 110, 253, 0.12);
+  color: #0d6efd;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.72rem;
+}
+
+.conv-filter-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(13, 110, 253, 0.22);
+}
+
+.conv-filter-btn:focus-visible {
+  outline: 2px solid rgba(13, 110, 253, 0.35);
+  outline-offset: 2px;
+}
+
+.conv-filter-btn.active {
+  background: linear-gradient(135deg, #2157d3 0%, #0d6efd 100%);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 10px 24px rgba(13, 110, 253, 0.35);
+}
+
+.conv-filter-btn.active .filter-count {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.conv-filter-btn.active .filter-label i,
+.conv-filter-btn.active .filter-label span {
+  color: inherit;
+}
+
+.favorite-toggle {
+  border: none;
+  background: transparent;
+  color: #9aa4b5;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.favorite-toggle:hover {
+  color: #f3a712;
+  background: rgba(243, 167, 18, 0.15);
+  transform: translateY(-1px);
+}
+
+.favorite-toggle:focus-visible {
+  outline: 2px solid rgba(13, 110, 253, 0.4);
+  outline-offset: 1px;
+}
+
+.favorite-toggle.active {
+  color: #f0a400;
+}
+
+.conv-tile.active .favorite-toggle {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.conv-tile.active .favorite-toggle:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.conv-tile.active .favorite-toggle.active {
+  color: #ffd976;
+}
+
+.conv-tile.favorite:not(.active) {
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.12), rgba(255, 193, 7, 0.02));
+  border-color: rgba(255, 193, 7, 0.35);
+  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.18);
+}
+
+.messages-wrapper {
+  position: relative;
+  padding: 1.75rem;
+  background: linear-gradient(135deg, rgba(13, 110, 253, 0.07), rgba(255, 255, 255, 0.9));
+  border-radius: 32px;
+  box-shadow: 0 24px 60px rgba(13, 38, 86, 0.12);
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+.messages-wrapper::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at top left, rgba(13, 110, 253, 0.12), transparent 55%),
+    radial-gradient(circle at bottom right, rgba(99, 102, 241, 0.12), transparent 45%);
+  pointer-events: none;
+}
 .messages-layout {
   position: relative;
   z-index: 1;
