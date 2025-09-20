@@ -1,4 +1,4 @@
-﻿from .auth import auth_bp
+﻿from .auth_clean import auth_bp
 from .conversation import conversation_bp
 from .message import messages_bp
 from .contacts import contacts_bp
@@ -9,6 +9,8 @@ from .reset import reset_bp
 from .profile import profile_bp
 from .devices import devices_bp
 from .health import health_bp
+from .users import users_bp
+from . import ws  # enregistre les evenements Socket.IO
 
 
 def register_blueprints(app):
@@ -23,3 +25,4 @@ def register_blueprints(app):
     app.register_blueprint(profile_bp)
     app.register_blueprint(devices_bp)
     app.register_blueprint(health_bp)
+    app.register_blueprint(users_bp, url_prefix="/api")

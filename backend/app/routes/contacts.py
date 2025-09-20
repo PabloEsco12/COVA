@@ -1,11 +1,12 @@
 # backend/app/routes/contacts.py
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, url_for
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..models import Contact, Utilisateur
 from ..extensions import db
 
 contacts_bp = Blueprint("contacts", __name__)
+
 
 # Ajouter un contact (envoyer une invitation)
 @contacts_bp.route("/contacts", methods=["POST"])
@@ -17,6 +18,7 @@ def add_contact():
     email = data.get("email")
     pseudo = data.get("pseudo")
 
+    # Résoudre l'ami via email/pseudo si pas d'ID fourni
     if not ami_id:
         if email:
             ami = Utilisateur.query.filter_by(email=email).first()
@@ -33,20 +35,21 @@ def add_contact():
             return jsonify({"error": "Utilisateur introuvable"}), 404
 
     if user_id == ami_id:
-        return jsonify({"error": "ami_id requis ou identique à soi-même"}), 400
+        return jsonify({"error": "Impossible de s'ajouter soi‑même"}), 400
 
     # Vérifier que le contact n'existe pas déjà dans les deux sens
     existing = Contact.query.filter(
-        ((Contact.user_id == user_id) & (Contact.ami_id == ami_id)) |
-        ((Contact.user_id == ami_id) & (Contact.ami_id == user_id))
+        ((Contact.user_id == user_id) & (Contact.ami_id == ami_id))
+        | ((Contact.user_id == ami_id) & (Contact.ami_id == user_id))
     ).first()
     if existing:
-        return jsonify({"error": "Déjà ajouté ou invitation en attente"}), 409
+        return jsonify({"error": "Ce contact existe déjà ou une invitation est en attente"}), 409
 
     c = Contact(user_id=user_id, ami_id=ami_id, statut="pending")
     db.session.add(c)
     db.session.commit()
     return jsonify({"message": "Contact ajouté, en attente de validation", "id_contact": c.id_contact}), 201
+
 
 # Accepter/refuser une invitation (uniquement par le destinataire)
 @contacts_bp.route("/contacts/<int:contact_id>", methods=["PATCH"])
@@ -66,15 +69,14 @@ def update_contact(contact_id):
     db.session.commit()
     return jsonify({"message": f"Statut changé en {statut}"}), 200
 
+
 # Lister tous ses contacts (possibilité de filtrer par statut)
 @contacts_bp.route("/contacts", methods=["GET"])
 @jwt_required()
 def list_contacts():
     user_id = int(get_jwt_identity())
     statut = request.args.get("statut")
-    q = Contact.query.filter(
-        ((Contact.user_id == user_id) | (Contact.ami_id == user_id))
-    )
+    q = Contact.query.filter(((Contact.user_id == user_id) | (Contact.ami_id == user_id)))
     if statut:
         q = q.filter_by(statut=statut)
     contacts = q.all()
@@ -88,15 +90,26 @@ def list_contacts():
         else:
             other = c.user
             is_sender = False
-        res.append({
-            "id_contact": c.id_contact,
-            "user_id": other.id_user,
-            "pseudo": other.pseudo,
-            "email": other.email,
-            "statut": c.statut,
-            "is_sender": is_sender,
-        })
+        avatar_url = None
+        try:
+            if getattr(other, "avatar", None):
+                avatar_url = url_for("static", filename=f"avatars/{other.avatar}", _external=True)
+        except Exception:
+            avatar_url = None
+        res.append(
+            {
+                "id_contact": c.id_contact,
+                "user_id": other.id_user,
+                "pseudo": other.pseudo,
+                "email": other.email,
+                "statut": c.statut,
+                "is_sender": is_sender,
+                "avatar": getattr(other, "avatar", None),
+                "avatar_url": avatar_url,
+            }
+        )
     return jsonify({"contacts": res}), 200
+
 
 # Lister les invitations reçues (contacts en attente dont je suis l'ami à valider)
 @contacts_bp.route("/contacts/invitations", methods=["GET"])
@@ -115,6 +128,7 @@ def invitations_recues():
     ]
     return jsonify(res), 200
 
+
 # (Optionnel) Supprimer un contact (pour l'un ou l'autre)
 @contacts_bp.route("/contacts/<int:contact_id>", methods=["DELETE"])
 @jwt_required()
@@ -126,3 +140,4 @@ def delete_contact(contact_id):
     db.session.delete(c)
     db.session.commit()
     return jsonify({"message": "Contact supprimé"}), 200
+

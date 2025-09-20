@@ -26,7 +26,7 @@ onMounted(() => {
 
 <style scoped>
 .dashboard-layout {
-  height: 100vh;
+  min-height: 100vh; /* permet à la page de grandir avec le contenu */
   background: linear-gradient(135deg, #eef3fc 0%, #e5ebf6 100%);
 }
 .main-content {

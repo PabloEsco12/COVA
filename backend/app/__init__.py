@@ -1,8 +1,8 @@
-﻿# backend/app/__init__.py
+# backend/app/__init__.py
 
 from flask import Flask
 from .config import load_config
-from .extensions import db, migrate, bcrypt, jwt
+from .extensions import db, migrate, bcrypt, jwt, limiter, socketio
 from .error_handlers import register_error_handlers
 from .logging_utils import configure_json_logging
 from . import models  # important: charger les modèles AVANT migrations
@@ -22,10 +22,20 @@ def create_app() -> Flask:
     migrate.init_app(app, db)
     bcrypt.init_app(app)
     jwt.init_app(app)
+    limiter.init_app(app)
+    socketio.init_app(app)
 
     CORS(app, origins=["http://localhost:5173"], supports_credentials=True)
 
     register_error_handlers(app)
     register_blueprints(app)
 
+    @app.after_request
+    def apply_security_headers(resp):
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("X-Frame-Options", "DENY")
+        resp.headers.setdefault("Referrer-Policy", "no-referrer")
+        return resp
+
     return app
+

@@ -12,10 +12,11 @@
         </button>
       </div>
     </div>
+
     <div class="mb-3">
       <div class="input-group">
-        <input v-model="search" type="text" class="form-control" placeholder="Rechercher un contact...">
-        <button class="btn btn-outline-success" @click="showAddModal = true">
+        <input v-model="search" type="text" class="form-control" placeholder="Rechercher un contact..." />
+        <button class="btn btn-outline-success" @click="openAddModal">
           <i class="bi bi-person-plus"></i> Ajouter
         </button>
       </div>
@@ -30,6 +31,7 @@
         <i class="bi bi-emoji-frown display-4"></i>
         <div>Aucun contact trouvé</div>
       </div>
+
       <ul class="list-group list-group-flush">
         <li
           v-for="contact in filteredContacts"
@@ -37,7 +39,12 @@
           class="list-group-item d-flex align-items-center justify-content-between"
         >
           <div class="d-flex align-items-center">
-            <i class="bi bi-person-circle fs-3 text-secondary me-2"></i>
+            <template v-if="contact.avatar_url">
+              <img :src="contact.avatar_url" alt="Avatar" class="avatar-sm me-2" />
+            </template>
+            <template v-else>
+              <div class="avatar-sm-placeholder me-2">{{ initials(contact.pseudo) }}</div>
+            </template>
             <div>
               <div class="fw-semibold">{{ contact.pseudo }}</div>
               <div class="text-muted small">{{ contact.email }}</div>
@@ -55,34 +62,71 @@
       </ul>
     </div>
 
-    <!-- Modal d'ajout de contact -->
-    <div v-if="showAddModal" class="modal-backdrop-custom">
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content p-3">
-          <div class="modal-header">
-            <h5 class="modal-title">Ajouter un contact</h5>
-            <button type="button" class="btn-close" @click="showAddModal = false"></button>
+    <!-- Modal d'ajout de contact (style app de messagerie) -->
+    <transition name="fade">
+      <div v-if="showAddModal" class="fancy-overlay" @click.self="closeAddModal">
+        <div class="fancy-modal">
+          <div class="fancy-header">
+            <div class="d-flex align-items-center">
+              <i class="bi bi-person-plus-fill text-primary me-2"></i>
+              <h5 class="mb-0">Ajouter un contact</h5>
+            </div>
+            <button class="btn btn-sm btn-light" @click="closeAddModal" aria-label="Fermer">
+              <i class="bi bi-x-lg"></i>
+            </button>
           </div>
-          <div class="modal-body">
-            <input v-model="addEmail" type="email" class="form-control mb-2" placeholder="Email du contact" />
-            <input v-model="addPseudo" type="text" class="form-control mb-2" placeholder="Pseudo (optionnel)" />
-            <div v-if="addError" class="alert alert-danger small">{{ addError }}</div>
+          <div class="fancy-body">
+            <label class="form-label small text-muted">Email du contact</label>
+            <div class="input-group mb-2 has-icon">
+              <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+              <input
+                ref="addEmailInput"
+                v-model.trim="addEmail"
+                type="email"
+                class="form-control"
+                placeholder="nom@domaine.com"
+                @keyup.enter="trySubmit"
+                @input="triggerSuggest(addEmail)"
+              />
+              <span class="input-group-text" v-if="addEmail && emailValid && !duplicate"><i class="bi bi-check-circle text-success"></i></span>
+              <span class="input-group-text" v-else-if="addEmail && (!emailValid || duplicate)"><i class="bi bi-exclamation-triangle text-warning"></i></span>
+            </div>
+            <div class="small text-danger mb-2" v-if="addEmail && !emailValid">Format d'email invalide.</div>
+            <div class="small text-warning mb-2" v-if="duplicate">Ce contact est déjà dans ta liste.</div>
+
+            <label class="form-label small text-muted">Pseudo (optionnel)</label>
+            <div class="input-group mb-2 has-icon">
+              <span class="input-group-text"><i class="bi bi-person"></i></span>
+              <input v-model.trim="addPseudo" type="text" class="form-control" placeholder="Ex. Marie" @keyup.enter="trySubmit" @input="triggerSuggest(addPseudo)" />
+            </div>
+            <div v-if="suggestions.length" class="suggest-box">
+              <div class="suggest-item" v-for="u in suggestions" :key="u.id_user" @click="pickSuggestion(u)">
+                <img v-if="u.avatar_url" :src="u.avatar_url" class="avatar-suggest me-2" alt="av" />
+                <div v-else class="avatar-suggest-placeholder me-2">{{ initials(u.pseudo) }}</div>
+                <div class="flex-grow-1 overflow-hidden">
+                  <div class="fw-semibold text-truncate">{{ u.pseudo }}</div>
+                  <div class="text-muted small text-truncate">{{ u.email }}</div>
+                </div>
+                <span v-if="contacts.some(c => c.user_id === u.id_user)" class="badge bg-secondary ms-2">Déjà contact</span>
+              </div>
+            </div>
+            <div v-if="addError" class="alert alert-danger py-2 px-3 small mb-0">{{ addError }}</div>
           </div>
-          <div class="modal-footer">
-            <button class="btn btn-secondary" @click="showAddModal = false">Annuler</button>
-            <button class="btn btn-primary" @click="addContact" :disabled="adding">
-              <span v-if="adding" class="spinner-border spinner-border-sm"></span>
-              <span v-else>Ajouter</span>
+          <div class="fancy-footer">
+            <button class="btn btn-light" @click="closeAddModal" :disabled="adding">Annuler</button>
+            <button class="btn btn-primary" @click="addContact" :disabled="!emailValid || duplicate || adding">
+              <span v-if="adding" class="spinner-border spinner-border-sm me-1"></span>
+              Ajouter
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </transition>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import axios from 'axios'
 
 const contacts = ref([])
@@ -93,12 +137,20 @@ const addEmail = ref('')
 const addPseudo = ref('')
 const addError = ref('')
 const adding = ref(false)
+const addEmailInput = ref(null)
+const suggestions = ref([])
+let suggestTimer = null
 
 const filteredContacts = computed(() =>
   contacts.value.filter(c =>
-    c.pseudo.toLowerCase().includes(search.value.toLowerCase()) ||
-    c.email.toLowerCase().includes(search.value.toLowerCase())
+    (c.pseudo || '').toLowerCase().includes((search.value || '').toLowerCase()) ||
+    (c.email || '').toLowerCase().includes((search.value || '').toLowerCase())
   )
+)
+
+const emailValid = computed(() => /.+@.+\..+/.test((addEmail.value || '').trim()))
+const duplicate = computed(() =>
+  contacts.value.some(c => (c.email || '').toLowerCase() === (addEmail.value || '').toLowerCase())
 )
 
 async function fetchContacts() {
@@ -116,7 +168,7 @@ async function fetchContacts() {
 }
 
 async function removeContact(contact) {
-  if (!confirm(`Supprimer ${contact.pseudo} ?`)) return
+  if (!confirm(`Supprimer ${contact.pseudo} ?`)) return
   loading.value = true
   try {
     await axios.delete(`http://localhost:5000/api/contacts/${contact.id_contact}`, {
@@ -124,7 +176,7 @@ async function removeContact(contact) {
     })
     await fetchContacts()
   } catch (e) {
-    // Afficher l’erreur si besoin
+    // noop
   } finally {
     loading.value = false
   }
@@ -132,10 +184,10 @@ async function removeContact(contact) {
 
 async function addContact() {
   addError.value = ''
-  if (!addEmail.value) {
-    addError.value = "L'email est requis."
-    return
-  }
+  if (!addEmail.value) { addError.value = "L'email est requis."; return }
+  if (!emailValid.value) { addError.value = "Format d'email invalide."; return }
+  if (duplicate.value) { addError.value = "Ce contact existe déjà."; return }
+
   adding.value = true
   try {
     await axios.post('http://localhost:5000/api/contacts', {
@@ -144,63 +196,90 @@ async function addContact() {
     }, {
       headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
     })
-    showAddModal.value = false
+    closeAddModal()
     addEmail.value = ''
     addPseudo.value = ''
     await fetchContacts()
   } catch (e) {
-    addError.value = e.response?.data?.error || 'Erreur lors de l’ajout'
+    addError.value = e.response?.data?.error || "Erreur lors de l'ajout"
   } finally {
     adding.value = false
   }
 }
 
-function refresh() {
+function refresh() { fetchContacts() }
+function openAddModal() { addError.value = ''; showAddModal.value = true }
+function closeAddModal() { showAddModal.value = false }
+function trySubmit() { if (emailValid.value && !duplicate.value && !adding.value) addContact() }
+
+watch(showAddModal, async (open) => {
+  if (open) {
+    await nextTick(); addEmailInput.value?.focus()
+    suggestions.value = []
+  }
+})
+
+onMounted(() => {
   fetchContacts()
+  const handler = (e) => { if (e.key === 'Escape') closeAddModal() }
+  window.addEventListener('keydown', handler)
+})
+
+function initials(name) {
+  const n = (name || '').trim()
+  if (!n) return 'C'
+  const parts = n.split(/\s+/)
+  const s = (parts[0]?.[0] || '') + (parts[1]?.[0] || '')
+  return s.toUpperCase() || n[0].toUpperCase()
 }
 
-onMounted(fetchContacts)
+function triggerSuggest(modelRef) {
+  const q = (modelRef.value || '').trim()
+  if (suggestTimer) clearTimeout(suggestTimer)
+  suggestTimer = setTimeout(() => searchUsers(q), 180)
+}
+
+async function searchUsers(q) {
+  if (!q || q.length < 2) { suggestions.value = []; return }
+  try {
+    const res = await axios.get('http://localhost:5000/api/users/search', {
+      params: { q, limit: 8 },
+      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
+    })
+    suggestions.value = res.data || []
+  } catch { suggestions.value = [] }
+}
+
+function pickSuggestion(u) {
+  addEmail.value = u.email || ''
+  addPseudo.value = u.pseudo || ''
+  suggestions.value = []
+}
 </script>
 
 <style scoped>
-.contacts-container {
-  max-width: 580px;
-  margin: 2rem auto;
-  background: #fff;
-  border-radius: 18px;
-}
+.contacts-container { max-width: 580px; margin: 2rem auto; background: #fff; border-radius: 18px; }
+.list-group-item { border: none; border-bottom: 1px solid #f3f4f7; background: transparent; }
+.list-group-item:last-child { border-bottom: none; }
+.badge { font-size: 0.97em; }
+.avatar-sm { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+.avatar-sm-placeholder { width: 36px; height: 36px; border-radius: 50%; display:flex; align-items:center; justify-content:center; background:#e9eefb; color:#506; font-weight:600; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
 
-.list-group-item {
-  border: none;
-  border-bottom: 1px solid #f3f4f7;
-  background: transparent;
-}
-.list-group-item:last-child {
-  border-bottom: none;
-}
-.badge {
-  font-size: 0.97em;
-}
+/* Fancy modal */
+.fancy-overlay { position: fixed; inset: 0; background: rgba(23,27,51,.25); backdrop-filter: blur(3px); z-index: 1080; display:flex; align-items:center; justify-content:center; padding:1rem; }
+.fancy-modal { width:100%; max-width:520px; border-radius:16px; overflow:hidden; background:#fff; box-shadow: 0 12px 40px rgba(0,0,0,.15); }
+.fancy-header { display:flex; align-items:center; justify-content:space-between; padding:.9rem 1rem; background: linear-gradient(90deg,#f4f7ff,#ffffff); border-bottom:1px solid #eef1f7; }
+.fancy-body { padding: 1rem; }
+.fancy-footer { display:flex; gap:.5rem; justify-content:flex-end; padding:.75rem 1rem; border-top:1px solid #eef1f7; }
+.has-icon .input-group-text { background:#f7f9ff; }
+.fade-enter-active,.fade-leave-active{ transition: opacity .18s ease; }
+.fade-enter-from,.fade-leave-to{ opacity:0; }
 
-.modal-backdrop-custom {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(30,40,100,0.13);
-  z-index: 1050;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.modal-content {
-  border-radius: 18px;
-  box-shadow: 0 4px 24px #2157d344;
-  min-width: 350px;
-}
-
-.btn-close {
-  background: none;
-  border: none;
-  font-size: 1.4rem;
-}
+/* Suggestions */
+.suggest-box{ border:1px solid #e7ecf6; border-radius:12px; overflow:hidden; box-shadow: 0 6px 22px rgba(16,24,40,.08); margin-bottom:.5rem; }
+.suggest-item{ display:flex; align-items:center; gap:.5rem; padding:.5rem .6rem; cursor:pointer; background:#fff; }
+.suggest-item + .suggest-item{ border-top:1px solid #f1f3f8; }
+.suggest-item:hover{ background:#f7faff; }
+.avatar-suggest{ width:32px; height:32px; border-radius:50%; object-fit:cover; }
+.avatar-suggest-placeholder{ width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:#e9eefb; color:#4a5275; font-weight:700; }
 </style>

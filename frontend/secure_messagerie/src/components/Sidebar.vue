@@ -1,7 +1,7 @@
 <template>
-  <nav class="sidebar d-flex flex-column p-3 vh-100">
+  <nav class="sidebar d-flex flex-column p-3">
     <router-link to="/dashboard" class="mb-4 text-center text-decoration-none">
-      <img src="@/assets/logo.svg" alt="COVA" width="48" />
+      <img src="@/assets/logo_COVA.png" alt="COVA" width="48" />
       <h4 class="mt-2 text-light fw-bold">COVA</h4>
     </router-link>
     <ul class="nav nav-pills flex-column mb-auto">
@@ -76,6 +76,10 @@ onMounted(async () => {
 .sidebar {
   min-width: 220px;
   background: linear-gradient(180deg, #212529 70%, #0d6efd 120%);
+  position: sticky;   /* reste visible lors du scroll */
+  top: 0;
+  height: 100vh;      /* occupe toute la hauteur de la fenêtre */
+  overflow-y: auto;   /* scroll interne si nécessaire */
 }
 .sidebar .nav-link {
   color: #d1d1d1;
@@ -85,4 +89,7 @@ onMounted(async () => {
   background: #0d6efd;
   color: #fff;
 }
+.sidebar .mt-auto { position: sticky; bottom: 12px; }
 </style>
+
+

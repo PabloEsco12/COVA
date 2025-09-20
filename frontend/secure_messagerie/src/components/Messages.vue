@@ -27,7 +27,7 @@
         <i class="bi bi-chat-dots fs-2 text-primary me-3"></i>
         <div class="flex-grow-1">
           <h3 class="mb-0 fw-bold">{{ currentConvTitle }}</h3>
-          <small class="text-muted">Discussions sÃ©curisÃ©es sur COVA</small>
+          <small class="text-muted">Discussions sécurisées sur COVA</small>
         </div>
         <div class="ms-auto">
           <button class="btn btn-outline-primary btn-sm" @click="refresh">
