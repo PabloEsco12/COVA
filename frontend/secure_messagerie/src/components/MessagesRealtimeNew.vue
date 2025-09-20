@@ -116,13 +116,35 @@
                 <div
                   v-for="file in msg.files"
                   :key="file.id_file"
-                  class="attachment-item d-flex align-items-center"
+                  class="attachment-item"
+                  :class="{ preview: isInlineImage(file) }"
                 >
-                  <i class="bi bi-paperclip me-2"></i>
-                  <button class="btn btn-link p-0 attachment-link" type="button" @click="downloadAttachment(file)">
-                    {{ file.filename }}
-                  </button>
-                  <small class="text-muted ms-2">{{ formatSize(file.taille) }}</small>
+                  <template v-if="isInlineImage(file)">
+                    <button
+                      type="button"
+                      class="attachment-thumb"
+                      :aria-label="`Télécharger ${file.filename}`"
+                      @click="downloadAttachment(file)"
+                    >
+                      <img
+                        v-if="attachmentPreviews[file.id_file]"
+                        :src="attachmentPreviews[file.id_file]"
+                        :alt="file.filename"
+                      />
+                      <span v-else class="spinner-border spinner-border-sm text-primary"></span>
+                    </button>
+                    <div class="attachment-meta">
+                      <div class="attachment-name">{{ file.filename }}</div>
+                      <small class="text-muted">{{ formatSize(file.taille) }}</small>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <i class="bi bi-paperclip me-2"></i>
+                    <button class="btn btn-link p-0 attachment-link" type="button" @click="downloadAttachment(file)">
+                      {{ file.filename }}
+                    </button>
+                    <small class="text-muted ms-2">{{ formatSize(file.taille) }}</small>
+                  </template>
                 </div>
               </div>
 
@@ -139,15 +161,11 @@
                   <span class="count">{{ reaction.count }}</span>
                 </button>
                 <div class="reaction-picker" v-if="reactionPickerFor === msg.id_msg">
-                  <button
-                    v-for="emoji in emojis"
-                    :key="emoji"
-                    type="button"
-                    class="btn btn-light btn-sm"
-                    @click="selectReaction(msg.id_msg, emoji)"
-                  >
-                    {{ emoji }}
-                  </button>
+                  <emoji-picker
+                    class="reaction-emoji-picker"
+                    skin-tone-emoji="👍"
+                    @emoji-click="event => onReactionEmoji(msg.id_msg, event)"
+                  ></emoji-picker>
                 </div>
                 <button
                   class="btn btn-light btn-sm add-reaction"
@@ -190,6 +208,14 @@
           >
             <i class="bi bi-emoji-smile"></i>
           </button>
+          <button
+            class="btn btn-outline-secondary"
+            type="button"
+            :disabled="loading || sendingMessage"
+            @click="toggleGifPicker"
+          >
+            <i class="bi bi-filetype-gif"></i>
+          </button>
           <input
             v-model="newMessage"
             type="text"
@@ -199,6 +225,7 @@
             @keyup.enter="sendMessage"
             @input="handleTyping"
             autocomplete="off"
+            ref="messageInput"
           />
           <button class="btn btn-primary" type="submit" :disabled="!canSend || loading || sendingMessage">
             <span v-if="sendingMessage" class="spinner-border spinner-border-sm"></span>
@@ -206,22 +233,61 @@
           </button>
         </div>
         <div v-if="pendingFiles.length" class="pending-files mt-2">
-          <span v-for="(file, index) in pendingFiles" :key="`${file.name}-${index}`" class="pending-file badge bg-light text-dark">
-            <i class="bi bi-paperclip me-1"></i>{{ file.name }}
-            <small class="ms-2 text-muted">{{ formatSize(file.size) }}</small>
+          <div v-for="(file, index) in pendingFiles" :key="`${file.name}-${index}`" class="pending-file">
+            <div v-if="file.previewUrl" class="pending-thumb">
+              <img :src="file.previewUrl" :alt="file.name" />
+            </div>
+            <div class="pending-details">
+              <div class="pending-name text-truncate">{{ file.name }}</div>
+              <small class="text-muted">{{ formatSize(file.size) }}</small>
+            </div>
             <button type="button" class="btn-close ms-2" aria-label="Retirer" @click="removePendingFile(index)"></button>
-          </span>
+          </div>
         </div>
-        <div v-if="showEmojiPicker" class="emoji-picker shadow-sm">
-          <button
-            v-for="emoji in emojis"
-            :key="emoji"
-            type="button"
-            class="btn btn-light"
-            @click="insertEmoji(emoji)"
-          >
-            {{ emoji }}
-          </button>
+        <div v-if="showEmojiPicker" class="emoji-popover shadow-sm">
+          <emoji-picker
+            class="composer-emoji-picker"
+            skin-tone-emoji="👍"
+            @emoji-click="onComposerEmojiSelect"
+          ></emoji-picker>
+        </div>
+        <div v-if="showGifPicker" class="gif-popover shadow-sm">
+          <div class="gif-search input-group input-group-sm mb-2">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input
+              v-model="gifSearchTerm"
+              type="text"
+              class="form-control"
+              placeholder="Rechercher un GIF"
+              autocomplete="off"
+            />
+            <button
+              class="btn btn-outline-secondary"
+              type="button"
+              :disabled="gifLoading"
+              @click="refreshGifResults"
+            >
+              <i class="bi bi-arrow-clockwise" :class="{ spinning: gifLoading }"></i>
+            </button>
+          </div>
+          <div v-if="gifError" class="gif-error alert alert-warning py-1 px-2 mb-2">{{ gifError }}</div>
+          <div v-if="gifLoading" class="gif-loading text-center py-2">
+            <span class="spinner-border spinner-border-sm text-primary"></span>
+          </div>
+          <div v-else>
+            <div v-if="gifResults.length" class="gif-grid">
+              <button
+                v-for="gif in gifResults"
+                :key="gif.id"
+                type="button"
+                class="gif-thumb"
+                @click="addGifToPending(gif)"
+              >
+                <img :src="gif.media_formats?.tinygif?.url || gif.media_formats?.gif?.url" alt="GIF" />
+              </button>
+            </div>
+            <div v-else class="text-muted small text-center py-2">Aucun GIF trouvé</div>
+          </div>
         </div>
       </form>
     </div>
@@ -325,10 +391,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, watch, computed } from 'vue'
+import { ref, onMounted, nextTick, watch, computed, onUnmounted } from 'vue'
 import axios from 'axios'
 import { io } from 'socket.io-client'
 import LogoUrl from '@/assets/logo_COVA.png'
+import 'emoji-picker-element'
 
 const conversations = ref([])
 const selectedConvId = ref(null)
@@ -351,9 +418,12 @@ const socket = ref(null)
 let lastJoinedConv = null
 let markReadTimer = null
 let typingSendTimer = null
+let gifSearchTimer = null
+let gifController = null
 const typingLabel = ref('')
 const unreadCounts = ref({})
 const conversationSearch = ref('')
+const loadingPreviewIds = new Set()
 const filteredConversations = computed(() => {
   const q = conversationSearch.value.trim().toLowerCase()
   const list = conversations.value || []
@@ -366,10 +436,19 @@ const filteredConversations = computed(() => {
 })
 
 const fileInput = ref(null)
+const messageInput = ref(null)
 const pendingFiles = ref([])
 const showEmojiPicker = ref(false)
+const showGifPicker = ref(false)
 const reactionPickerFor = ref(null)
-const emojis = ['😀', '😁', '😂', '🤣', '😊', '😍', '😘', '😎', '😢', '😡', '👍', '🙏', '👏', '🔥', '🎉']
+const gifSearchTerm = ref('')
+const gifResults = ref([])
+const gifLoading = ref(false)
+const gifError = ref('')
+const attachmentPreviews = ref({})
+const TENOR_API_KEY = 'LIVDSRZULELA'
+const TENOR_CLIENT_KEY = 'cova_messaging_ui'
+const GIF_PAGE_LIMIT = 24
 
 const canSend = computed(() => newMessage.value.trim().length > 0 || pendingFiles.value.length > 0)
 
@@ -436,6 +515,40 @@ function derivedTitle() {
   if (names.length > 2) return `${names[0]}, ${names[1]} (+${names.length - 2})`
   return ''
 }
+watch(gifSearchTerm, value => {
+  if (!showGifPicker.value) return
+  if (gifSearchTimer) {
+    clearTimeout(gifSearchTimer)
+    gifSearchTimer = null
+  }
+  gifSearchTimer = setTimeout(() => {
+    loadGifResults(value)
+  }, 350)
+})
+watch(showEmojiPicker, open => {
+  if (open) {
+    showGifPicker.value = false
+    reactionPickerFor.value = null
+  }
+})
+watch(showGifPicker, open => {
+  if (open) {
+    showEmojiPicker.value = false
+    reactionPickerFor.value = null
+    if (!gifResults.value.length) refreshGifResults()
+  } else {
+    if (gifSearchTimer) {
+      clearTimeout(gifSearchTimer)
+      gifSearchTimer = null
+    }
+    if (gifController) {
+      gifController.abort()
+      gifController = null
+    }
+    gifSearchTerm.value = ''
+    gifError.value = ''
+  }
+})
 watch(showConvModal, async open => {
   if (open) {
     await nextTick()
@@ -702,29 +815,162 @@ function triggerFilePicker() {
   fileInput.value?.click()
 }
 
+function withPreviewForPending(file) {
+  if (file && file.type && file.type.startsWith('image/')) {
+    try {
+      file.previewUrl = URL.createObjectURL(file)
+    } catch {}
+  }
+  return file
+}
+
+function revokePendingPreview(file) {
+  if (file && file.previewUrl) {
+    URL.revokeObjectURL(file.previewUrl)
+    delete file.previewUrl
+  }
+}
+
 function handleFiles(event) {
-  const files = Array.from(event.target?.files || [])
+  const files = Array.from(event.target?.files || []).map(withPreviewForPending)
   if (!files.length) return
   pendingFiles.value = pendingFiles.value.concat(files)
   if (fileInput.value) fileInput.value.value = ''
 }
 
 function removePendingFile(index) {
-  pendingFiles.value.splice(index, 1)
+  const removed = pendingFiles.value.splice(index, 1)
+  removed.forEach(revokePendingPreview)
 }
 
 function resetPendingFiles() {
+  pendingFiles.value.forEach(revokePendingPreview)
   pendingFiles.value = []
   if (fileInput.value) fileInput.value.value = ''
 }
 
 function toggleEmojiPicker() {
   showEmojiPicker.value = !showEmojiPicker.value
+  if (showEmojiPicker.value) {
+    showGifPicker.value = false
+    reactionPickerFor.value = null
+    focusMessageInput()
+  }
 }
 
-function insertEmoji(emoji) {
+function toggleGifPicker() {
+  showGifPicker.value = !showGifPicker.value
+  if (showGifPicker.value) {
+    showEmojiPicker.value = false
+    reactionPickerFor.value = null
+    refreshGifResults()
+    focusMessageInput()
+  }
+}
+
+function focusMessageInput() {
+  nextTick(() => {
+    messageInput.value?.focus()
+  })
+}
+
+function onComposerEmojiSelect(event) {
+  const emoji = extractEmoji(event)
+  if (!emoji) return
   newMessage.value += emoji
   showEmojiPicker.value = false
+  focusMessageInput()
+}
+
+function onReactionEmoji(msgId, event) {
+  const emoji = extractEmoji(event)
+  if (!emoji) return
+  selectReaction(msgId, emoji)
+}
+
+function extractEmoji(event) {
+  return (
+    event?.detail?.unicode ||
+    event?.detail?.emoji?.unicode ||
+    event?.detail?.native ||
+    event?.detail?.char ||
+    ''
+  )
+}
+
+async function refreshGifResults() {
+  return loadGifResults(gifSearchTerm.value)
+}
+
+async function loadGifResults(query = '') {
+  const search = (query || '').trim()
+  if (gifController) {
+    gifController.abort()
+    gifController = null
+  }
+  const controller = new AbortController()
+  gifController = controller
+  gifLoading.value = true
+  gifError.value = ''
+  try {
+    const endpoint = search ? 'search' : 'featured'
+    const params = new URLSearchParams({
+      key: TENOR_API_KEY,
+      client_key: TENOR_CLIENT_KEY,
+      limit: String(GIF_PAGE_LIMIT),
+      media_filter: 'minimal',
+    })
+    if (search) params.set('q', search)
+    const response = await fetch(`https://tenor.googleapis.com/v2/${endpoint}?${params.toString()}`, {
+      signal: controller.signal,
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const data = await response.json()
+    gifResults.value = data.results || []
+  } catch (error) {
+    if (error.name === 'AbortError') return
+    console.error('GIF search failed', error)
+    gifError.value = "Impossible de charger les GIFs pour le moment."
+  } finally {
+    if (gifController === controller) {
+      gifLoading.value = false
+      gifController = null
+    }
+  }
+}
+
+function gifMediaUrl(gif) {
+  if (!gif || !gif.media_formats) return ''
+  const order = ['gif', 'mediumgif', 'nanogif', 'tinygif', 'loopedmp4']
+  for (const key of order) {
+    const candidate = gif.media_formats[key]
+    if (candidate?.url) return candidate.url
+  }
+  return ''
+}
+
+async function addGifToPending(gif) {
+  const url = gifMediaUrl(gif)
+  if (!url) {
+    gifError.value = 'GIF indisponible.'
+    return
+  }
+  try {
+    const response = await fetch(url)
+    if (!response.ok) throw new Error('download failed')
+    const blob = await response.blob()
+    const extension = (blob.type && blob.type.split('/')[1]) || 'gif'
+    const filename = `gif-${gif?.id || Date.now()}.${extension}`
+    const file = new File([blob], filename, { type: blob.type || 'image/gif' })
+    withPreviewForPending(file)
+    pendingFiles.value = pendingFiles.value.concat(file)
+    showGifPicker.value = false
+    gifError.value = ''
+    focusMessageInput()
+  } catch (error) {
+    console.error('Unable to attach GIF', error)
+    gifError.value = "Impossible d'ajouter ce GIF."
+  }
 }
 
 function formatSize(bytes) {
@@ -751,6 +997,7 @@ async function sendMessage() {
   sendingMessage.value = true
   newMessage.value = ''
   showEmojiPicker.value = false
+  showGifPicker.value = false
   try {
     const res = await axios.post(
       `http://localhost:5000/api/conversations/${selectedConvId.value}/messages/`,
@@ -874,6 +1121,10 @@ function summariseReactions(reactions) {
 
 function toggleReactionPicker(msgId) {
   reactionPickerFor.value = reactionPickerFor.value === msgId ? null : msgId
+  if (reactionPickerFor.value) {
+    showEmojiPicker.value = false
+    showGifPicker.value = false
+  }
 }
 
 function selectReaction(msgId, emoji) {
@@ -900,11 +1151,43 @@ function applyReactionUpdate(messageId, payload) {
   target.reaction_summary = payload.reaction_summary || summariseReactions(target.reactions)
 }
 
+function attachmentEndpoint(file) {
+  const fallback = `/api/messages/files/${file?.id_file}`
+  const url = file?.url || fallback
+  return url.startsWith('http') ? url : `http://localhost:5000${url}`
+}
+
+function isInlineImage(file) {
+  const mime = (file?.mime || '').toLowerCase()
+  if (mime.startsWith('image/')) return true
+  const name = (file?.filename || '').toLowerCase()
+  return /\.(png|jpe?g|gif|webp|bmp)$/i.test(name)
+}
+
+async function ensureAttachmentPreview(file) {
+  const key = file?.id_file
+  if (!key) return
+  const cacheKey = String(key)
+  if (attachmentPreviews.value[cacheKey] || loadingPreviewIds.has(cacheKey)) return
+  if (!isInlineImage(file)) return
+  loadingPreviewIds.add(cacheKey)
+  try {
+    const response = await axios.get(attachmentEndpoint(file), {
+      responseType: 'blob',
+      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
+    })
+    const blobUrl = window.URL.createObjectURL(response.data)
+    attachmentPreviews.value = { ...attachmentPreviews.value, [cacheKey]: blobUrl }
+  } catch (error) {
+    console.error('Unable to load preview', error)
+  } finally {
+    loadingPreviewIds.delete(cacheKey)
+  }
+}
+
 async function downloadAttachment(file) {
   try {
-    const url = file.url || `/api/messages/files/${file.id_file}`
-    const endpoint = url.startsWith('http') ? url : `http://localhost:5000${url}`
-    const response = await axios.get(endpoint, {
+    const response = await axios.get(attachmentEndpoint(file), {
       responseType: 'blob',
       headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
     })
@@ -918,6 +1201,34 @@ async function downloadAttachment(file) {
     window.URL.revokeObjectURL(blobUrl)
   } catch {}
 }
+
+watch(
+  messages,
+  list => {
+    const active = new Set()
+    for (const msg of list || []) {
+      for (const file of msg.files || []) {
+        if (!file || !file.id_file) continue
+        const key = String(file.id_file)
+        active.add(key)
+        if (isInlineImage(file)) ensureAttachmentPreview(file)
+      }
+    }
+    const cache = { ...attachmentPreviews.value }
+    let changed = false
+    for (const key of Object.keys(cache)) {
+      if (!active.has(key)) {
+        window.URL.revokeObjectURL(cache[key])
+        delete cache[key]
+        changed = true
+      }
+    }
+    if (changed) {
+      attachmentPreviews.value = { ...cache }
+    }
+  },
+  { deep: true, immediate: true },
+)
 
 function handleIncomingMessage(payload) {
   if (!payload) return
@@ -974,8 +1285,28 @@ watch(selectedConvId, async val => {
     await fetchMessages()
     resetPendingFiles()
     showEmojiPicker.value = false
+    showGifPicker.value = false
     reactionPickerFor.value = null
     typingLabel.value = ''
+  }
+})
+
+onUnmounted(() => {
+  if (gifSearchTimer) {
+    clearTimeout(gifSearchTimer)
+    gifSearchTimer = null
+  }
+  if (gifController) {
+    gifController.abort()
+    gifController = null
+  }
+  pendingFiles.value.forEach(revokePendingPreview)
+  pendingFiles.value = []
+  const cache = attachmentPreviews.value || {}
+  for (const url of Object.values(cache)) {
+    try {
+      window.URL.revokeObjectURL(url)
+    } catch {}
   }
 })
 </script>
@@ -1261,39 +1592,111 @@ watch(selectedConvId, async val => {
   border-top: 1px solid #e6eaf1;
   background: #fff;
   border-radius: 0 0 18px 18px;
+  position: relative;
 }
 .pending-files {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 .pending-file {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-.emoji-picker {
-  margin-top: 0.5rem;
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  background: #fff;
-  padding: 0.4rem;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #dbe2f3;
+  border-radius: 12px;
+  background: #f8faff;
+  box-shadow: 0 1px 3px rgba(13, 110, 253, 0.12);
+}
+.pending-thumb {
+  width: 48px;
+  height: 48px;
   border-radius: 10px;
-  max-width: 220px;
+  overflow: hidden;
+  background: #e5ecff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.emoji-picker button {
-  width: 2.2rem;
-  height: 2.2rem;
-  font-size: 1.2rem;
+.pending-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
-.bubble-attachments {
+.pending-details {
+  min-width: 0;
+}
+.pending-name {
+  font-weight: 600;
+  max-width: 180px;
+}
+.emoji-popover,
+.gif-popover {
+  position: absolute;
+  bottom: 70px;
+  left: 64px;
+  z-index: 30;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid rgba(13, 110, 253, 0.2);
+  box-shadow: 0 18px 40px rgba(13, 110, 253, 0.15);
+  padding: 0.75rem;
+}
+.emoji-popover {
+  width: 320px;
+}
+.composer-emoji-picker {
+  width: 100%;
+  height: 320px;
+  border-radius: 12px;
+}
+.gif-popover {
+  width: 360px;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.5rem;
 }
-.attachment-item .attachment-link {
-  font-size: 0.95rem;
+.gif-search .input-group-text {
+  background: #f1f4ff;
+  border-color: #dbe2f3;
+}
+.gif-search .form-control,
+.gif-search .btn {
+  border-color: #dbe2f3;
+}
+.gif-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+.gif-thumb {
+  border: none;
+  padding: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: transparent;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(13, 110, 253, 0.14);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.gif-thumb:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 26px rgba(13, 110, 253, 0.2);
+}
+.gif-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.gif-loading {
+  min-height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .reaction-strip {
   display: flex;
@@ -1321,18 +1724,83 @@ watch(selectedConvId, async val => {
   font-size: 1rem;
 }
 .reaction-picker {
-  display: inline-flex;
-  gap: 0.2rem;
+  position: relative;
+  z-index: 10;
   background: #fff;
-  border-radius: 8px;
-  padding: 0.2rem 0.3rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(13, 110, 253, 0.2);
+  border-radius: 14px;
+  box-shadow: 0 16px 38px rgba(13, 110, 253, 0.18);
+  padding: 0.35rem;
 }
-.reaction-picker button {
-  font-size: 1rem;
+.reaction-emoji-picker {
+  width: 220px;
+  height: 240px;
+  border-radius: 12px;
 }
 .add-reaction {
   border-radius: 999px;
+}
+.spinning {
+  animation: rotate 0.9s linear infinite;
+}
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.bubble-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 12px;
+  background: #f0f4ff;
+}
+.attachment-item.preview {
+  background: #fff;
+  border: 1px solid rgba(13, 110, 253, 0.2);
+  box-shadow: 0 10px 28px rgba(13, 110, 253, 0.18);
+  align-items: stretch;
+}
+.attachment-thumb {
+  border: none;
+  background: transparent;
+  padding: 0;
+  width: 140px;
+  height: 140px;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.attachment-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.attachment-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  justify-content: center;
+  max-width: 180px;
+}
+.attachment-name {
+  font-weight: 600;
+  word-break: break-word;
+}
+.attachment-item:not(.preview) .attachment-link {
+  font-size: 0.95rem;
+  font-weight: 600;
 }
 
 .messages-layout {
