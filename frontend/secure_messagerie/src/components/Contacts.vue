@@ -127,6 +127,7 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 
 const contacts = ref([])
@@ -140,6 +141,9 @@ const adding = ref(false)
 const addEmailInput = ref(null)
 const suggestions = ref([])
 let suggestTimer = null
+
+const route = useRoute()
+const router = useRouter()
 
 const filteredContacts = computed(() =>
   contacts.value.filter(c =>
@@ -208,8 +212,23 @@ async function addContact() {
 }
 
 function refresh() { fetchContacts() }
-function openAddModal() { addError.value = ''; showAddModal.value = true }
-function closeAddModal() { showAddModal.value = false }
+function openAddModal() {
+  addError.value = ''
+  if (!showAddModal.value) {
+    showAddModal.value = true
+  }
+  if (route.query.add !== '1') {
+    router.replace({ query: { ...route.query, add: '1' } }).catch(() => {})
+  }
+}
+function closeAddModal() {
+  showAddModal.value = false
+  if (route.query.add !== undefined) {
+    const newQuery = { ...route.query }
+    delete newQuery.add
+    router.replace({ query: newQuery }).catch(() => {})
+  }
+}
 function trySubmit() { if (emailValid.value && !duplicate.value && !adding.value) addContact() }
 
 watch(showAddModal, async (open) => {
@@ -218,6 +237,20 @@ watch(showAddModal, async (open) => {
     suggestions.value = []
   }
 })
+
+watch(
+  () => route.query.add,
+  (val) => {
+    const shouldOpen = val !== undefined
+    if (shouldOpen && !showAddModal.value) {
+      addError.value = ''
+      showAddModal.value = true
+    } else if (!shouldOpen && showAddModal.value) {
+      showAddModal.value = false
+    }
+  },
+  { immediate: true }
+)
 
 onMounted(() => {
   fetchContacts()

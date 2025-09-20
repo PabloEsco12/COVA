@@ -1,6 +1,6 @@
 <template>
-  <div class="dashboard-layout d-flex" :class="{ 'dashboard-layout-dark': isDark }">
-    <Sidebar class="sidebar" :is-dark="isDark" @toggle-dark="toggleTheme" />
+  <div class="dashboard-layout d-flex">
+    <Sidebar class="sidebar" />
     <div class="flex-grow-1 d-flex flex-column min-vh-100">
       <DashboardHeader :is-dark="isDark" @toggle-dark="toggleTheme" />
       <main
@@ -69,12 +69,6 @@ onMounted(() => {
   background: #f7f9fb;
   border-radius: 20px;
   box-shadow: 0 4px 16px #1959c233;
-  transition: background 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
-}
-.main-content-dark {
-  background: rgba(21, 26, 35, 0.96);
-  color: #e9ecef;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
 }
 .sidebar {
   min-width: 230px;
