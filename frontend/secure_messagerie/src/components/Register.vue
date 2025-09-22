@@ -1,32 +1,134 @@
 <template>
-  <div class="register-bg">
-    <div class="register-container animate__animated animate__fadeInDown">
-      <img src="@/assets/logo_COVA.png" alt="Logo COVA" class="register-logo" />
-      <h2 class="register-title mb-3">Créer un compte <span class="brand">COVA</span></h2>
-      <form @submit.prevent="handleRegister" class="register-form">
-        <div class="form-group mb-3">
-          <div class="input-group">
-            <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
-            <input v-model="pseudo" type="text" class="form-control" placeholder="Pseudo" required>
+  <div class="auth-page signup-page">
+    <div class="auth-orb orb-primary"></div>
+    <div class="auth-orb orb-secondary"></div>
+
+    <div class="auth-grid">
+      <section class="auth-illustration">
+        <div class="auth-illustration__overlay"></div>
+        <div class="auth-illustration__content">
+          <div class="auth-badge">
+            <i class="bi bi-stars me-2"></i>
+            Onboarding maîtrisé
+          </div>
+          <h1>
+            Lancez votre espace collaboratif
+            <span class="brand-text">COVA</span>
+          </h1>
+          <p>
+            Déployez en toute simplicité un environnement souverain pour vos équipes.
+            Nous accompagnons chaque organisation vers un démarrage sécurisé et fluide.
+          </p>
+          <ul class="auth-feature-list">
+            <li>
+              <span class="feature-icon"><i class="bi bi-person-badge-fill"></i></span>
+              Validation des identités et contrôle des accès à la volée.
+            </li>
+            <li>
+              <span class="feature-icon"><i class="bi bi-diagram-3-fill"></i></span>
+              Espaces partagés, canaux projets et archivage automatique.
+            </li>
+            <li>
+              <span class="feature-icon"><i class="bi bi-headset"></i></span>
+              Experts COVA dédiés pour configurer vos règles de sécurité.
+            </li>
+          </ul>
+          <div class="auth-metrics">
+            <div>
+              <strong>&lt; 5 min</strong>
+              <span>pour activer votre équipe</span>
+            </div>
+            <div>
+              <strong>99,9%</strong>
+              <span>disponibilité garantie</span>
+            </div>
           </div>
         </div>
-        <div class="form-group mb-3">
-          <div class="input-group">
-            <span class="input-group-text"><i class="bi bi-envelope-fill"></i></span>
-            <input v-model="email" type="email" class="form-control" placeholder="Email" required>
+      </section>
+
+      <section class="auth-card">
+        <div class="auth-card__brand">
+          <img src="@/assets/logo_COVA.png" alt="Logo COVA" class="auth-card__logo" />
+          <div>
+            <p class="auth-card__subtitle">Premiers pas sur la plateforme</p>
+            <h2 class="auth-card__title">Créez votre accès sécurisé</h2>
           </div>
         </div>
-        <div class="form-group mb-3">
-          <div class="input-group">
-            <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
-            <input v-model="password" type="password" class="form-control" placeholder="Mot de passe" required>
+
+        <p class="auth-card__intro">
+          Renseignez vos informations professionnelles pour générer vos identifiants
+          chiffrés. Vous recevrez un e-mail de confirmation afin d'activer votre
+          compte.
+        </p>
+
+        <form @submit.prevent="handleRegister" class="auth-form">
+          <div class="input-field">
+            <span class="input-field__icon"><i class="bi bi-person-fill"></i></span>
+            <input
+              v-model="pseudo"
+              type="text"
+              class="input-field__control"
+              placeholder=" "
+              required
+              autocomplete="nickname"
+            >
+            <label class="input-field__label">Nom d'affichage</label>
           </div>
+
+          <div class="input-field">
+            <span class="input-field__icon"><i class="bi bi-envelope-fill"></i></span>
+            <input
+              v-model="email"
+              type="email"
+              class="input-field__control"
+              placeholder=" "
+              required
+              autocomplete="email"
+            >
+            <label class="input-field__label">Adresse e-mail professionnelle</label>
+          </div>
+
+          <div class="input-field">
+            <span class="input-field__icon"><i class="bi bi-lock-fill"></i></span>
+            <input
+              v-model="password"
+              type="password"
+              class="input-field__control"
+              placeholder=" "
+              required
+              minlength="8"
+              autocomplete="new-password"
+            >
+            <label class="input-field__label">Mot de passe</label>
+            <small class="input-field__hint">8 caractères minimum, combinez lettres, chiffres et symboles.</small>
+          </div>
+
+          <div class="auth-legal">
+            En créant un compte, vous acceptez la charte de sécurité et de confidentialité COVA.
+          </div>
+
+          <button type="submit" class="btn-auth" :disabled="loading">
+            <span v-if="loading" class="spinner-border spinner-border-sm"></span>
+            <span v-else>Créer mon compte</span>
+          </button>
+        </form>
+
+        <div v-if="error" class="alert alert-danger text-center animate__animated animate__shakeX mt-3">
+          {{ error }}
         </div>
-        <button type="submit" class="btn btn-gradient w-100">S'inscrire</button>
-      </form>
-      <div v-if="error" class="alert alert-danger mt-3 text-center">{{ error }}</div>
-      <div v-if="success" class="alert alert-success mt-3 text-center">{{ success }}</div>
-      <router-link to="/login" class="btn btn-link mt-2 w-100">Déjà un compte ? Se connecter</router-link>
+
+        <div
+          v-if="success"
+          class="alert alert-success text-center animate__animated animate__fadeInUp mt-3"
+        >
+          {{ success }}
+        </div>
+
+        <p class="auth-card__footer">
+          Déjà inscrit ?
+          <router-link to="/login">Revenir à la connexion</router-link>
+        </p>
+      </section>
     </div>
   </div>
 </template>
@@ -40,10 +142,12 @@ const email = ref('')
 const password = ref('')
 const error = ref('')
 const success = ref('')
+const loading = ref(false)
 
 async function handleRegister() {
   error.value = ''
   success.value = ''
+  loading.value = true
   try {
     const res = await axios.post('http://localhost:5000/api/register', {
       pseudo: pseudo.value,
@@ -51,70 +155,411 @@ async function handleRegister() {
       password: password.value,
     })
     success.value = res.data.message || "Inscription réussie. Un e-mail de confirmation a été envoyé."
-    pseudo.value = email.value = password.value = ''
+    pseudo.value = ''
+    email.value = ''
+    password.value = ''
   } catch (err) {
-    error.value = err.response?.data?.error || 'Erreur inconnue'
+    error.value = err.response?.data?.error || 'Erreur inconnue. Veuillez réessayer.'
+  } finally {
+    loading.value = false
   }
 }
 </script>
 
 <style scoped>
-.register-bg {
+@import 'animate.css';
+
+.auth-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #1959c2 0%, #162041 100%);
   display: flex;
   align-items: center;
   justify-content: center;
+  background: linear-gradient(135deg, #eef3fc 0%, #dfe7f8 40%, #eaf6ff 100%);
+  padding: 3.5rem 1.5rem;
+  position: relative;
+  overflow: hidden;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
 }
-.register-container {
-  background: rgba(255,255,255,0.14);
-  border-radius: 24px;
-  box-shadow: 0 8px 32px 0 rgba(31,38,135,0.25);
-  backdrop-filter: blur(7px);
-  -webkit-backdrop-filter: blur(7px);
-  padding: 3rem 2rem 2rem 2rem;
-  width: 100%;
-  max-width: 410px;
-  border: 1.5px solid rgba(255,255,255,0.12);
-  text-align: center;
+
+.signup-page::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 20% 20%, rgba(25, 89, 194, 0.14), transparent 45%),
+    radial-gradient(circle at 70% 0%, rgba(90, 211, 245, 0.15), transparent 50%),
+    radial-gradient(circle at 50% 100%, rgba(19, 72, 160, 0.12), transparent 55%);
+  opacity: 0.8;
+  z-index: 1;
 }
-.register-logo {
-  width: 56px;
-  margin-bottom: 12px;
-  border-radius: 10px;
-  box-shadow: 0 2px 12px #1959c2ad;
+
+.auth-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(0);
+  opacity: 0.8;
+  z-index: 0;
 }
-.register-title {
+
+.orb-primary {
+  width: 360px;
+  height: 360px;
+  top: -140px;
+  right: -140px;
+  background: radial-gradient(circle, rgba(25, 89, 194, 0.3) 0%, rgba(24, 60, 135, 0) 70%);
+}
+
+.orb-secondary {
+  width: 300px;
+  height: 300px;
+  bottom: -160px;
+  left: -120px;
+  background: radial-gradient(circle, rgba(90, 211, 245, 0.32) 0%, rgba(90, 211, 245, 0) 70%);
+}
+
+.auth-grid {
+  position: relative;
+  z-index: 2;
+  width: min(1120px, 100%);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2.5rem;
+  align-items: stretch;
+}
+
+.auth-illustration {
+  position: relative;
+  border-radius: 36px;
+  overflow: hidden;
+  background: linear-gradient(140deg, #183c87 0%, #1959c2 45%, #5ad3f5 100%);
+  color: #fff;
+  display: flex;
+  align-items: flex-end;
+  padding: clamp(2.5rem, 3vw, 3.5rem);
+  box-shadow: 0 24px 60px rgba(20, 64, 140, 0.35);
+}
+
+.auth-illustration__overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.18) 0%, rgba(9, 21, 58, 0.35) 100%);
+  mix-blend-mode: screen;
+  opacity: 0.75;
+}
+
+.auth-illustration__content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 1.6rem;
+}
+
+.auth-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 1.35rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
   font-weight: 600;
-  letter-spacing: 1px;
-  color: #1b2845;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
-.brand {
-  color: #1959c2;
-  letter-spacing: 2px;
+
+.auth-illustration h1 {
+  font-size: clamp(2.1rem, 3vw, 2.7rem);
+  line-height: 1.25;
+  margin: 0;
+}
+
+.brand-text {
+  color: #fff;
+  text-shadow: 0 6px 24px rgba(0, 0, 0, 0.2);
+}
+
+.auth-illustration p {
+  margin: 0;
+  font-size: 1.05rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.auth-feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.auth-feature-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  font-size: 0.98rem;
+  line-height: 1.45;
+}
+
+.feature-icon {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+}
+
+.auth-metrics {
+  display: flex;
+  gap: 2.5rem;
+  margin-top: 0.5rem;
+}
+
+.auth-metrics strong {
+  display: block;
+  font-size: 1.8rem;
   font-weight: 700;
 }
-.btn-gradient {
-  background: linear-gradient(90deg,#1959c2 0,#2157d3 100%);
-  color: #fff;
-  border: none;
+
+.auth-metrics span {
+  font-size: 0.92rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.auth-card {
+  background: rgba(255, 255, 255, 0.94);
+  border-radius: 36px;
+  padding: clamp(2.4rem, 3vw, 3rem);
+  box-shadow: 0 22px 60px rgba(17, 44, 108, 0.18);
+  backdrop-filter: blur(18px);
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-card__brand {
+  display: flex;
+  gap: 1.2rem;
+  align-items: center;
+  margin-bottom: 1.6rem;
+}
+
+.auth-card__logo {
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+  box-shadow: 0 12px 30px rgba(25, 89, 194, 0.25);
+}
+
+.auth-card__subtitle {
+  margin: 0;
+  font-size: 0.92rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #1959c2;
   font-weight: 600;
-  transition: box-shadow 0.3s;
 }
-.btn-gradient:hover {
-  box-shadow: 0 4px 16px #1959c277;
-  color: #fff;
+
+.auth-card__title {
+  margin: 0.35rem 0 0;
+  font-size: 1.65rem;
+  font-weight: 700;
+  color: #101728;
 }
-.input-group-text {
-  background: #e6e8f1;
-  border: none;
+
+.auth-card__intro {
+  margin: 0 0 2rem;
+  font-size: 0.98rem;
+  color: rgba(16, 23, 40, 0.72);
+  line-height: 1.55;
 }
-input.form-control {
-  border-left: 0;
-  background: #fff;
-  border-radius: 0 6px 6px 0;
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
 }
-.alert {
+
+.input-field {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.input-field__icon {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  color: #1959c2;
+  font-size: 1.05rem;
+  z-index: 2;
+  opacity: 0.9;
+}
+
+.input-field__control {
+  border: 1.5px solid rgba(25, 89, 194, 0.15);
+  border-radius: 16px;
+  padding: 1.05rem 1.1rem 1.05rem 3.2rem;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 12px 28px rgba(31, 82, 183, 0.08);
   font-size: 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.input-field__control:focus {
+  outline: none;
+  border-color: rgba(90, 211, 245, 0.8);
+  box-shadow: 0 0 0 3px rgba(90, 211, 245, 0.25);
+  transform: translateY(-1px);
+}
+
+.input-field__label {
+  position: absolute;
+  left: 3.2rem;
+  top: 18px;
+  color: rgba(16, 23, 40, 0.7);
+  pointer-events: none;
+  transition: 0.2s ease;
+  font-weight: 500;
+}
+
+.input-field__control:focus + .input-field__label,
+.input-field__control:not(:placeholder-shown) + .input-field__label {
+  top: -0.6rem;
+  left: 2.9rem;
+  background: #fff;
+  padding: 0 0.45rem;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  color: #1959c2;
+  letter-spacing: 0.02em;
+}
+
+.input-field__hint {
+  margin-top: 0.6rem;
+  margin-left: 3.2rem;
+  font-size: 0.78rem;
+  color: rgba(16, 23, 40, 0.6);
+}
+
+.auth-legal {
+  font-size: 0.78rem;
+  color: rgba(16, 23, 40, 0.6);
+  line-height: 1.4;
+  margin-top: -0.6rem;
+  margin-bottom: 0.6rem;
+  padding-left: 3.2rem;
+}
+
+.btn-auth {
+  border: none;
+  border-radius: 16px;
+  padding: 0.95rem;
+  background: linear-gradient(135deg, #1959c2 0%, #5ad3f5 100%);
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-auth:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.btn-auth:not(:disabled):hover,
+.btn-auth:not(:disabled):focus {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 35px rgba(25, 89, 194, 0.35);
+}
+
+.auth-card__footer {
+  margin-top: 2.25rem;
+  text-align: center;
+  font-size: 0.95rem;
+  color: rgba(16, 23, 40, 0.75);
+}
+
+.auth-card__footer a {
+  color: #1959c2;
+  font-weight: 600;
+  text-decoration: none;
+  margin-left: 0.3rem;
+}
+
+.auth-card__footer a:hover,
+.auth-card__footer a:focus {
+  text-decoration: underline;
+}
+
+.alert {
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+@media (max-width: 1080px) {
+  .auth-grid {
+    gap: 2rem;
+  }
+
+  .auth-card__title {
+    font-size: 1.55rem;
+  }
+}
+
+@media (max-width: 992px) {
+  .auth-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-illustration,
+  .auth-card {
+    border-radius: 28px;
+  }
+
+  .auth-card {
+    max-width: 540px;
+    margin: 0 auto;
+  }
+
+  .auth-legal {
+    padding-left: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .auth-page {
+    padding: 2.5rem 1rem;
+  }
+
+  .auth-card {
+    padding: 2.2rem 1.6rem;
+  }
+
+  .auth-card__brand {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .auth-legal {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 460px) {
+  .auth-illustration {
+    padding: 2rem 1.6rem;
+  }
+
+  .auth-feature-list li {
+    font-size: 0.95rem;
+  }
+
+  .auth-metrics {
+    gap: 1.5rem;
+  }
 }
 </style>
