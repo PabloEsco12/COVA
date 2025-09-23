@@ -93,20 +93,11 @@ def _build_from_header():
     return os.getenv('SMTP_FROM') or os.getenv('SMTP_USER', '')
 
 
-def _build_branded_email_html(
-    *,
-    title: str,
-    subtitle: str,
-    preheader: str,
-    paragraphs: list[str],
-    button_label: str,
-    button_link: str,
-    validity_note: str,
-) -> str:
-    paragraph_html = "".join(
-        f"<p style=\"margin:0 0 16px;line-height:1.6;color:#273041;font-size:15px;\">{para}</p>"
-        for para in paragraphs
-    )
+def send_reset_email(dest_email, reset_link) -> bool:
+    msg = MIMEMultipart('alternative')
+    msg['From'] = _build_from_header()
+    msg['To'] = dest_email
+    msg['Subject'] = 'Réinitialisation de mot de passe - COVA'
 
     html = f"""
     <html>
@@ -123,7 +114,7 @@ def _build_branded_email_html(
                     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                       <tr>
                         <td align="left">
-                          <img src="https://i.imgur.com/ENajk29.png" width="56" alt="Logo COVA" style="display:block;border-radius:14px;border:1px solid rgba(255,255,255,0.35);box-shadow:0 10px 30px rgba(10,35,82,0.45);" />
+                          {logo_markup}
                         </td>
                         <td align="right" style="font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:13px;letter-spacing:0.18em;text-transform:uppercase;color:#d2e1ff;">
                           Plateforme COVA
@@ -181,61 +172,45 @@ def _build_branded_email_html(
     return html
 
 
-def _build_branded_email_html(
-    *,
-    title: str,
-    subtitle: str,
-    preheader: str,
-    paragraphs: list[str],
-    button_label: str,
-    button_link: str,
-    validity_note: str,
-    logo_src: str | None = None,
-) -> str:
-    paragraph_html = "".join(
-        f"<p style=\"margin:0 0 16px;line-height:1.6;color:#273041;font-size:15px;\">{para}</p>"
-        for para in paragraphs
+def send_reset_email(dest_email, reset_link) -> bool:
+    msg = MIMEMultipart('related')
+    msg['From'] = _build_from_header()
+    msg['To'] = dest_email
+    msg['Subject'] = 'Réinitialisation de mot de passe - COVA'
+
+    paragraphs = [
+        "Nous avons reçu une demande de réinitialisation de votre mot de passe pour votre espace <strong>COVA</strong>.",
+        "Pour des raisons de sécurité, ce lien est personnel et ne doit pas être partagé.",
+    ]
+
+    logo_bytes = _get_logo_bytes()
+    html = _build_branded_email_html(
+        title="Réinitialisez votre mot de passe",
+        subtitle="Sécurisez votre accès à la plateforme COVA en quelques secondes.",
+        preheader="Réinitialisez votre mot de passe COVA en toute sécurité.",
+        paragraphs=paragraphs,
+        button_label="Réinitialiser mon mot de passe",
+        button_link=reset_link,
+        validity_note="Ce lien sécurisé restera actif pendant 1 heure. Passé ce délai, vous devrez effectuer une nouvelle demande.",
+        logo_src=f"cid:{LOGO_CONTENT_ID}" if logo_bytes else None,
     )
 
-    if logo_src:
-        logo_markup = (
-            f"<img src=\"{logo_src}\" width=\"56\" alt=\"Logo COVA\" "
-            "style=\"display:block;border-radius:14px;border:1px solid rgba(255,255,255,0.35);"
-            "box-shadow:0 10px 30px rgba(10,35,82,0.45);\" />"
-        )
-    else:
-        logo_markup = (
-            "<div style=\"width:56px;height:56px;display:flex;align-items:center;justify-content:center;"
-            "font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif;font-weight:700;font-size:14px;color:#143f8c;"
-            "background:#ffffff;border-radius:14px;border:1px solid rgba(255,255,255,0.35);"
-            "box-shadow:0 10px 30px rgba(10,35,82,0.45);\">COVA</div>"
-        )
+    plain_text = (
+        "Bonjour,\n\n"
+        "Vous avez demandé la réinitialisation de votre mot de passe pour votre compte COVA. "
+        "Cliquez sur le lien ci-dessous ou copiez-le dans votre navigateur :\n"
+        f"{reset_link}\n\n"
+        "Ce lien est valable 1 heure. Si vous n'êtes pas à l'origine de cette démarche, vous pouvez ignorer ce message.\n\n"
+        "L'équipe COVA"
+    )
 
-    html = f"""
-    <html>
-      <body style="font-family:Arial,sans-serif;background:#f8fafc;padding:32px;">
-        <div style="background:#fff;border-radius:13px;padding:28px 36px;max-width:460px;margin:auto;box-shadow:0 2px 16px #2b6cb021;">
-          <img src='https://i.imgur.com/ENajk29.png' width='56' style='margin-bottom:15px;border-radius:8px;box-shadow:0 2px 10px #1959c278;' alt='COVA logo' />
-          <h2 style="color:#183c87;margin-bottom:12px;">Réinitialisation de mot de passe</h2>
-          <p style="color:#1b2845;font-size:1.1em;">
-            Bonjour,<br><br>
-            Tu as demandé la réinitialisation de ton mot de passe pour ton compte <b>COVA</b>.
-          </p>
-          <p style="margin:20px 0;">
-            <a href="{reset_link}" style="background:#1959c2;color:#fff;padding:13px 30px;border-radius:9px;text-decoration:none;font-size:1.14em;font-weight:600;">
-              Réinitialiser mon mot de passe
-            </a>
-          </p>
-          <div style="color:#8a93a3;font-size:0.99em;">
-            Ce lien est valable 1h. Si tu n'es pas à l'origine de cette demande, ignore simplement ce mail.<br><br>
-            Merci de ta confiance.<br>
-            <b>L'équipe COVA</b>
-          </div>
-        </div>
-      </body>
-    </html>
-    """
-    msg.attach(MIMEText(html, 'html'))
+    alternative_part = MIMEMultipart('alternative')
+    alternative_part.attach(MIMEText(plain_text, 'plain', 'utf-8'))
+    alternative_part.attach(MIMEText(html, 'html', 'utf-8'))
+    msg.attach(alternative_part)
+
+    if logo_bytes:
+        _attach_logo(msg, logo_bytes)
 
     return _send_message(msg)
 
@@ -246,31 +221,39 @@ def send_confirm_email(dest_email, confirm_link) -> bool:
     msg['To'] = dest_email
     msg['Subject'] = "Confirmation d'inscription - COVA"
 
-    html = f"""
-    <html>
-      <body style="font-family:Arial,sans-serif;background:#f8fafc;padding:32px;">
-        <div style="background:#fff;border-radius:13px;padding:28px 36px;max-width:460px;margin:auto;box-shadow:0 2px 16px #2b6cb021;">
-          <img src='https://i.imgur.com/ENajk29.png' width='56' style='margin-bottom:15px;border-radius:8px;box-shadow:0 2px 10px #1959c278;' alt='COVA logo' />
-          <h2 style="color:#183c87;margin-bottom:12px;">Confirme ton adresse e-mail</h2>
-          <p style="color:#1b2845;font-size:1.1em;">
-            Bonjour,<br><br>
-            Merci de t'être inscrit sur <b>COVA</b>. Clique sur le bouton ci-dessous pour confirmer ton adresse e-mail.
-          </p>
-          <p style="margin:20px 0;">
-            <a href="{confirm_link}" style="background:#1959c2;color:#fff;padding:13px 30px;border-radius:9px;text-decoration:none;font-size:1.14em;font-weight:600;">
-              Confirmer mon e-mail
-            </a>
-          </p>
-          <div style="color:#8a93a3;font-size:0.99em;">
-            Ce lien est valable 24h. Si tu n'es pas à l'origine de cette inscription, ignore simplement ce message.<br><br>
-            Merci de ta confiance.<br>
-            <b>L'équipe COVA</b>
-          </div>
-        </div>
-      </body>
-    </html>
-    """
-    msg.attach(MIMEText(html, 'html'))
+    paragraphs = [
+        "Nous sommes ravis de vous compter parmi nos membres.",
+        "Pour finaliser votre inscription et sécuriser votre compte, merci de confirmer votre adresse e-mail." ,
+    ]
+
+    logo_bytes = _get_logo_bytes()
+    html = _build_branded_email_html(
+        title="Confirmez votre adresse e-mail",
+        subtitle="Bienvenue sur COVA, la plateforme dédiée au suivi et à l'accompagnement.",
+        preheader="Bienvenue sur COVA ! Confirmez votre adresse e-mail pour finaliser votre inscription.",
+        paragraphs=paragraphs,
+        button_label="Confirmer mon e-mail",
+        button_link=confirm_link,
+        validity_note="Le lien de confirmation est valable pendant 24 heures. Passé ce délai, il faudra effectuer une nouvelle demande depuis la plateforme.",
+        logo_src=f"cid:{LOGO_CONTENT_ID}" if logo_bytes else None,
+    )
+
+    plain_text = (
+        "Bonjour,\n\n"
+        "Merci de vous être inscrit sur COVA. Pour activer votre compte, cliquez sur le lien ci-dessous "
+        "ou copiez-le dans votre navigateur :\n"
+        f"{confirm_link}\n\n"
+        "Ce lien est valable 24 heures. Si vous n'êtes pas à l'origine de cette inscription, ignorez ce message.\n\n"
+        "L'équipe COVA"
+    )
+
+    alternative_part = MIMEMultipart('alternative')
+    alternative_part.attach(MIMEText(plain_text, 'plain', 'utf-8'))
+    alternative_part.attach(MIMEText(html, 'html', 'utf-8'))
+    msg.attach(alternative_part)
+
+    if logo_bytes:
+        _attach_logo(msg, logo_bytes)
 
     return _send_message(msg)
 
