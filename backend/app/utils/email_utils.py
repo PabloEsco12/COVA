@@ -93,11 +93,35 @@ def _build_from_header():
     return os.getenv('SMTP_FROM') or os.getenv('SMTP_USER', '')
 
 
-def send_reset_email(dest_email, reset_link) -> bool:
-    msg = MIMEMultipart('alternative')
-    msg['From'] = _build_from_header()
-    msg['To'] = dest_email
-    msg['Subject'] = 'Réinitialisation de mot de passe - COVA'
+def _build_branded_email_html(
+    *,
+    title: str,
+    subtitle: str,
+    preheader: str,
+    paragraphs: list[str],
+    button_label: str,
+    button_link: str,
+    validity_note: str,
+    logo_src: str | None = None,
+) -> str:
+    paragraph_html = "".join(
+        f"<p style=\"margin:0 0 16px;line-height:1.6;color:#273041;font-size:15px;\">{para}</p>"
+        for para in paragraphs
+    )
+
+    if logo_src:
+        logo_markup = (
+            f"<img src=\"{logo_src}\" width=\"56\" alt=\"Logo COVA\" "
+            "style=\"display:block;border-radius:14px;border:1px solid rgba(255,255,255,0.35);"
+            "box-shadow:0 10px 30px rgba(10,35,82,0.45);\" />"
+        )
+    else:
+        logo_markup = (
+            "<div style=\"width:56px;height:56px;display:flex;align-items:center;justify-content:center;"
+            "font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif;font-weight:700;font-size:14px;color:#143f8c;"
+            "background:#ffffff;border-radius:14px;border:1px solid rgba(255,255,255,0.35);"
+            "box-shadow:0 10px 30px rgba(10,35,82,0.45);\">COVA</div>"
+        )
 
     html = f"""
     <html>
