@@ -55,6 +55,9 @@ class Config:
     # Frontend
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
+    # Calls
+    CALL_BASE_URL: str = os.getenv("CALL_BASE_URL", "https://meet.jit.si")
+
     # Fichiers
     UPLOAD_FOLDER: str = os.getenv("UPLOAD_FOLDER", _DEFAULT_UPLOAD_DIR)
 

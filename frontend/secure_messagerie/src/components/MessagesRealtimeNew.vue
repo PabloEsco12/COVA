@@ -129,6 +129,9 @@
               <span class="chat-meta-chip">
                 <i class="bi bi-chat-text me-1"></i>{{ displayMessages.length }} message(s)
               </span>
+              <span v-if="selectedCallSessions.length" class="chat-meta-chip">
+                <i class="bi bi-camera-video me-1"></i>{{ selectedCallSessions.length }} appel(s)
+              </span>
               <span v-if="lastMessageAt" class="chat-meta-chip">
                 <i class="bi bi-clock-history me-1"></i>Dernier message {{ formatDate(lastMessageAt) }}
               </span>
@@ -137,6 +140,26 @@
           <div class="chat-actions">
             <button class="chat-action-btn" type="button" @click="refresh" title="Rafraîchir">
               <i class="bi bi-arrow-clockwise"></i>
+            </button>
+            <button
+              class="chat-action-btn"
+              type="button"
+              :disabled="!selectedConvId || !!callActionPending"
+              @click="startCall('video')"
+              title="Lancer un appel vidéo"
+            >
+              <span v-if="callActionPending === 'video'" class="spinner-border spinner-border-sm"></span>
+              <i v-else class="bi bi-camera-video"></i>
+            </button>
+            <button
+              class="chat-action-btn"
+              type="button"
+              :disabled="!selectedConvId || !!callActionPending"
+              @click="startCall('audio')"
+              title="Lancer un appel audio"
+            >
+              <span v-if="callActionPending === 'audio'" class="spinner-border spinner-border-sm"></span>
+              <i v-else class="bi bi-telephone"></i>
             </button>
             <button
               class="chat-action-btn"
@@ -165,6 +188,24 @@
             </div>
           </div>
         </header>
+      <div v-if="latestCall" class="call-banner" :class="latestCall.call_type">
+        <div class="call-banner-info">
+          <div class="call-banner-icon">
+            <i class="bi" :class="callTypeIcon(latestCall.call_type)"></i>
+          </div>
+          <div>
+            <div class="call-banner-title">{{ callTypeLabel(latestCall.call_type) }}</div>
+            <div class="call-banner-meta">
+              Lancé par {{ callInitiatorLabel(latestCall) }} · {{ formatDate(latestCall.started_at) }}
+            </div>
+          </div>
+        </div>
+        <div class="call-banner-actions">
+          <button class="btn btn-primary btn-sm" type="button" @click="joinCall(latestCall)">
+            <i class="bi bi-box-arrow-in-right me-1"></i>Rejoindre
+          </button>
+        </div>
+      </div>
       <div v-if="showMessageSearch" class="chat-search">
         <div class="input-group input-group-sm chat-search-bar">
           <span class="input-group-text"><i class="bi bi-search"></i></span>
@@ -673,14 +714,6 @@ const totalConversations = computed(() => conversations.value.length)
 const activeConversationFilter = computed(
   () => conversationFilters.find(filter => filter.value === conversationFilter.value) || conversationFilters[0]
 )
-const lastMessageAt = computed(() => {
-  const list = messages.value || []
-  if (!list.length) return null
-  const last = list[list.length - 1]
-  return last?.ts_msg || null
-})
-
-
 const fileInput = ref(null)
 const messageInput = ref(null)
 const pendingFiles = ref([])
@@ -703,6 +736,30 @@ const TENOR_CLIENT_KEY = 'cova_messaging_ui'
 const GIF_PAGE_LIMIT = 24
 
 const canSend = computed(() => newMessage.value.trim().length > 0 || pendingFiles.value.length > 0)
+
+const callSessionsMap = ref({})
+const callActionPending = ref('')
+const selectedCallSessions = computed(() => {
+  const convId = selectedConvId.value
+  if (!convId) return []
+  return callSessionsMap.value[convId] || []
+})
+const latestCall = computed(() => {
+  const list = selectedCallSessions.value || []
+  if (!list.length) return null
+  const sorted = list.slice().sort((a, b) => new Date(b.started_at || 0) - new Date(a.started_at || 0))
+  return sorted[0] || null
+})
+
+const lastMessageAt = computed(() => {
+  const list = messages.value || []
+  const lastMessageTs = list.length ? list[list.length - 1]?.ts_msg : null
+  const callTs = latestCall.value?.started_at || null
+  if (lastMessageTs && callTs) {
+    return new Date(callTs) > new Date(lastMessageTs) ? callTs : lastMessageTs
+  }
+  return callTs || lastMessageTs || null
+})
 
 const displayMessages = computed(() => {
   let list = messages.value || []
@@ -903,6 +960,7 @@ function ensureSocket() {
       if (!payload) return
       applyReactionUpdate(payload.message_id, payload)
     })
+    socket.value.on('call_created', handleCallCreated)
   } catch (e) {
     // ignore connection errors
   }
@@ -1055,6 +1113,109 @@ function refresh() {
   fetchMessages()
 }
 
+function normalizeCall(session) {
+  if (!session || typeof session !== 'object') return null
+  const initiator = session.initiator || null
+  return {
+    ...session,
+    initiator,
+    initiator_pseudo: session.initiator_pseudo || initiator?.pseudo || '',
+    isMine: session.initiator_id === userId,
+  }
+}
+
+function setCallSessions(convId, sessions) {
+  if (!convId) return
+  const safeList = (sessions || []).slice().sort((a, b) => new Date(a.started_at || 0) - new Date(b.started_at || 0))
+  callSessionsMap.value = { ...callSessionsMap.value, [convId]: safeList }
+}
+
+async function fetchCallSessions(convId = selectedConvId.value) {
+  if (!convId) return
+  try {
+    const res = await axios.get(`http://localhost:5000/api/conversations/${convId}/calls`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
+    })
+    const normalized = (res.data || []).map(normalizeCall).filter(Boolean)
+    setCallSessions(convId, normalized)
+    if (normalized.length) {
+      updateConversationPreviewWithCall(normalized[normalized.length - 1])
+    }
+  } catch (error) {
+    setCallSessions(convId, [])
+  }
+}
+
+function callTypeLabel(type) {
+  return type === 'audio' ? 'Appel audio' : 'Appel vidéo'
+}
+
+function callTypeIcon(type) {
+  return type === 'audio' ? 'bi-telephone-fill' : 'bi-camera-video-fill'
+}
+
+function callInitiatorLabel(call) {
+  if (!call) return ''
+  if (call.isMine) return 'vous'
+  return call.initiator_pseudo || call.initiator?.pseudo || 'un membre'
+}
+
+function updateConversationPreviewWithCall(call) {
+  if (!call) return
+  const conv = conversations.value.find(c => c.id === call.conv_id)
+  if (!conv) return
+  const callTs = call.started_at || null
+  const currentTs = conv.last?.ts || null
+  if (callTs && currentTs && new Date(currentTs) > new Date(callTs)) return
+  conv.last = {
+    text: `${callTypeLabel(call.call_type)} démarré`,
+    ts: call.started_at,
+    sentByMe: call.isMine,
+  }
+}
+
+function handleCallCreated(payload) {
+  const call = normalizeCall(payload)
+  if (!call || !call.conv_id) return
+  const existing = (callSessionsMap.value[call.conv_id] || []).slice()
+  const idx = existing.findIndex(item => item.id === call.id)
+  if (idx >= 0) existing[idx] = call
+  else existing.push(call)
+  existing.sort((a, b) => new Date(a.started_at || 0) - new Date(b.started_at || 0))
+  setCallSessions(call.conv_id, existing)
+  updateConversationPreviewWithCall(call)
+  if (call.conv_id === selectedConvId.value && !call.isMine && document.hidden) {
+    showNotification(callTypeLabel(call.call_type), `Lancé par ${callInitiatorLabel(call)}`)
+  }
+}
+
+async function startCall(callType) {
+  if (!selectedConvId.value || callActionPending.value) return
+  callActionPending.value = callType
+  try {
+    const res = await axios.post(
+      `http://localhost:5000/api/conversations/${selectedConvId.value}/calls`,
+      { type: callType },
+      { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } },
+    )
+    const call = normalizeCall(res.data)
+    handleCallCreated(call)
+    joinCall(call)
+  } catch (error) {
+    console.error('Unable to start call', error)
+    alert("Impossible de démarrer l'appel pour le moment.")
+  } finally {
+    callActionPending.value = ''
+  }
+}
+
+function joinCall(call) {
+  if (!call || !call.join_url) return
+  try {
+    window.open(call.join_url, '_blank', 'noopener')
+  } catch {}
+}
+
 function selectConversation(id) {
   if (selectedConvId.value !== id) {
     selectedConvId.value = id
@@ -1119,6 +1280,9 @@ async function leaveConversation() {
     )
     removeFavorite(convId)
     conversations.value = conversations.value.filter(c => c.id !== convId)
+    const map = { ...callSessionsMap.value }
+    delete map[convId]
+    callSessionsMap.value = map
     selectedConvId.value = null
     messages.value = []
     if (conversations.value.length) selectConversation(conversations.value[0].id)
@@ -1135,6 +1299,9 @@ async function deleteConversation() {
     })
     removeFavorite(convId)
     conversations.value = conversations.value.filter(c => c.id !== convId)
+    const map = { ...callSessionsMap.value }
+    delete map[convId]
+    callSessionsMap.value = map
     selectedConvId.value = null
     messages.value = []
     if (conversations.value.length) selectConversation(conversations.value[0].id)
@@ -1661,6 +1828,7 @@ onMounted(async () => {
   await fetchConversations()
   if (selectedConvId.value) selectConversation(selectedConvId.value)
   await fetchMessages()
+  await fetchCallSessions()
   ensureSocket()
   if (selectedConvId.value) joinRoom(selectedConvId.value)
   document.addEventListener('visibilitychange', () => {
@@ -1672,6 +1840,7 @@ watch(selectedConvId, async val => {
   if (val) {
     selectConversation(val)
     await fetchMessages()
+    await fetchCallSessions(val)
     resetPendingFiles()
     showEmojiPicker.value = false
     showGifPicker.value = false
@@ -1984,6 +2153,57 @@ onUnmounted(() => {
   border-radius: 16px;
   padding: 0.35rem 0;
   box-shadow: 0 18px 40px rgba(15, 38, 105, 0.12);
+}
+.call-banner {
+  margin: 0 1.75rem 1rem;
+  padding: 0.85rem 1.2rem;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid rgba(13, 110, 253, 0.25);
+  background: rgba(13, 110, 253, 0.12);
+  color: #123d8c;
+  box-shadow: 0 12px 32px rgba(13, 110, 253, 0.12);
+}
+.call-banner.audio {
+  border-color: rgba(25, 135, 84, 0.25);
+  background: rgba(25, 135, 84, 0.12);
+  color: #0f5132;
+}
+.call-banner-info {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+.call-banner-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+  font-size: 1.2rem;
+}
+.call-banner-title {
+  font-weight: 700;
+  font-size: 1rem;
+  margin-bottom: 0.1rem;
+}
+.call-banner-meta {
+  font-size: 0.85rem;
+  color: inherit;
+  opacity: 0.8;
+}
+.call-banner-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 999px;
+  padding-inline: 1rem;
 }
 .chat-messages {
   position: relative;

@@ -1,12 +1,35 @@
 # backend/app/routes/conversation.py
 
-from flask import Blueprint, request, jsonify
-from ..models import Conversation, Participation, Utilisateur
-from ..extensions import db
+from flask import Blueprint, request, jsonify, current_app
+from uuid import uuid4
+
+from ..models import Conversation, Participation, Utilisateur, CallSession
+from ..extensions import db, socketio
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 
 conversation_bp = Blueprint("conversation", __name__)
+
+
+def _serialize_call(call: CallSession) -> dict:
+    if not call:
+        return {}
+    initiator = getattr(call, "initiator", None)
+    return {
+        "id": call.id_call,
+        "conv_id": call.conv_id,
+        "initiator_id": call.initiator_id,
+        "initiator": {
+            "id_user": getattr(initiator, "id_user", None),
+            "pseudo": getattr(initiator, "pseudo", None),
+        } if initiator else None,
+        "initiator_pseudo": getattr(initiator, "pseudo", None) if initiator else None,
+        "call_type": call.call_type,
+        "room_name": call.room_name,
+        "join_url": call.join_url,
+        "started_at": call.started_at.isoformat() if call.started_at else None,
+        "ended_at": call.ended_at.isoformat() if call.ended_at else None,
+    }
 
 # ─────────────────────────── Liste toutes les conversations de l’utilisateur ───────────────────────────
 @conversation_bp.route("/", methods=["GET"])
@@ -86,6 +109,77 @@ def get_conversation(id_conv):
         "date_crea": conv.date_crea.isoformat(),
         "participants": participants
     }), 200
+
+
+@conversation_bp.route("/<int:conv_id>/calls", methods=["POST"])
+@jwt_required()
+def create_call(conv_id):
+    user_id = int(get_jwt_identity())
+    conv = Conversation.query.get(conv_id)
+    if not conv:
+        return jsonify({"error": "Conversation introuvable"}), 404
+
+    participation = Participation.query.filter_by(id_conv=conv_id, id_user=user_id).first()
+    if not participation:
+        return jsonify({"error": "Accès refusé"}), 403
+
+    data = request.get_json() or {}
+    raw_type = data.get("type", "video")
+    call_type = raw_type.lower() if isinstance(raw_type, str) else "video"
+    if call_type not in {"video", "audio"}:
+        return jsonify({"error": "Type d'appel invalide"}), 400
+
+    base_url = (current_app.config.get("CALL_BASE_URL") or "https://meet.jit.si").rstrip("/")
+    room_name = f"cova-{conv_id}-{uuid4().hex[:10]}"
+    join_url = f"{base_url}/{room_name}"
+    if call_type == "audio":
+        join_url = f"{join_url}#config.startWithVideoMuted=true&config.startAudioOnly=true"
+
+    try:
+        CallSession.__table__.create(db.session.get_bind(), checkfirst=True)
+    except Exception:
+        current_app.logger.exception("call_session table creation failed")
+
+    call = CallSession(
+        conv_id=conv_id,
+        initiator_id=user_id,
+        call_type=call_type,
+        room_name=room_name,
+        join_url=join_url,
+    )
+    db.session.add(call)
+    db.session.commit()
+
+    payload = _serialize_call(call)
+    socketio.emit("call_created", payload, to=f"conv_{conv_id}")
+
+    return jsonify(payload), 201
+
+
+@conversation_bp.route("/<int:conv_id>/calls", methods=["GET"])
+@jwt_required()
+def list_calls(conv_id):
+    user_id = int(get_jwt_identity())
+    conv = Conversation.query.get(conv_id)
+    if not conv:
+        return jsonify({"error": "Conversation introuvable"}), 404
+
+    participation = Participation.query.filter_by(id_conv=conv_id, id_user=user_id).first()
+    if not participation:
+        return jsonify({"error": "Accès refusé"}), 403
+
+    try:
+        CallSession.__table__.create(db.session.get_bind(), checkfirst=True)
+    except Exception:
+        current_app.logger.exception("call_session table creation failed")
+
+    calls = (
+        CallSession.query.filter_by(conv_id=conv_id)
+        .order_by(CallSession.started_at.asc())
+        .all()
+    )
+    return jsonify([_serialize_call(call) for call in calls]), 200
+
 
 @conversation_bp.route("/<int:conv_id>/add_member", methods=["POST"])
 @jwt_required()

@@ -17,6 +17,7 @@ from sqlalchemy import Enum
 MessageState = Enum("delivered", "read", name="msg_state")
 ContactState = Enum("pending", "accepted", "blocked", name="contact_state")
 UserRole     = Enum("owner", "admin", "member", name="user_role")
+CallType     = Enum("audio", "video", name="call_type")
 
 # Tables
 class Utilisateur(db.Model):
@@ -84,6 +85,7 @@ class Conversation(db.Model):
     participations = db.relationship("Participation", back_populates="conversation", cascade="all, delete-orphan")
     messages       = db.relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
     settings       = db.relationship("ConvSettings", uselist=False, back_populates="conversation", cascade="all, delete-orphan")
+    call_sessions  = db.relationship("CallSession", back_populates="conversation", cascade="all, delete-orphan")
 
 class Participation(db.Model):
     __tablename__ = "participation"
@@ -142,6 +144,22 @@ class Reaction(db.Model):
 
     message = db.relationship("Message", back_populates="reactions")
     user    = db.relationship("Utilisateur")
+
+
+class CallSession(db.Model):
+    __tablename__ = "call_session"
+
+    id_call      = db.Column(db.Integer, primary_key=True)
+    conv_id      = db.Column(db.Integer, db.ForeignKey("conversation.id_conv"), nullable=False)
+    initiator_id = db.Column(db.Integer, db.ForeignKey("utilisateur.id_user"), nullable=False)
+    call_type    = db.Column(CallType, nullable=False, default="video")
+    room_name    = db.Column(db.String(120), nullable=False)
+    join_url     = db.Column(db.String(512), nullable=False)
+    started_at   = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    ended_at     = db.Column(db.DateTime, nullable=True)
+
+    conversation = db.relationship("Conversation", back_populates="call_sessions")
+    initiator    = db.relationship("Utilisateur")
 
 class RefreshToken(db.Model):
     __tablename__ = "refresh_token"
