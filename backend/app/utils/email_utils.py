@@ -1,4 +1,6 @@
-﻿import base64
+﻿
+import base64
+
 import logging
 import os
 import smtplib
