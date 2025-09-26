@@ -40,7 +40,9 @@ def create_app() -> Flask:
     limiter.init_app(app)
     socketio.init_app(app)
 
-    CORS(app, origins=["http://localhost:5173"], supports_credentials=True)
+    CORS(app, resources={
+    r"/api/*": {"origins": ["https://covamessagerie.be", "https://www.covamessagerie.be"]}
+})
 
     register_error_handlers(app)
     register_blueprints(app)
