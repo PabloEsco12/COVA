@@ -1,4 +1,3 @@
-# backend/app/extensions.py
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_bcrypt import Bcrypt
@@ -12,14 +11,15 @@ migrate = Migrate()
 bcrypt = Bcrypt()
 jwt = JWTManager()
 limiter = Limiter(get_remote_address, storage_uri="memory://")
-socketio = SocketIO(
-    cors_allowed_origins=[
-        "http://localhost:5173",
-        "https://covamessagerie.be",
-        "https://www.covamessagerie.be"
-    ],
-    async_mode="eventlet"
-)
+
+# Autoriser frontend local ET domaine en prod
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "https://covamessagerie.be",
+    "https://www.covamessagerie.be"
+]
+
+socketio = SocketIO(cors_allowed_origins=ALLOWED_ORIGINS, async_mode="eventlet")
 
 
 # --- Callbacks pour la révocation ---
