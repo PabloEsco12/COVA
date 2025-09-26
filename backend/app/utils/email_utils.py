@@ -1,4 +1,4 @@
-import base64
+﻿import base64
 import logging
 import os
 import smtplib
@@ -7,7 +7,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from flask import current_app
 
-from ._cova_logo_b64 import LOGO_PNG_BASE64
+from app.utils._cova_logo_b64 import LOGO_PNG_BASE64
+
 
 
 logger = logging.getLogger(__name__)
