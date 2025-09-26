@@ -41,8 +41,15 @@ def create_app() -> Flask:
     socketio.init_app(app)
 
     CORS(app, resources={
-    r"/api/*": {"origins": ["https://covamessagerie.be", "https://www.covamessagerie.be"]}
-})
+    r"/api/*": {
+        "origins": [
+            "http://localhost:5173",
+            "https://covamessagerie.be",
+            "https://www.covamessagerie.be"
+        ]
+        }
+    })
+    
 
     register_error_handlers(app)
     register_blueprints(app)
