@@ -24,8 +24,10 @@ secrets.*
 config.py         # Si tu y mets des secrets
 
 # Flask-Migrate / Alembic
-migrations/
-alembic.ini
+# Garder les migrations dans le repo (schéma BDD nécessaire en prod)
+# On ignore uniquement les fichiers temporaires générés à l'exécution
+migrations/*.pyc
+migrations/__pycache__/
 
 # ----------------- POSTGRES / BDD -----------------
 # Volume de données Docker/Postgres
