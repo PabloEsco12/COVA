@@ -116,8 +116,7 @@ const showPassword = ref(false)
 const showPasswordConfirm = ref(false)
 const route = useRoute()
 
-const rawBaseUrl = (import.meta?.env?.VITE_API_URL ?? 'http://localhost:5000').toString()
-const apiBaseUrl = rawBaseUrl.endsWith('/') ? rawBaseUrl.slice(0, -1) : rawBaseUrl
+const apiBaseUrl = (import.meta?.env?.VITE_API_URL ?? 'http://localhost:5000/api').toString().replace(/\/$/, '')
 
 const passwordScore = computed(() => evaluateStrength(password.value))
 const strengthPercent = computed(() => `${(passwordScore.value / 5) * 100}%`)
@@ -189,7 +188,7 @@ async function handleNewPassword() {
 
   loading.value = true
   try {
-    await axios.post(`${apiBaseUrl}/api/reset-password/${token}`, {
+    await axios.post(`${apiBaseUrl}/reset-password/${token}`, {
       password: password.value
     })
     success.value = 'Mot de passe mis à jour. Vous pouvez à présent vous connecter.'

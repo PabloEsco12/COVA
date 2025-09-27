@@ -39,6 +39,7 @@ const emit = defineEmits(['toggle-dark'])
 
 const pseudo = ref('')
 const avatarUrl = ref(null)
+const backendBase = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '') || 'http://localhost:5000'
 
 onMounted(async () => {
   // Lecture immédiate depuis le storage pour un rendu rapide
@@ -49,14 +50,14 @@ onMounted(async () => {
   const token = localStorage.getItem('access_token')
   if (token) {
     try {
-      const res = await axios.get('http://localhost:5000/api/me', {
+      const res = await axios.get(`${import.meta.env.VITE_API_URL}/me`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       if (res.data?.pseudo) {
         pseudo.value = res.data.pseudo
         localStorage.setItem('pseudo', res.data.pseudo)
       }
-      const apiAvatar = res.data?.avatar_url || (res.data?.avatar ? `http://localhost:5000/static/avatars/${res.data.avatar}` : null)
+      const apiAvatar = res.data?.avatar_url || (res.data?.avatar ? `${backendBase}/static/avatars/${res.data.avatar}` : null)
       if (apiAvatar) {
         avatarUrl.value = apiAvatar
         localStorage.setItem('avatar_url', apiAvatar)

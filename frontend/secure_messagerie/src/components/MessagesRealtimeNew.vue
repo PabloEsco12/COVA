@@ -568,6 +568,7 @@ import axios from 'axios'
 import { io } from 'socket.io-client'
 import LogoUrl from '@/assets/logo_COVA.png'
 import 'emoji-picker-element'
+const backendBase = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '') || 'http://localhost:5000'
 
 const conversations = ref([])
 const selectedConvId = ref(null)
@@ -945,7 +946,7 @@ watch(selectedUsers, () => {
 function ensureSocket() {
   if (socket.value) return
   try {
-    socket.value = io('http://localhost:5000', {
+    socket.value = io(backendBase, {
       transports: ['websocket'],
       auth: { token: localStorage.getItem('access_token') },
     })
@@ -1035,7 +1036,7 @@ function formatDate(ts) {
 
 async function fetchConversations() {
   try {
-    const res = await axios.get('http://localhost:5000/api/conversations/', {
+    const res = await axios.get(`${import.meta.env.VITE_API_URL}/conversations/`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
     })
     conversations.value = (res.data || []).map(c => ({ ...c }))
@@ -1054,7 +1055,7 @@ async function enrichConversations() {
   for (const conv of conversations.value) {
     try {
       if (!conv.is_group) {
-        const d = await axios.get(`http://localhost:5000/api/conversations/${conv.id}`, {
+        const d = await axios.get(`${import.meta.env.VITE_API_URL}/conversations/${conv.id}`, {
           headers: { Authorization: `Bearer ${token}` },
         })
         const parts = d.data?.participants || []
@@ -1068,7 +1069,7 @@ async function enrichConversations() {
       }
     } catch {}
     try {
-      const mres = await axios.get(`http://localhost:5000/api/conversations/${conv.id}/messages/`, {
+      const mres = await axios.get(`${import.meta.env.VITE_API_URL}/conversations/${conv.id}/messages/`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       const arr = mres.data || []
@@ -1089,9 +1090,9 @@ async function fetchMessages() {
   }
   loading.value = true
   try {
-    const res = await axios.get(`http://localhost:5000/api/conversations/${selectedConvId.value}/messages/`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-    })
+  const res = await axios.get(`${import.meta.env.VITE_API_URL}/conversations/${selectedConvId.value}/messages/`, {
+    headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
+  })
     messages.value = (res.data || []).map(m => ({
       ...m,
       sentByMe: m.sender_id === userId,
@@ -1133,7 +1134,7 @@ function setCallSessions(convId, sessions) {
 async function fetchCallSessions(convId = selectedConvId.value) {
   if (!convId) return
   try {
-    const res = await axios.get(`http://localhost:5000/api/conversations/${convId}/calls`, {
+    const res = await axios.get(`${import.meta.env.VITE_API_URL}/conversations/${convId}/calls`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
     })
     const normalized = (res.data || []).map(normalizeCall).filter(Boolean)
@@ -1194,7 +1195,7 @@ async function startCall(callType) {
   callActionPending.value = callType
   try {
     const res = await axios.post(
-      `http://localhost:5000/api/conversations/${selectedConvId.value}/calls`,
+      `${import.meta.env.VITE_API_URL}/conversations/${selectedConvId.value}/calls`,
       { type: callType },
       { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } },
     )
@@ -1259,7 +1260,7 @@ async function promptRename() {
   if (!t || !t.trim()) return
   try {
     await axios.patch(
-      `http://localhost:5000/api/conversations/${selectedConvId.value}/title`,
+      `${import.meta.env.VITE_API_URL}/conversations/${selectedConvId.value}/title`,
       { titre: t.trim() },
       { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } },
     )
@@ -1274,7 +1275,7 @@ async function leaveConversation() {
   if (!confirm('Quitter cette conversation ?')) return
   try {
     await axios.post(
-      `http://localhost:5000/api/conversations/${selectedConvId.value}/leave`,
+      `${import.meta.env.VITE_API_URL}/conversations/${selectedConvId.value}/leave`,
       {},
       { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } },
     )
@@ -1294,7 +1295,7 @@ async function deleteConversation() {
   const convId = selectedConvId.value
   if (!confirm('Supprimer définitivement cette conversation ?')) return
   try {
-    await axios.delete(`http://localhost:5000/api/conversations/${selectedConvId.value}`, {
+    await axios.delete(`${import.meta.env.VITE_API_URL}/conversations/${selectedConvId.value}`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
     })
     removeFavorite(convId)
@@ -1540,7 +1541,7 @@ async function sendMessage() {
   showGifPicker.value = false
   try {
     const res = await axios.post(
-      `http://localhost:5000/api/conversations/${selectedConvId.value}/messages/`,
+      `${import.meta.env.VITE_API_URL}/conversations/${selectedConvId.value}/messages/`,
       formData,
       { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } },
     )
@@ -1572,7 +1573,7 @@ async function confirmEdit() {
   if (!editingId.value) return
   try {
     await axios.put(
-      `http://localhost:5000/api/conversations/${selectedConvId.value}/messages/${editingId.value}`,
+      `${import.meta.env.VITE_API_URL}/conversations/${selectedConvId.value}/messages/${editingId.value}`,
       { contenu_chiffre: editContent.value },
       { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } },
     )
@@ -1590,7 +1591,7 @@ async function deleteMessage(id) {
   if (!confirm('Supprimer ce message ?')) return
   try {
     await axios.delete(
-      `http://localhost:5000/api/conversations/${selectedConvId.value}/messages/${id}`,
+      `${import.meta.env.VITE_API_URL}/conversations/${selectedConvId.value}/messages/${id}`,
       { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } },
     )
     await fetchMessages()
@@ -1599,7 +1600,7 @@ async function deleteMessage(id) {
 
 async function fetchContacts() {
   try {
-    const res = await axios.get('http://localhost:5000/api/contacts?statut=accepted', {
+    const res = await axios.get(`${import.meta.env.VITE_API_URL}/contacts?statut=accepted`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
     })
     contacts.value = res.data.contacts || []
@@ -1621,7 +1622,7 @@ async function createConversation() {
   creatingConv.value = true
   try {
     const res = await axios.post(
-      'http://localhost:5000/api/conversations/',
+      `${import.meta.env.VITE_API_URL}/conversations/`,
       {
         titre: convTitle.value,
         participants: selectedUsers.value,
@@ -1675,7 +1676,7 @@ function selectReaction(msgId, emoji) {
 async function toggleReaction(msgId, emoji) {
   try {
     const res = await axios.post(
-      `http://localhost:5000/api/messages/${msgId}/reactions`,
+      `${import.meta.env.VITE_API_URL}/messages/${msgId}/reactions`,
       { emoji },
       { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } },
     )
@@ -1694,7 +1695,7 @@ function applyReactionUpdate(messageId, payload) {
 function attachmentEndpoint(file) {
   const fallback = `/api/messages/files/${file?.id_file}`
   const url = file?.url || fallback
-  return url.startsWith('http') ? url : `http://localhost:5000${url}`
+  return url.startsWith('http') ? url : `${backendBase}${url}`
 }
 
 function isInlineImage(file) {

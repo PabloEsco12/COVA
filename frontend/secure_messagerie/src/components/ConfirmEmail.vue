@@ -26,7 +26,7 @@ const success = ref('')
 
 onMounted(async () => {
   try {
-    const res = await axios.get(`http://localhost:5000/api/confirm-email/${route.params.token}`)
+    const res = await axios.get(`${import.meta.env.VITE_API_URL}/confirm-email/${route.params.token}`)
     success.value = res.data.message || "E-mail confirmé.";
   } catch (err) {
     error.value = err.response?.data?.error || 'Erreur inconnue'

@@ -56,7 +56,7 @@ const loading = ref(true)
 async function fetchInvitations() {
   loading.value = true
   try {
-    const res = await axios.get('http://localhost:5000/api/contacts/invitations', {
+    const res = await axios.get(`${import.meta.env.VITE_API_URL}/contacts/invitations`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
     })
     invitations.value = res.data || []
@@ -70,7 +70,7 @@ async function fetchInvitations() {
 async function respond(id, statut) {
   loading.value = true
   try {
-    await axios.patch(`http://localhost:5000/api/contacts/${id}`, { statut }, {
+    await axios.patch(`${import.meta.env.VITE_API_URL}/contacts/${id}`, { statut }, {
       headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
     })
     await fetchInvitations()

@@ -130,6 +130,7 @@ const totp = ref('')
 const error = ref('')
 const loading = ref(false)
 const router = useRouter()
+const backendBase = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '') || 'http://localhost:5000'
 
 onMounted(() => {
   if (localStorage.getItem('access_token')) {
@@ -141,7 +142,7 @@ async function handleLogin() {
   error.value = ''
   loading.value = true
   try {
-    const res = await axios.post('http://localhost:5000/api/login', {
+    const res = await axios.post(`${import.meta.env.VITE_API_URL}/login`, {
       email: email.value,
       password: password.value,
       code: totp.value,
@@ -153,13 +154,13 @@ async function handleLogin() {
     localStorage.setItem('user_email', res.data.user?.email || '')
 
     try {
-      const profile = await axios.get('http://localhost:5000/api/me', {
+      const profile = await axios.get(`${import.meta.env.VITE_API_URL}/me`, {
         headers: { Authorization: `Bearer ${res.data.access_token}` }
       })
       if (profile.data.avatar) {
         localStorage.setItem(
           'avatar_url',
-          `http://localhost:5000/static/avatars/${profile.data.avatar}`
+          `${backendBase}/static/avatars/${profile.data.avatar}`
         )
       } else {
         localStorage.removeItem('avatar_url')

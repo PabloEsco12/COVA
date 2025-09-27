@@ -7,6 +7,24 @@ import 'bootstrap'
 import 'bootstrap-icons/font/bootstrap-icons.css'
 import '@/assets/custom.css'
 import 'animate.css/animate.min.css'
+import axios from 'axios'
+
+// Normalize API base URLs from env and rewrite any legacy hardcoded URLs
+const __apiBase = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+const __backendBase = __apiBase.replace(/\/api$/, '') || ''
+axios.interceptors.request.use((config) => {
+  try {
+    const url = typeof config.url === 'string' ? config.url : ''
+    if (!url) return config
+    // Rewrite old localhost API base to env API URL
+    config.url = url
+      .replace(/^http:\/\/localhost:5000\/api(?=\/|$)/, __apiBase)
+      .replace(/^http:\/\/localhost:5000(?=\/|$)/, __backendBase || 'http://localhost:5000')
+    return config
+  } catch {
+    return config
+  }
+})
 
 // Apply initial theme early to avoid FOUC
 try {

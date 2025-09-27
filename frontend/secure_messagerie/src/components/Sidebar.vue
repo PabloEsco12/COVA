@@ -171,6 +171,7 @@ const unreadCount = ref(0)
 const pseudo = ref('Utilisateur')
 const avatarUrl = ref(null)
 const isOnline = ref(typeof navigator !== 'undefined' ? navigator.onLine : true)
+const backendBase = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '') || 'http://localhost:5000'
 const securitySettings = ref({
   totpEnabled: false,
   notificationLogin: false
@@ -234,21 +235,21 @@ onMounted(async () => {
   }
 
   try {
-    const res = await axios.get('http://localhost:5000/api/messages/unread_count', { headers })
+    const res = await axios.get(`${import.meta.env.VITE_API_URL}/messages/unread_count`, { headers })
     unreadCount.value = res.data?.count || 0
   } catch (e) {
     unreadCount.value = 0
   }
 
   try {
-    const profileRes = await axios.get('http://localhost:5000/api/me', { headers })
+    const profileRes = await axios.get(`${import.meta.env.VITE_API_URL}/me`, { headers })
     if (profileRes.data?.pseudo) {
       pseudo.value = profileRes.data.pseudo
       localStorage.setItem('pseudo', profileRes.data.pseudo)
     }
     const apiAvatar =
       profileRes.data?.avatar_url ||
-      (profileRes.data?.avatar ? `http://localhost:5000/static/avatars/${profileRes.data.avatar}` : null)
+      (profileRes.data?.avatar ? `${backendBase}/static/avatars/${profileRes.data.avatar}` : null)
     if (apiAvatar) {
       avatarUrl.value = apiAvatar
       localStorage.setItem('avatar_url', apiAvatar)
@@ -258,7 +259,7 @@ onMounted(async () => {
   }
 
   try {
-    const securityRes = await axios.get('http://localhost:5000/api/me/security', { headers })
+    const securityRes = await axios.get(`${import.meta.env.VITE_API_URL}/me/security`, { headers })
     securitySettings.value = {
       totpEnabled: !!securityRes.data?.totp_enabled,
       notificationLogin: !!securityRes.data?.notification_login
@@ -271,7 +272,7 @@ onMounted(async () => {
   }
 
   try {
-    const auditRes = await axios.get('http://localhost:5000/api/me/audit', { headers })
+    const auditRes = await axios.get(`${import.meta.env.VITE_API_URL}/me/audit`, { headers })
     if (Array.isArray(auditRes.data) && auditRes.data.length > 0) {
       lastAuditLog.value = auditRes.data[0]
     }

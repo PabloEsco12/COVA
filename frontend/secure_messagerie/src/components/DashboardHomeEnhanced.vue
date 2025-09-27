@@ -146,7 +146,7 @@ onMounted(async () => {
 
   // Ping API
   try {
-    await axios.get('http://localhost:5000/api/ping')
+    await axios.get(`${import.meta.env.VITE_API_URL}/ping`)
     apiOk.value = true
   } catch {
     apiOk.value = false
@@ -157,17 +157,18 @@ onMounted(async () => {
     const headers = { Authorization: `Bearer ${token}` }
     try {
       const [me, unread, contacts, invitations, convs] = await Promise.all([
-        axios.get('http://localhost:5000/api/me', { headers }),
-        axios.get('http://localhost:5000/api/messages/unread_count', { headers }),
-        axios.get('http://localhost:5000/api/contacts?statut=accepted', { headers }),
-        axios.get('http://localhost:5000/api/contacts/invitations', { headers }),
-        axios.get('http://localhost:5000/api/conversations/', { headers }),
+        axios.get(`${import.meta.env.VITE_API_URL}/me`, { headers }),
+        axios.get(`${import.meta.env.VITE_API_URL}/messages/unread_count`, { headers }),
+        axios.get(`${import.meta.env.VITE_API_URL}/contacts?statut=accepted`, { headers }),
+        axios.get(`${import.meta.env.VITE_API_URL}/contacts/invitations`, { headers }),
+        axios.get(`${import.meta.env.VITE_API_URL}/conversations/`, { headers }),
       ])
       if (me.data?.pseudo) {
         pseudo.value = me.data.pseudo
         localStorage.setItem('pseudo', me.data.pseudo)
       }
-      const apiAvatar = me.data?.avatar_url || (me.data?.avatar ? `http://localhost:5000/static/avatars/${me.data.avatar}` : null)
+      const backendBase = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '') || 'http://localhost:5000'
+      const apiAvatar = me.data?.avatar_url || (me.data?.avatar ? `${backendBase}/static/avatars/${me.data.avatar}` : null)
       if (apiAvatar) {
         avatarUrl.value = apiAvatar
         localStorage.setItem('avatar_url', apiAvatar)
@@ -227,4 +228,3 @@ function goToConversation(id) {
 .status-dot.ok { background: #28a745; box-shadow: 0 0 0 4px rgba(40,167,69,0.12); }
 .status-dot.ko { background: #dc3545; box-shadow: 0 0 0 4px rgba(220,53,69,0.12); }
 </style>
-

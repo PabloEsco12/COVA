@@ -160,7 +160,7 @@ const duplicate = computed(() =>
 async function fetchContacts() {
   loading.value = true
   try {
-    const res = await axios.get('http://localhost:5000/api/contacts', {
+    const res = await axios.get(`${import.meta.env.VITE_API_URL}/contacts`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
     })
     contacts.value = res.data.contacts || []
@@ -175,7 +175,7 @@ async function removeContact(contact) {
   if (!confirm(`Supprimer ${contact.pseudo} ?`)) return
   loading.value = true
   try {
-    await axios.delete(`http://localhost:5000/api/contacts/${contact.id_contact}`, {
+    await axios.delete(`${import.meta.env.VITE_API_URL}/contacts/${contact.id_contact}`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
     })
     await fetchContacts()
@@ -194,7 +194,7 @@ async function addContact() {
 
   adding.value = true
   try {
-    await axios.post('http://localhost:5000/api/contacts', {
+    await axios.post(`${import.meta.env.VITE_API_URL}/contacts`, {
       email: addEmail.value,
       pseudo: addPseudo.value,
     }, {
@@ -275,7 +275,7 @@ function triggerSuggest(modelRef) {
 async function searchUsers(q) {
   if (!q || q.length < 2) { suggestions.value = []; return }
   try {
-    const res = await axios.get('http://localhost:5000/api/users/search', {
+  const res = await axios.get(`${import.meta.env.VITE_API_URL}/users/search`, {
       params: { q, limit: 8 },
       headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
     })
