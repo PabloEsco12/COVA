@@ -16,10 +16,16 @@ axios.interceptors.request.use((config) => {
   try {
     const url = typeof config.url === 'string' ? config.url : ''
     if (!url) return config
-    // Rewrite old localhost API base to env API URL
-    config.url = url
-      .replace(/^http:\/\/localhost:5000\/api(?=\/|$)/, __apiBase)
-      .replace(/^http:\/\/localhost:5000(?=\/|$)/, __backendBase || 'http://localhost:5000')
+    // If pointing to localhost:5000 without '/api', redirect to API base
+    if (/^http:\/\/localhost:5000\/(?!api\/)/.test(url)) {
+      const rest = url.replace(/^http:\/\/localhost:5000\//, '')
+      config.url = `${__apiBase}/${rest}`.replace(/\/+$/, '').replace(/([^:])\/\/+/, '$1/')
+    } else {
+      // Rewrite old localhost API base to env API URL
+      config.url = url
+        .replace(/^http:\/\/localhost:5000\/api(?=\/|$)/, __apiBase)
+        .replace(/^http:\/\/localhost:5000(?=\/|$)/, __backendBase || 'http://localhost:5000')
+    }
     return config
   } catch {
     return config

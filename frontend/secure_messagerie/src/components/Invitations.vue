@@ -49,6 +49,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import { api } from '@/utils/api'
 
 const invitations = ref([])
 const loading = ref(true)
@@ -56,9 +57,7 @@ const loading = ref(true)
 async function fetchInvitations() {
   loading.value = true
   try {
-    const res = await axios.get(`${import.meta.env.VITE_API_URL}/contacts/invitations`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-    })
+    const res = await api.get(`/contacts/invitations`)
     invitations.value = res.data || []
   } catch {
     invitations.value = []
@@ -70,9 +69,7 @@ async function fetchInvitations() {
 async function respond(id, statut) {
   loading.value = true
   try {
-    await axios.patch(`${import.meta.env.VITE_API_URL}/contacts/${id}`, { statut }, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-    })
+    await api.patch(`/contacts/${id}`, { statut })
     await fetchInvitations()
   } catch (e) {
     // ignore error display for now

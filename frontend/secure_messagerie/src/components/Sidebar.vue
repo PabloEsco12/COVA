@@ -159,6 +159,7 @@
 import { ref, onMounted, onBeforeUnmount, defineProps, toRefs, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
+import { api, backendBase } from '@/utils/api'
 
 const props = defineProps({
   isDark: Boolean
@@ -171,7 +172,6 @@ const unreadCount = ref(0)
 const pseudo = ref('Utilisateur')
 const avatarUrl = ref(null)
 const isOnline = ref(typeof navigator !== 'undefined' ? navigator.onLine : true)
-const backendBase = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '') || 'http://localhost:5000'
 const securitySettings = ref({
   totpEnabled: false,
   notificationLogin: false
@@ -235,14 +235,14 @@ onMounted(async () => {
   }
 
   try {
-    const res = await axios.get(`${import.meta.env.VITE_API_URL}/messages/unread_count`, { headers })
+    const res = await api.get(`/messages/unread_count`)
     unreadCount.value = res.data?.count || 0
   } catch (e) {
     unreadCount.value = 0
   }
 
   try {
-    const profileRes = await axios.get(`${import.meta.env.VITE_API_URL}/me`, { headers })
+    const profileRes = await api.get(`/me`)
     if (profileRes.data?.pseudo) {
       pseudo.value = profileRes.data.pseudo
       localStorage.setItem('pseudo', profileRes.data.pseudo)
@@ -259,7 +259,7 @@ onMounted(async () => {
   }
 
   try {
-    const securityRes = await axios.get(`${import.meta.env.VITE_API_URL}/me/security`, { headers })
+    const securityRes = await api.get(`/me/security`)
     securitySettings.value = {
       totpEnabled: !!securityRes.data?.totp_enabled,
       notificationLogin: !!securityRes.data?.notification_login
@@ -272,7 +272,7 @@ onMounted(async () => {
   }
 
   try {
-    const auditRes = await axios.get(`${import.meta.env.VITE_API_URL}/me/audit`, { headers })
+    const auditRes = await api.get(`/me/audit`)
     if (Array.isArray(auditRes.data) && auditRes.data.length > 0) {
       lastAuditLog.value = auditRes.data[0]
     }

@@ -105,6 +105,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import axios from 'axios'
+import { api } from '@/utils/api'
 import { useRoute } from 'vue-router'
 
 const password = ref('')
@@ -116,7 +117,6 @@ const showPassword = ref(false)
 const showPasswordConfirm = ref(false)
 const route = useRoute()
 
-const apiBaseUrl = (import.meta?.env?.VITE_API_URL ?? 'http://localhost:5000/api').toString().replace(/\/$/, '')
 
 const passwordScore = computed(() => evaluateStrength(password.value))
 const strengthPercent = computed(() => `${(passwordScore.value / 5) * 100}%`)
@@ -188,7 +188,7 @@ async function handleNewPassword() {
 
   loading.value = true
   try {
-    await axios.post(`${apiBaseUrl}/reset-password/${token}`, {
+    await api.post(`/reset-password/${token}`, {
       password: password.value
     })
     success.value = 'Mot de passe mis à jour. Vous pouvez à présent vous connecter.'

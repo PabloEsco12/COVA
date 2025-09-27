@@ -26,6 +26,7 @@
 <script setup>
 import { ref, onMounted, defineProps, defineEmits, toRefs } from 'vue'
 import axios from 'axios'
+import { api, backendBase } from '@/utils/api'
 
 const props = defineProps({
   isDark: {
@@ -39,7 +40,6 @@ const emit = defineEmits(['toggle-dark'])
 
 const pseudo = ref('')
 const avatarUrl = ref(null)
-const backendBase = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '') || 'http://localhost:5000'
 
 onMounted(async () => {
   // Lecture immédiate depuis le storage pour un rendu rapide
@@ -50,9 +50,7 @@ onMounted(async () => {
   const token = localStorage.getItem('access_token')
   if (token) {
     try {
-      const res = await axios.get(`${import.meta.env.VITE_API_URL}/me`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const res = await api.get(`/me`)
       if (res.data?.pseudo) {
         pseudo.value = res.data.pseudo
         localStorage.setItem('pseudo', res.data.pseudo)

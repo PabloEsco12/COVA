@@ -127,6 +127,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import { api, backendBase } from '@/utils/api'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -146,7 +147,7 @@ onMounted(async () => {
 
   // Ping API
   try {
-    await axios.get(`${import.meta.env.VITE_API_URL}/ping`)
+    await api.get(`/ping`)
     apiOk.value = true
   } catch {
     apiOk.value = false
@@ -154,20 +155,18 @@ onMounted(async () => {
 
   const token = localStorage.getItem('access_token')
   if (token) {
-    const headers = { Authorization: `Bearer ${token}` }
     try {
       const [me, unread, contacts, invitations, convs] = await Promise.all([
-        axios.get(`${import.meta.env.VITE_API_URL}/me`, { headers }),
-        axios.get(`${import.meta.env.VITE_API_URL}/messages/unread_count`, { headers }),
-        axios.get(`${import.meta.env.VITE_API_URL}/contacts?statut=accepted`, { headers }),
-        axios.get(`${import.meta.env.VITE_API_URL}/contacts/invitations`, { headers }),
-        axios.get(`${import.meta.env.VITE_API_URL}/conversations/`, { headers }),
+        api.get(`/me`),
+        api.get(`/messages/unread_count`),
+        api.get(`/contacts?statut=accepted`),
+        api.get(`/contacts/invitations`),
+        api.get(`/conversations/`),
       ])
       if (me.data?.pseudo) {
         pseudo.value = me.data.pseudo
         localStorage.setItem('pseudo', me.data.pseudo)
       }
-      const backendBase = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '') || 'http://localhost:5000'
       const apiAvatar = me.data?.avatar_url || (me.data?.avatar ? `${backendBase}/static/avatars/${me.data.avatar}` : null)
       if (apiAvatar) {
         avatarUrl.value = apiAvatar

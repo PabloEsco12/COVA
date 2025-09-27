@@ -16,6 +16,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import { api } from '@/utils/api'
 import { useRoute } from 'vue-router'
 import Spinner from './Spinner.vue'
 
@@ -26,7 +27,7 @@ const success = ref('')
 
 onMounted(async () => {
   try {
-    const res = await axios.get(`${import.meta.env.VITE_API_URL}/confirm-email/${route.params.token}`)
+    const res = await api.get(`/confirm-email/${route.params.token}`)
     success.value = res.data.message || "E-mail confirmé.";
   } catch (err) {
     error.value = err.response?.data?.error || 'Erreur inconnue'

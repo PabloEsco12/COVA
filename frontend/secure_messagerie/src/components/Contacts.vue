@@ -129,6 +129,7 @@
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
+import { api } from '@/utils/api'
 
 const contacts = ref([])
 const search = ref('')
@@ -160,9 +161,7 @@ const duplicate = computed(() =>
 async function fetchContacts() {
   loading.value = true
   try {
-    const res = await axios.get(`${import.meta.env.VITE_API_URL}/contacts`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-    })
+    const res = await api.get(`/contacts`)
     contacts.value = res.data.contacts || []
   } catch {
     contacts.value = []
@@ -175,9 +174,7 @@ async function removeContact(contact) {
   if (!confirm(`Supprimer ${contact.pseudo} ?`)) return
   loading.value = true
   try {
-    await axios.delete(`${import.meta.env.VITE_API_URL}/contacts/${contact.id_contact}`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-    })
+    await api.delete(`/contacts/${contact.id_contact}`)
     await fetchContacts()
   } catch (e) {
     // noop
@@ -194,11 +191,9 @@ async function addContact() {
 
   adding.value = true
   try {
-    await axios.post(`${import.meta.env.VITE_API_URL}/contacts`, {
+    await api.post(`/contacts`, {
       email: addEmail.value,
       pseudo: addPseudo.value,
-    }, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
     })
     closeAddModal()
     addEmail.value = ''
@@ -275,10 +270,7 @@ function triggerSuggest(modelRef) {
 async function searchUsers(q) {
   if (!q || q.length < 2) { suggestions.value = []; return }
   try {
-  const res = await axios.get(`${import.meta.env.VITE_API_URL}/users/search`, {
-      params: { q, limit: 8 },
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-    })
+    const res = await api.get(`/users/search`, { params: { q, limit: 8 } })
     suggestions.value = res.data || []
   } catch { suggestions.value = [] }
 }

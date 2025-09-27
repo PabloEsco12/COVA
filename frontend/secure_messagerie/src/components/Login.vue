@@ -122,6 +122,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import { api, backendBase } from '@/utils/api'
 import { useRouter } from 'vue-router'
 
 const email = ref('')
@@ -130,7 +131,8 @@ const totp = ref('')
 const error = ref('')
 const loading = ref(false)
 const router = useRouter()
-const backendBase = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '') || 'http://localhost:5000'
+// Normalize API base so it always ends with '/api'
+// Use centralized API base + backend origin
 
 onMounted(() => {
   if (localStorage.getItem('access_token')) {
@@ -142,7 +144,7 @@ async function handleLogin() {
   error.value = ''
   loading.value = true
   try {
-    const res = await axios.post(`${import.meta.env.VITE_API_URL}/login`, {
+    const res = await api.post(`/login`, {
       email: email.value,
       password: password.value,
       code: totp.value,
@@ -154,9 +156,7 @@ async function handleLogin() {
     localStorage.setItem('user_email', res.data.user?.email || '')
 
     try {
-      const profile = await axios.get(`${import.meta.env.VITE_API_URL}/me`, {
-        headers: { Authorization: `Bearer ${res.data.access_token}` }
-      })
+      const profile = await api.get(`/me`)
       if (profile.data.avatar) {
         localStorage.setItem(
           'avatar_url',
