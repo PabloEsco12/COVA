@@ -10,7 +10,7 @@ import 'animate.css/animate.min.css'
 import axios from 'axios'
 
 // Normalize API base URLs from env and rewrite any legacy hardcoded URLs
-const __apiBase = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+const __apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/$/, '')
 const __backendBase = __apiBase.replace(/\/api$/, '') || ''
 axios.interceptors.request.use((config) => {
   try {
@@ -20,11 +20,27 @@ axios.interceptors.request.use((config) => {
     if (/^http:\/\/localhost:5000\/(?!api\/)/.test(url)) {
       const rest = url.replace(/^http:\/\/localhost:5000\//, '')
       config.url = `${__apiBase}/${rest}`.replace(/\/+$/, '').replace(/([^:])\/\/+/, '$1/')
+    } else if (/^\/(?!api\/)/.test(url)) {
+      // Relative URL hitting root (e.g., '/contacts') → send to API base
+      const rest = url.replace(/^\//, '')
+      config.url = `${__apiBase}/${rest}`
     } else {
       // Rewrite old localhost API base to env API URL
       config.url = url
         .replace(/^http:\/\/localhost:5000\/api(?=\/|$)/, __apiBase)
         .replace(/^http:\/\/localhost:5000(?=\/|$)/, __backendBase || 'http://localhost:5000')
+    }
+
+    // Attach Authorization header automatically for API calls if missing
+    const needsAuth = typeof config.url === 'string' && (
+      config.url.startsWith(__apiBase) || config.url.startsWith('/api')
+    )
+    if (needsAuth) {
+      config.headers = config.headers || {}
+      if (!config.headers.Authorization) {
+        const token = localStorage.getItem('access_token')
+        if (token) config.headers.Authorization = `Bearer ${token}`
+      }
     }
     return config
   } catch {

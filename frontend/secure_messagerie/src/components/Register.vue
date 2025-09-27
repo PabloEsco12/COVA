@@ -136,6 +136,7 @@
 <script setup>
 import { ref } from 'vue'
 import axios from 'axios'
+import { api } from '@/utils/api'
 
 const pseudo = ref('')
 const email = ref('')
@@ -149,7 +150,7 @@ async function handleRegister() {
   success.value = ''
   loading.value = true
   try {
-    const res = await axios.post(`${import.meta.env.VITE_API_URL}/register`, {
+    const res = await api.post(`/register`, {
       pseudo: pseudo.value,
       email: email.value,
       password: password.value,

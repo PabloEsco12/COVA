@@ -145,6 +145,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
+import { api, backendBase } from '@/utils/api'
 
 const avatarUrl = ref(null)
 const formPseudo = ref('')
@@ -187,12 +188,10 @@ onMounted(async () => {
 
 async function fetchProfile() {
   try {
-    const res = await axios.get(`${import.meta.env.VITE_API_URL}/me`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
+    const res = await api.get(`/me`)
     formPseudo.value = res.data.pseudo || ''
     formEmail.value = res.data.email || ''
-    const backendBase = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '') || 'http://localhost:5000'
+    
     avatarUrl.value = res.data.avatar_url || (res.data.avatar ? `${backendBase}/static/avatars/${res.data.avatar}` : null)
   } catch (e) {
     // ignore
@@ -201,9 +200,7 @@ async function fetchProfile() {
 
 async function fetchSecurity() {
   try {
-    const res = await axios.get(`${import.meta.env.VITE_API_URL}/me/security`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
+    const res = await api.get(`/me/security`)
     totpEnabled.value = res.data.totp_enabled
     notifLogin.value = !!res.data.notification_login
   } catch (e) {
@@ -215,7 +212,7 @@ async function savePseudo() {
   profileMsg.value = ''
   savingPseudo.value = true
   try {
-    await axios.put(`${import.meta.env.VITE_API_URL}/me/pseudo`, { pseudo: formPseudo.value }, { headers: { Authorization: `Bearer ${token}` } })
+    await api.put(`/me/pseudo`, { pseudo: formPseudo.value })
     profileOk.value = true
     profileMsg.value = 'Pseudo mis à jour'
     localStorage.setItem('pseudo', formPseudo.value)
@@ -229,7 +226,7 @@ async function saveEmail() {
   profileMsg.value = ''
   savingEmail.value = true
   try {
-    await axios.put(`${import.meta.env.VITE_API_URL}/me/email`, { email: formEmail.value }, { headers: { Authorization: `Bearer ${token}` } })
+    await api.put(`/me/email`, { email: formEmail.value })
     profileOk.value = true
     profileMsg.value = 'Email mis à jour'
   } catch (e) {
@@ -247,7 +244,7 @@ async function changePassword() {
   }
   savingPwd.value = true
   try {
-    await axios.put(`${import.meta.env.VITE_API_URL}/me/password`, { old_password: oldPassword.value, new_password: newPassword.value }, { headers: { Authorization: `Bearer ${token}` } })
+    await api.put(`/me/password`, { old_password: oldPassword.value, new_password: newPassword.value })
     pwdOk.value = true
     pwdMsg.value = 'Mot de passe mis à jour'
     oldPassword.value = newPassword.value = newPassword2.value = ''
@@ -259,7 +256,7 @@ async function changePassword() {
 
 async function saveSecurity() {
   try {
-    await axios.put(`${import.meta.env.VITE_API_URL}/me/security`, { notification_login: notifLogin.value }, { headers: { Authorization: `Bearer ${token}` } })
+    await api.put(`/me/security`, { notification_login: notifLogin.value })
     secMsg.value = 'Paramètres de sécurité enregistrés'
     setTimeout(() => secMsg.value = '', 1500)
   } catch {}
@@ -293,9 +290,7 @@ async function uploadAvatar(event) {
   const formData = new FormData()
   formData.append('avatar', file)
   try {
-    const res = await axios.post(`${import.meta.env.VITE_API_URL}/me/avatar`, formData, {
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' }
-    })
+    const res = await api.post(`/me/avatar`, formData, { headers: { 'Content-Type': 'multipart/form-data' } })
     avatarUrl.value = res.data.avatar_url
     localStorage.setItem('avatar_url', res.data.avatar_url)
   } catch (e) {
@@ -308,7 +303,7 @@ async function uploadAvatar(event) {
 async function deleteAvatar() {
   loadingAvatar.value = true
   try {
-    await axios.delete(`${import.meta.env.VITE_API_URL}/me/avatar`, { headers: { Authorization: `Bearer ${token}` } })
+    await api.delete(`/me/avatar`)
     avatarUrl.value = null
     localStorage.removeItem('avatar_url')
   } catch (e) {
@@ -322,7 +317,7 @@ async function startActivation() {
   totpSuccess.value = ''
   loadingTotp.value = true
   try {
-    const res = await axios.post(`${import.meta.env.VITE_API_URL}/auth/totp/activate`, null, { responseType: 'blob', headers: { Authorization: `Bearer ${token}` } })
+    const res = await api.post(`/auth/totp/activate`, null, { responseType: 'blob' })
     const reader = new FileReader()
     reader.onloadend = () => { qrCodeData.value = reader.result }
     reader.readAsDataURL(res.data)
@@ -336,7 +331,7 @@ async function confirmTotp() {
   totpSuccess.value = ''
   loadingTotp.value = true
   try {
-    const res = await axios.post(`${import.meta.env.VITE_API_URL}/auth/totp/confirm`, { code: totpCode.value }, { headers: { Authorization: `Bearer ${token}` } })
+    const res = await api.post(`/auth/totp/confirm`, { code: totpCode.value })
     totpEnabled.value = true
     qrCodeData.value = null
     totpCode.value = ''
@@ -351,7 +346,7 @@ async function deactivateTotp() {
   totpSuccess.value = ''
   loadingTotp.value = true
   try {
-    const res = await axios.post(`${import.meta.env.VITE_API_URL}/auth/totp/deactivate`, null, { headers: { Authorization: `Bearer ${token}` } })
+    const res = await api.post(`/auth/totp/deactivate`, null)
     totpEnabled.value = false
     totpSuccess.value = res.data.message || 'TOTP désactivé'
   } catch (e) {
@@ -365,7 +360,7 @@ async function confirmDelete() {
   deleteError.value = ''
   loadingDelete.value = true
   try {
-    await axios.delete(`${import.meta.env.VITE_API_URL}/me`, { headers: { Authorization: `Bearer ${token}` }, data: { password: deletePassword.value } })
+    await api.delete(`/me`, { data: { password: deletePassword.value } })
     localStorage.clear(); router.push('/login')
   } catch (e) {
     deleteError.value = e.response?.data?.error || 'Suppression impossible pour le moment.'

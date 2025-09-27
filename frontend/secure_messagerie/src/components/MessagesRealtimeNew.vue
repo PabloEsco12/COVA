@@ -565,10 +565,11 @@
 <script setup>
 import { ref, onMounted, nextTick, watch, computed, onUnmounted } from 'vue'
 import axios from 'axios'
+import { api, backendBase } from '@/utils/api'
 import { io } from 'socket.io-client'
 import LogoUrl from '@/assets/logo_COVA.png'
 import 'emoji-picker-element'
-const backendBase = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '') || 'http://localhost:5000'
+// backendBase provided by central api util
 
 const conversations = ref([])
 const selectedConvId = ref(null)
