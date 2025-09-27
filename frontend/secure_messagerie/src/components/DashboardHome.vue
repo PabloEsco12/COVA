@@ -8,7 +8,7 @@
             <img :src="avatarUrl" alt="Avatar" class="avatar-lg" @error="onAvatarError" />
           </div>
           <p class="lead mb-4">
-            Messagerie sécurisée, simple et rapide.<br />
+            Messagerie sÃ©curisÃ©e, simple et rapide.<br />
             Retrouvez vos messages, contacts et notifications ici.
           </p>
           <img src="@/assets/logo_COVA.png" alt="Logo COVA" style="width:80px; margin-bottom:20px;" />
@@ -30,7 +30,7 @@
             </div>
             <div class="col-6 col-md-3 mb-3">
               <router-link to="/dashboard/settings" class="btn btn-outline-secondary w-100">
-                <i class="bi bi-gear"></i> Paramètres
+                <i class="bi bi-gear"></i> ParamÃ¨tres
               </router-link>
             </div>
           </div>
@@ -38,7 +38,7 @@
             Statut API :
             <span :class="apiOk ? 'text-success' : 'text-danger'">
               <i :class="apiOk ? 'bi bi-circle-fill' : 'bi bi-x-circle-fill'"></i>
-              {{ apiOk ? 'Connecté' : 'Hors ligne' }}
+              {{ apiOk ? 'ConnectÃ©' : 'Hors ligne' }}
             </span>
           </div>
         </div>
@@ -49,7 +49,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import { api } from '@/utils/api'
 
 const apiOk = ref(false)
 const pseudo = ref('Utilisateur')
@@ -60,7 +60,7 @@ onMounted(async () => {
   avatarUrl.value = localStorage.getItem('avatar_url') || null
 
   try {
-    await axios.get('http://localhost:5000/api/ping')
+    await api.get('/ping')
     apiOk.value = true
   } catch (e) {
     apiOk.value = false
@@ -69,9 +69,7 @@ onMounted(async () => {
   const token = localStorage.getItem('access_token')
   if (token) {
     try {
-      const res = await axios.get('http://localhost:5000/api/me', {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const res = await api.get('/me')
       if (res.data?.avatar_url) {
         avatarUrl.value = res.data.avatar_url
         localStorage.setItem('avatar_url', res.data.avatar_url)

@@ -27,7 +27,7 @@
         <i class="bi bi-chat-dots fs-2 text-primary me-3"></i>
         <div class="flex-grow-1">
           <h3 class="mb-0 fw-bold">{{ currentConvTitle }}</h3>
-          <small v-if="!typingLabel" class="text-muted">Discussions sécurisées sur COVA</small>
+          <small v-if="!typingLabel" class="text-muted">Discussions sÃ©curisÃ©es sur COVA</small>
           <small v-else class="text-success">{{ typingLabel }}</small>
         </div>
         <div class="ms-auto">
@@ -67,14 +67,14 @@
 
       <form @submit.prevent="sendMessage" class="chat-input px-3 py-2">
         <div class="input-group">
-          <input v-model="newMessage" type="text" class="form-control" placeholder="Écrire un message..." :disabled="loading" @keyup.enter="sendMessage" @input="handleTyping" autocomplete="off" />
+          <input v-model="newMessage" type="text" class="form-control" placeholder="Ã‰crire un message..." :disabled="loading" @keyup.enter="sendMessage" @input="handleTyping" autocomplete="off" />
           <button class="btn btn-primary" type="submit" :disabled="!newMessage || loading"><i class="bi bi-send"></i></button>
         </div>
       </form>
     </div>
   </div>
 
-    <!-- Modal nouvelle conversation (am�lior�e) -->
+    <!-- Modal nouvelle conversation (améliorée) -->
   <div v-if="showConvModal" class="modal-backdrop-custom">
     <div class="modal-dialog modal-dialog-centered modal-lg">
       <div class="modal-content p-0 overflow-hidden">
@@ -117,7 +117,7 @@
                   {{ byId(uid)?.pseudo || uid }}
                   <i class="bi bi-x ms-1" role="button" @click="removeSelected(uid)"></i>
                 </span>
-                <div v-if="selectedUsers.length === 0" class="text-muted small">S�lectionne au moins un contact � gauche</div>
+                <div v-if="selectedUsers.length === 0" class="text-muted small">Sélectionne au moins un contact à gauche</div>
               </div>
             </div>
           </div>
@@ -126,7 +126,7 @@
           <button class="btn btn-secondary" @click="showConvModal = false">Annuler</button>
           <button class="btn btn-primary" @click="createConversation" :disabled="creatingConv || selectedUsers.length === 0 || !convTitle">
             <span v-if="creatingConv" class="spinner-border spinner-border-sm"></span>
-            <span v-else>Cr�er</span>
+            <span v-else>Créer</span>
           </button>
         </div>
       </div>
@@ -135,7 +135,7 @@
 
 <script setup>
 import { ref, onMounted, nextTick, watch, computed } from 'vue'
-import axios from 'axios'
+import { api } from '@/utils/api'
 import { io } from 'socket.io-client'
 import LogoUrl from '@/assets/logo_COVA.png'
 
@@ -262,9 +262,7 @@ function formatDate(ts) {
 
 async function fetchConversations() {
   try {
-    const res = await axios.get('http://localhost:5000/api/conversations/', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-    })
+    const res = await api.get('/conversations/')
     conversations.value = res.data || []
     if (!selectedConvId.value && conversations.value.length) {
       selectConversation(conversations.value[0].id)
@@ -278,9 +276,7 @@ async function fetchMessages() {
   if (!selectedConvId.value) { messages.value = []; return }
   loading.value = true
   try {
-    const res = await axios.get(`http://localhost:5000/api/conversations/${selectedConvId.value}/messages/`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-    })
+    const res = await api.get(`/conversations/${selectedConvId.value}/messages/`)
     messages.value = (res.data || []).map(m => ({ ...m, sentByMe: m.sender_id === userId }))
     await nextTick()
     scrollToBottom()
@@ -307,9 +303,7 @@ async function sendMessage() {
   const content = newMessage.value
   newMessage.value = ''
   try {
-    await axios.post(`http://localhost:5000/api/conversations/${selectedConvId.value}/messages/`, { contenu_chiffre: content }, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-    })
+    await api.post(`/conversations/${selectedConvId.value}/messages/`, { contenu_chiffre: content })
     // Optimistic: append locally; server will also echo via WS
     messages.value.push({ id_msg: Date.now(), contenu_chiffre: content, sender_id: userId, conv_id: selectedConvId.value, ts_msg: new Date().toISOString(), sentByMe: true })
     await nextTick(); scrollToBottom()
@@ -320,9 +314,7 @@ function startEdit(msg) { editingId.value = msg.id_msg; editContent.value = msg.
 async function confirmEdit() {
   if (!editingId.value) return
   try {
-    await axios.put(`http://localhost:5000/api/conversations/${selectedConvId.value}/messages/${editingId.value}`, { contenu_chiffre: editContent.value }, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-    })
+    await api.put(`/conversations/${selectedConvId.value}/messages/${editingId.value}`, { contenu_chiffre: editContent.value })
     editingId.value = null; editContent.value = ''; await fetchMessages()
   } catch {}
 }
@@ -330,18 +322,14 @@ function cancelEdit() { editingId.value = null }
 async function deleteMessage(id) {
   if (!confirm('Supprimer ce message ?')) return
   try {
-    await axios.delete(`http://localhost:5000/api/conversations/${selectedConvId.value}/messages/${id}`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-    })
+    await api.delete(`/conversations/${selectedConvId.value}/messages/${id}`)
     await fetchMessages()
   } catch {}
 }
 
 async function fetchContacts() {
   try {
-    const res = await axios.get('http://localhost:5000/api/contacts?statut=accepted', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-    })
+    const res = await api.get('/contacts?statut=accepted')
     contacts.value = res.data.contacts || []
   } catch { contacts.value = [] }
 }

@@ -27,7 +27,7 @@
         <i class="bi bi-chat-dots fs-2 text-primary me-3"></i>
         <div class="flex-grow-1">
           <h3 class="mb-0 fw-bold">{{ currentConvTitle }}</h3>
-          <small class="text-muted">Discussions s�curis�es sur COVA</small>
+          <small class="text-muted">Discussions sécurisées sur COVA</small>
         </div>
         <div class="ms-auto">
           <button class="btn btn-outline-primary btn-sm" @click="refresh">
@@ -80,7 +80,7 @@
           v-model="newMessage"
           type="text"
           class="form-control"
-          placeholder="Écrire un message…"
+          placeholder="Ã‰crire un messageâ€¦"
           :disabled="loading"
           @keyup.enter="sendMessage"
           autocomplete="off"
@@ -111,7 +111,7 @@
           <button class="btn btn-secondary" @click="showConvModal = false">Annuler</button>
           <button class="btn btn-primary" @click="createConversation" :disabled="creatingConv">
             <span v-if="creatingConv" class="spinner-border spinner-border-sm"></span>
-            <span v-else>Créer</span>
+            <span v-else>CrÃ©er</span>
           </button>
         </div>
       </div>
@@ -122,7 +122,7 @@
 
 <script setup>
 import { ref, onMounted, nextTick, watch } from 'vue'
-import axios from 'axios'
+import { api } from '@/utils/api'
 
 const conversations = ref([])
 const selectedConvId = ref(null)
@@ -149,9 +149,7 @@ function formatDate(ts) {
 
 async function fetchConversations() {
   try {
-    const res = await axios.get('http://localhost:5000/api/conversations/', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-    })
+    const res = await api.get('/conversations/')
     conversations.value = res.data || []
     if (!selectedConvId.value && conversations.value.length) {
       selectConversation(conversations.value[0].id)
@@ -161,20 +159,18 @@ async function fetchConversations() {
   }
 }
 
-// Récupère les messages d'une conversation
+// RÃ©cupÃ¨re les messages d'une conversation
 async function fetchMessages() {
     if (!selectedConvId.value) { messages.value = []; return }
   loading.value = true
   try {
-    const res = await axios.get(`http://localhost:5000/api/conversations/${selectedConvId.value}/messages/`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-    })
-    // Adapter selon le format de réponse réel de l’API
+    const res = await api.get(`/conversations/${selectedConvId.value}/messages/`)
+    // Adapter selon le format de rÃ©ponse rÃ©el de lâ€™API
     messages.value = (res.data || []).map(m => ({
       ...m,
       sentByMe: m.sender_id === userId
     }))
-    // Scrolle en bas après chargement
+    // Scrolle en bas aprÃ¨s chargement
     await nextTick()
     messagesEnd.value.scrollTop = messagesEnd.value.scrollHeight
   } catch (e) {
@@ -195,17 +191,15 @@ function selectConversation(id) {
 }
 
 
-// Envoi d’un message
+// Envoi dâ€™un message
 async function sendMessage() {
   if (!newMessage.value.trim() || !selectedConvId.value) return
   const content = newMessage.value
   newMessage.value = ''
   loading.value = true
   try {
-    await axios.post(`http://localhost:5000/api/conversations/${selectedConvId.value}/messages/`, {
+    await api.post(`/conversations/${selectedConvId.value}/messages/`, {
       contenu_chiffre: content
-    }, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
     })
     await fetchMessages()
   } catch (e) {
@@ -222,10 +216,8 @@ function startEdit(msg) {
 async function confirmEdit() {
   if (!editingId.value) return
   try {
-    await axios.put(`http://localhost:5000/api/conversations/${selectedConvId.value}/messages/${editingId.value}`, {
+    await api.put(`/conversations/${selectedConvId.value}/messages/${editingId.value}`, {
       contenu_chiffre: editContent.value
-    }, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
     })
     editingId.value = null
     editContent.value = ''
@@ -240,18 +232,14 @@ function cancelEdit() {
 async function deleteMessage(id) {
   if (!confirm('Supprimer ce message ?')) return
   try {
-    await axios.delete(`http://localhost:5000/api/conversations/${selectedConvId.value}/messages/${id}`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-    })
+    await api.delete(`/conversations/${selectedConvId.value}/messages/${id}`)
     await fetchMessages()
   } catch {}
 }
 
 async function fetchContacts() {
   try {
-    const res = await axios.get('http://localhost:5000/api/contacts?statut=accepted', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-    })
+    const res = await api.get('/contacts?statut=accepted')
     contacts.value = res.data.contacts || []
   } catch {
     contacts.value = []
@@ -269,12 +257,10 @@ async function createConversation() {
   if (!convTitle.value) return
   creatingConv.value = true
   try {
-    const res = await axios.post('http://localhost:5000/api/conversations/', {
+    const res = await api.post('/conversations/', {
       titre: convTitle.value,
       participants: selectedUsers.value,
       is_group: selectedUsers.value.length > 1
-    }, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
     })
     showConvModal.value = false
     creatingConv.value = false
