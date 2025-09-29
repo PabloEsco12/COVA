@@ -1,42 +1,50 @@
 services:
+  # ─────────────────────────── Base de données ───────────────────────────
   db:
     image: postgres:14
     container_name: securechat_db
-    env_file: .env.docker
+    restart: always
+    env_file: .env.prod               # POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
     volumes:
       - db_data:/var/lib/postgresql/data
-    restart: always
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 5s
       timeout: 3s
       retries: 5
 
+  # ─────────────────────────── Backend Flask ─────────────────────────────
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: securechat_backend
+    restart: always
     depends_on:
       db:
         condition: service_healthy
-    env_file: .env.docker
+    env_file: .env.prod               # DATABASE_URL, SECRET_KEY, JWT_SECRET_KEY, etc.
     environment:
+      - FLASK_APP=app
       - FLASK_ENV=production
-    ports:
-      - "5000:5000"            # Nginx VPS reverse-proxie vers celui-ci
-    restart: always
+    expose:
+      - "5000"                        # exposé au réseau Docker mais pas en public
+    volumes:
+      - ./backend/app/migrations:/app/migrations
+      - ./backend/app/static/avatars:/app/app/static/avatars
+      - ./backend/app/static/uploads:/app/app/static/uploads
 
+  # ─────────────────────────── Frontend Vue ──────────────────────────────
   frontend:
     build:
       context: ./frontend/secure_messagerie
       dockerfile: Dockerfile.prod
     container_name: securechat_frontend
-    ports:
-      - "8080:80"              # Nginx VPS reverse-proxie vers celui-ci
     restart: always
     depends_on:
       - backend
+    expose:
+      - "80"                          # exposé seulement au réseau Docker
 
 volumes:
   db_data:
