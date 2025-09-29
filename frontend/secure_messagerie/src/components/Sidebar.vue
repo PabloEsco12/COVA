@@ -49,7 +49,7 @@
       <p class="sidebar-section-title">Navigation</p>
       <ul class="nav nav-pills flex-column">
         <li class="nav-item">
-          <router-link to="/dashboard" class="nav-link" active-class="active">
+          <router-link to="/dashboard" class="nav-link" exact-active-class="active">
             <i class="bi bi-house me-2"></i> Accueil
           </router-link>
         </li>
