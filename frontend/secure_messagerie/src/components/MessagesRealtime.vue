@@ -67,7 +67,7 @@
 
       <form @submit.prevent="sendMessage" class="chat-input px-3 py-2">
         <div class="input-group">
-          <input v-model="newMessage" type="text" class="form-control" placeholder="Ã‰crire un message..." :disabled="loading" @keyup.enter="sendMessage" @input="handleTyping" autocomplete="off" />
+          <input v-model="newMessage" type="text" class="form-control" placeholder="Ã‰crire un message..." :disabled="loading" @input="handleTyping" autocomplete="off" />
           <button class="btn btn-primary" type="submit" :disabled="!newMessage || loading"><i class="bi bi-send"></i></button>
         </div>
       </form>
@@ -297,15 +297,15 @@ function selectConversation(id) {
   joinRoom(id)
 }
 
-// Send message (REST); WS broadcast will update other clients
+// Send message (REST) and rely on server payload to avoid duplicates
 async function sendMessage() {
   if (!newMessage.value.trim() || !selectedConvId.value) return
   const content = newMessage.value
   newMessage.value = ''
   try {
-    await api.post(`/conversations/${selectedConvId.value}/messages/`, { contenu_chiffre: content })
-    // Optimistic: append locally; server will also echo via WS
-    messages.value.push({ id_msg: Date.now(), contenu_chiffre: content, sender_id: userId, conv_id: selectedConvId.value, ts_msg: new Date().toISOString(), sentByMe: true })
+    const res = await api.post(`/conversations/${selectedConvId.value}/messages/`, { contenu_chiffre: content })
+    const created = { ...res.data, sentByMe: true }
+    messages.value.push(created)
     await nextTick(); scrollToBottom()
   } catch (e) {}
 }

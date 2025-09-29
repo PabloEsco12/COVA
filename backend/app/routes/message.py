@@ -203,7 +203,7 @@ def download_file(file_id):
             upload_dir,
             stored_name,
             mimetype=file_obj.mime or None,
-            as_attachment=True,
+            as_attachment=False,
             download_name=original,
         )
     except FileNotFoundError:
@@ -276,15 +276,3 @@ def unread_count():
 
 # Utilities imported late to avoid circular import
 from werkzeug.utils import secure_filename  # noqa: E402  pylint: disable=wrong-import-position
-
-# Utilities imported late to avoid circular import
-from werkzeug.utils import secure_filename  # noqa: E402  pylint: disable=wrong-import-position
-
-# Utilities imported late to avoid circular import
-from werkzeug.utils import secure_filename  # noqa: E402  pylint: disable=wrong-import-position
-
-# Utilities imported late to avoid circular import
-from werkzeug.utils import secure_filename  # noqa: E402  pylint: disable=wrong-import-position
-
-# Utilities imported late to avoid circular import
-from werkzeug.utils import secure_filename 

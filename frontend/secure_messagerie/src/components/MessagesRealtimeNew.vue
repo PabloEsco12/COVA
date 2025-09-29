@@ -294,6 +294,7 @@
                           v-if="attachmentPreviews[file.id_file]"
                           :src="attachmentPreviews[file.id_file]"
                           :alt="file.filename"
+                          @load="onAttachmentImageLoad"
                         />
                         <span v-else class="spinner-border spinner-border-sm text-primary"></span>
                       </button>
@@ -391,7 +392,6 @@
             class="composer-input"
             placeholder="Écrire un message..."
             :disabled="loading || sendingMessage"
-            @keyup.enter="sendMessage"
             @input="handleTyping"
             autocomplete="off"
             ref="messageInput"
@@ -1013,6 +1013,11 @@ function scrollToBottom() {
   const el = messagesBox.value
   if (!el) return
   el.scrollTop = el.scrollHeight
+}
+
+function onAttachmentImageLoad() {
+  // When an attachment image finishes loading, ensure the latest messages stay visible
+  scrollToBottom()
 }
 
 function requestNotificationPermission() {
@@ -1673,8 +1678,9 @@ function applyReactionUpdate(messageId, payload) {
 
 function attachmentEndpoint(file) {
   const fallback = `/api/messages/files/${file?.id_file}`
-  const url = file?.url || fallback
-  return url.startsWith('http') ? url : `${backendBase}${url}`
+  const raw = file?.url || fallback
+  const withInline = raw.includes('?') ? `${raw}&inline=1` : `${raw}?inline=1`
+  return withInline.startsWith('http') ? withInline : `${backendBase}${withInline}`
 }
 
 function isInlineImage(file) {
@@ -1684,6 +1690,7 @@ function isInlineImage(file) {
   return /\.(png|jpe?g|gif|webp|bmp)$/i.test(name)
 }
 
+const _previewRetryCount = new Map()
 async function ensureAttachmentPreview(file) {
   const key = file?.id_file
   if (!key) return
@@ -1692,14 +1699,18 @@ async function ensureAttachmentPreview(file) {
   if (!isInlineImage(file)) return
   loadingPreviewIds.add(cacheKey)
   try {
-    const response = await axios.get(attachmentEndpoint(file), {
-      responseType: 'blob',
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-    })
+    const response = await api.get(attachmentEndpoint(file), { responseType: 'blob' })
     const blobUrl = window.URL.createObjectURL(response.data)
     attachmentPreviews.value = { ...attachmentPreviews.value, [cacheKey]: blobUrl }
   } catch (error) {
-    console.error('Unable to load preview', error)
+    // Retry once after a short delay in case the file is not yet available
+    const tries = _previewRetryCount.get(cacheKey) || 0
+    if (tries < 1) {
+      _previewRetryCount.set(cacheKey, tries + 1)
+      setTimeout(() => ensureAttachmentPreview(file), 800)
+    } else {
+      console.error('Unable to load preview', error)
+    }
   } finally {
     loadingPreviewIds.delete(cacheKey)
   }
