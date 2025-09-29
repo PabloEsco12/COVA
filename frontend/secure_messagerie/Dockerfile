@@ -1,24 +1,17 @@
-# Étape de build
-FROM node:18-alpine AS builder
+# frontend/secure_messagerie/Dockerfile (LOCAL)
+FROM node:18-alpine
 
 WORKDIR /app
 
-# Copier les fichiers package*.json
-COPY package*.json ./
-
 # Installer les dépendances
+COPY package*.json ./
 RUN npm install
 
-# Copier tout le reste (src, public, etc.)
+# Copier le reste du projet
 COPY . .
 
-# Construire l'application
-RUN npm run build
+# Exposer le port de dev Vite
+EXPOSE 5173
 
-# Étape de runtime
-FROM nginx:1.23-alpine
-COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+# Commande par défaut
+CMD ["npm", "run", "dev", "--", "--host"]

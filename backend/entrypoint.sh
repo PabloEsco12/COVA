@@ -1,24 +1,23 @@
 #!/bin/sh
 set -e
+
 export FLASK_APP=${FLASK_APP:-app}
 
-# 0) Attendre que Postgres soit prêt !
+# 0) Attendre que Postgres soit prêt
 /wait-for-it.sh db:5432 --timeout=60 --strict -- echo "✅ Postgres est prêt !"
 
-# 1) Crée migrations/ si absent
-if [ ! -d "/app/migrations" ]; then
-  echo "📁  Pas de dossier migrations/ → initialisation"
-  python -m flask db init
+# 1) Appliquer les migrations (si elles existent déjà dans le repo)
+if [ -d "/app/migrations" ]; then
+  echo "⬆️  Upgrade BDD (Alembic)…"
+  flask db upgrade || echo "⚠️ Aucun upgrade appliqué"
+else
+  echo "⚠️ Pas de dossier migrations/ → skip flask db upgrade"
 fi
 
-# 2) Génère une révision auto si des changements ORM sont détectés
-echo "🔍  Vérification des changements de schéma"
-python -m flask db migrate -m "auto" || true   # 'true' si aucun changement
-
-# 3) Upgrade
-echo "⬆️   Upgrade BDD (Alembic)…"
-python -m flask db upgrade
-
-# 4) Démarrage de l’API
-echo "🚀  Lancement API Flask…"
-exec python -m app
+# 2) Lancer Gunicorn (au lieu du serveur Flask intégré)
+echo "🚀  Lancement API Flask avec Gunicorn…"
+exec gunicorn "app:create_app()" \
+    -b 0.0.0.0:5000 \
+    --workers ${WORKERS:-4} \
+    --threads ${THREADS:-2} \
+    --timeout ${TIMEOUT:-120}
