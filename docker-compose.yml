@@ -35,6 +35,7 @@ services:
     volumes:
      - ./backend/app/migrations:/app/migrations
      - ./backend/app/static/avatars:/app/app/static/avatars
+     - ./backend/app/static/uploads:/app/app/static/uploads
 
   # ─────────────────────────── Frontend (Vue/Nginx) ───────────────
   frontend:
