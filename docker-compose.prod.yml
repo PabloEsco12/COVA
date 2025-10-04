@@ -1,7 +1,4 @@
-version: "3.9"
-
 services:
-  # ────────────── Base de données PostgreSQL ──────────────
   db:
     image: postgres:14
     container_name: securechat_db
@@ -14,11 +11,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
-    networks:
-      securechat_net:
-        ipv4_address: 172.20.0.2
 
-  # ────────────── Backend Flask (Gunicorn) ──────────────
   backend:
     build:
       context: ./backend
@@ -34,6 +27,8 @@ services:
       - FLASK_ENV=production
     expose:
       - "5000"
+    networks:
+      - securechat_net
     volumes:
       - ./backend/app/migrations:/app/migrations
       - ./backend/app/static/avatars:/app/app/static/avatars
@@ -43,11 +38,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
-    networks:
-      securechat_net:
-        ipv4_address: 172.20.0.3
 
-  # ────────────── Frontend Vue (Nginx SPA) ──────────────
   frontend:
     build:
       context: ./frontend/secure_messagerie
@@ -59,56 +50,39 @@ services:
         condition: service_healthy
     expose:
       - "80"
+    networks:
+      - securechat_net
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost/ || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 5
-    networks:
-      securechat_net:
-        ipv4_address: 172.20.0.4
 
-  # ────────────── Uptime Kuma (Monitoring UI) ──────────────
-  uptime-kuma:
+  uptime_kuma:
     image: louislam/uptime-kuma:latest
     container_name: uptime_kuma
     restart: always
+    expose:
+      - "3001"
+    networks:
+      - securechat_net
     environment:
       - BASE_PATH=/monitoring
-    ports:
-      - "3001:3001"
     volumes:
       - /srv/uptime-kuma:/app/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:3001/"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-    networks:
-      securechat_net:
-        ipv4_address: 172.20.0.5
 
-  # ────────────── Auto-Heal Watchdog ──────────────
   autoheal:
     image: willfarrell/autoheal:latest
     container_name: autoheal
     restart: always
     environment:
       - AUTOHEAL_CONTAINER_LABEL=all
-      - AUTOHEAL_INTERVAL=20
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - securechat_net
 
-# ────────────── Volumes persistants ──────────────
 volumes:
   db_data:
 
-# ────────────── Réseau dédié avec IP fixes ──────────────
 networks:
   securechat_net:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
