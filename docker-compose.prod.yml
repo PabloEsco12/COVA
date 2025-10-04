@@ -29,8 +29,8 @@ services:
     environment:
       - FLASK_APP=app
       - FLASK_ENV=production
-    ports:                     # ⚠️ Ajout essentiel pour que Nginx hôte accède à Flask
-      - "5000:5000"
+    ports:
+      - "5000:5000"      # pour Nginx hôte
     volumes:
       - ./backend/app/migrations:/app/migrations
       - ./backend/app/static/avatars:/app/app/static/avatars
@@ -40,6 +40,9 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+    labels:
+      - "autoheal=true"          # ← autoheal surveille ce service
+      - "com.centurylinklabs.watchtower.enable=true"   # (optionnel) watchtower
 
   # ────────────────────────────── FRONTEND ──────────────────────────────
   frontend:
@@ -51,20 +54,54 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    ports:                     # ⚠️ Ajout essentiel pour Nginx hôte
-      - "8080:80"
+    ports:
+      - "8080:80"        # pour Nginx hôte
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost/ || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 5
+    labels:
+      - "autoheal=true"
+      - "com.centurylinklabs.watchtower.enable=true"   # (optionnel)
 
-# ────────────────────────────── VOLUMES / NETWORK ──────────────────────────────
+  # ────────────────────────────── AUTOHEAL ──────────────────────────────
+  autoheal:
+    image: willfarrell/autoheal
+    container_name: autoheal
+    restart: always
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal      # ne redémarre que les conteneurs étiquetés
+      - AUTOHEAL_INTERVAL=10
+      - CURL_TIMEOUT=5
+      - SHUTDOWN_GRACE_PERIOD=10
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  # ────────────────────────────── UPTIME KUMA ───────────────────────────
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: always
+    ports:
+      - "127.0.0.1:3001:3001"     # accessible seulement en local/Nginx
+    volumes:
+      - ./monitoring/uptime-kuma:/app/data
+
+  # ────────────────────────────── WATCHTOWER (optionnel) ────────────────
+  # ⚠️ Watchtower met à jour les *images* depuis un registry.
+  # Dans ton cas (build local), il ne rebuild pas. Tu peux le laisser
+  # pour Uptime Kuma/Autoheal, ou le désactiver.
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: always
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=86400   # 1x/jour
+      - WATCHTOWER_LABEL_ENABLE=true     # ne met à jour que les services étiquetés
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
 volumes:
   db_data:
-
-# Pas besoin d’un réseau externe ici : tout reste sur bridge par défaut.
-# Si tu veux que d’autres conteneurs externes y accèdent → décommente :
-# networks:
-#   securechat_net:
-#     external: true
