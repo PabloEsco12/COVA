@@ -54,62 +54,74 @@
           </button>
         </div>
         <div class="conv-scroll">
-          <ul class="list-group list-group-flush conv-list-scroll">
-            <li
-              v-for="conv in filteredConversations"
-              :key="conv.id"
-              class="list-group-item p-0 border-0 bg-transparent"
-            >
-              <div
-                class="conv-tile"
-                :class="{ active: conv.id === selectedConvId, favorite: isFavorite(conv.id) }"
-                @click="selectConversation(conv.id)"
-              >
-                <div class="me-2 avatar-wrap">
-                  <img v-if="conv.avatar_url" :src="conv.avatar_url" class="avatar-list" alt="avatar" />
-                  <div v-else class="avatar-list-placeholder" :class="{ group: conv.is_group }">
-                    {{ initials(conv.displayName || conv.titre) }}
-                  </div>
-                  <span v-if="conv.is_group" class="group-ind"><i class="bi bi-people-fill"></i></span>
-                </div>
-                <div class="flex-grow-1 overflow-hidden conv-content">
-                  <div class="conv-name-row d-flex align-items-center">
-                    <div class="conv-name text-truncate">{{ conv.displayName || conv.titre }}</div>
-                    <div class="ms-auto d-flex align-items-center gap-2 conv-meta-right">
-                      <button
-                        type="button"
-                        class="favorite-toggle"
-                        :class="{ active: isFavorite(conv.id) }"
-                        :aria-pressed="isFavorite(conv.id)"
-                        :title="isFavorite(conv.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'"
-                        @click.stop="toggleFavorite(conv.id)"
-                      >
-                        <i class="bi" :class="isFavorite(conv.id) ? 'bi-star-fill' : 'bi-star'"></i>
-                      </button>
-                      <div class="conv-time">{{ formatTime(conv.last?.ts) }}</div>
-                      <span v-if="getUnreadCount(conv)" class="badge-unread">{{ getUnreadCount(conv) }}</span>
+          <div v-if="conversationBuckets.length" class="conv-sections">
+            <div v-for="bucket in conversationBuckets" :key="bucket.key" class="conv-section">
+              <p v-if="bucket.title" class="conv-section-title">{{ bucket.title }}</p>
+              <ul class="list-group list-group-flush conv-list-scroll">
+                <li
+                  v-for="conv in bucket.items"
+                  :key="conv.id"
+                  class="list-group-item p-0 border-0 bg-transparent"
+                >
+                  <div
+                    class="conv-item"
+                    :class="{
+                      active: conv.id === selectedConvId,
+                      favorite: isFavorite(conv.id),
+                      unread: getUnreadCount(conv)
+                    }"
+                    @click="selectConversation(conv.id)"
+                  >
+                    <div class="conv-item-leading">
+                      <div class="avatar-wrap">
+                        <img v-if="conv.avatar_url" :src="conv.avatar_url" class="avatar-list" alt="avatar" />
+                        <div v-else class="avatar-list-placeholder" :class="{ group: conv.is_group }">
+                          {{ initials(conv.displayName || conv.titre) }}
+                        </div>
+                        <span v-if="conv.is_group" class="group-ind"><i class="bi bi-people-fill"></i></span>
+                      </div>
+                    </div>
+                    <div class="conv-item-body">
+                      <div class="conv-item-header">
+                        <span class="conv-name text-truncate">{{ conv.displayName || conv.titre }}</span>
+                        <span class="conv-time">{{ formatTime(conv.last?.ts) }}</span>
+                      </div>
+                      <div class="conv-item-preview text-truncate">
+                        <span v-if="conv.last && conv.last.sentByMe" class="text-muted">Vous: </span>
+                        {{ conv.last ? conv.last.text : 'Aucun message' }}
+                      </div>
+                      <div class="conv-item-footer">
+                        <div class="conv-tags">
+                          <span v-if="conv.is_group" class="conv-tag">
+                            <i class="bi bi-people-fill me-1"></i>Groupe
+                          </span>
+                          <span v-if="isFavorite(conv.id)" class="conv-tag favorite">
+                            <i class="bi bi-star-fill me-1"></i>Favori
+                          </span>
+                        </div>
+                        <div class="conv-item-meta">
+                          <span v-if="getUnreadCount(conv)" class="badge-unread">{{ getUnreadCount(conv) }}</span>
+                          <button
+                            type="button"
+                            class="favorite-toggle"
+                            :class="{ active: isFavorite(conv.id) }"
+                            :aria-pressed="isFavorite(conv.id)"
+                            :title="isFavorite(conv.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'"
+                            @click.stop="toggleFavorite(conv.id)"
+                          >
+                            <i class="bi" :class="isFavorite(conv.id) ? 'bi-star-fill' : 'bi-star'"></i>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div class="conv-preview text-truncate">
-                    <span v-if="conv.last && conv.last.sentByMe" class="text-muted">Vous: </span>
-                    {{ conv.last ? conv.last.text : 'Aucun message' }}
-                  </div>
-                  <div class="conv-flags" v-if="conv.is_group || isFavorite(conv.id)">
-                    <span v-if="conv.is_group" class="conv-flag">
-                      <i class="bi bi-people-fill me-1"></i>Groupe
-                    </span>
-                    <span v-if="isFavorite(conv.id)" class="conv-flag favorite">
-                      <i class="bi bi-star-fill me-1"></i>Favori
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </li>
-            <li v-if="!filteredConversations.length" class="list-group-item text-center text-muted py-4 conv-empty">
-              <i class="bi bi-search mb-2 d-block fs-4"></i>
-              <span>Aucune conversation trouvée</span>
-            </li>
-          </ul>
+                </li>
+              </ul>
+            </div>
+          </div>          <div v-else class="conv-empty text-center text-muted py-4">
+            <i class="bi bi-search mb-2 d-block fs-4"></i>
+            <span>Aucune conversation trouvee</span>
+          </div>
         </div>
       </aside>
 
@@ -254,107 +266,132 @@
         <div v-else class="chat-history">
           <div v-if="messageSearch && displayMessages.length === 0" class="chat-state chat-empty">Aucun résultat</div>
           <div v-else class="messages-stack">
-            <div v-for="msg in displayMessages" :key="msg.id_msg" class="msg-row" :class="{ sent: msg.sentByMe }">
-              <template v-if="!msg.sentByMe && partnerAvatar">
-                <img :src="partnerAvatar" class="avatar-xs me-2" alt="avatar" />
-              </template>
-              <div :class="['chat-bubble', msg.sentByMe ? 'sent' : 'received']">
-                <div class="bubble-header">
-                  <span class="name">{{ msg.sentByMe ? pseudo : partnerName }}</span>
-                  <span class="time">{{ formatDate(msg.ts_msg) }}</span>
-                </div>
-                <div class="bubble-body">
-                  <template v-if="editingId === msg.id_msg">
-                    <input v-model="editContent" class="form-control form-control-sm mb-1" />
-                    <div class="text-end">
-                      <button class="btn btn-sm btn-success me-1" @click="confirmEdit">OK</button>
-                      <button class="btn btn-sm btn-secondary" @click="cancelEdit">Annuler</button>
-                    </div>
-                  </template>
-                  <template v-else>
-                    {{ msg.contenu_chiffre || (msg.files?.length ? `${msg.files.length} pièce(s) jointe(s)` : '') }}
-                  </template>
-                </div>
-
-                <div v-if="msg.files && msg.files.length" class="bubble-attachments mt-2">
-                  <div
-                    v-for="file in msg.files"
-                    :key="file.id_file"
-                    class="attachment-item"
-                    :class="{ preview: isInlineImage(file) }"
-                  >
-                    <template v-if="isInlineImage(file)">
-                      <button
-                        type="button"
-                        class="attachment-thumb"
-                        :aria-label="`Télécharger ${file.filename}`"
-                        @click="downloadAttachment(file)"
-                      >
-                        <img
-                          v-if="attachmentPreviews[file.id_file]"
-                          :src="attachmentPreviews[file.id_file]"
-                          :alt="file.filename"
-                          @load="onAttachmentImageLoad"
-                        />
-                        <span v-else class="spinner-border spinner-border-sm text-primary"></span>
-                      </button>
-                      <div class="attachment-meta">
-                        <div class="attachment-name" v-html="highlightFilename(file.filename)"></div>
-                        <small class="text-muted">{{ formatSize(file.taille) }}</small>
+            <div
+              v-for="item in messageTimeline"
+              :key="item.id"
+              class="timeline-entry"
+            >
+              <div
+                v-if="item.type === 'date'"
+                class="day-divider"
+              >
+                <span class="day-divider-label">{{ item.label }}</span>
+              </div>
+              <div
+                v-if="item.type !== 'date'"
+                class="msg-row"
+                :class="{ sent: item.message.sentByMe }"
+              >
+                <template v-if="!item.message.sentByMe && partnerAvatar">
+                  <img :src="partnerAvatar" class="avatar-xs me-2" alt="avatar" />
+                </template>
+                <div :class="['chat-bubble', item.message.sentByMe ? 'sent' : 'received']">
+                  <div class="bubble-header">
+                    <span class="name">{{ item.message.sentByMe ? pseudo : partnerName }}</span>
+                    <span class="time">{{ formatDate(item.message.ts_msg) }}</span>
+                  </div>
+                  <div class="bubble-body">
+                    <template v-if="editingId === item.message.id_msg">
+                      <input v-model="editContent" class="form-control form-control-sm mb-1" />
+                      <div class="text-end">
+                        <button class="btn btn-sm btn-success me-1" @click="confirmEdit">OK</button>
+                        <button class="btn btn-sm btn-secondary" @click="cancelEdit">Annuler</button>
                       </div>
                     </template>
                     <template v-else>
-                      <i class="bi bi-paperclip me-2"></i>
-                      <button class="btn btn-link p-0 attachment-link" type="button" @click="downloadAttachment(file)">
-                        <span v-html="highlightFilename(file.filename)"></span>
-                      </button>
-                      <small class="text-muted ms-2">{{ formatSize(file.taille) }}</small>
+                      {{ item.message.contenu_chiffre || (item.message.files?.length ? `${item.message.files.length} pi�ce(s) jointe(s)` : '') }}
                     </template>
                   </div>
-                </div>
 
-                <div class="reaction-strip mt-2">
-                  <button
-                    v-for="reaction in reactionSummary(msg)"
-                    :key="reaction.emoji"
-                    class="reaction-chip"
-                    :class="{ mine: reaction.mine }"
-                    type="button"
-                    @click="toggleReaction(msg.id_msg, reaction.emoji)"
-                  >
-                    <span class="emoji">{{ reaction.emoji }}</span>
-                    <span class="count">{{ reaction.count }}</span>
-                  </button>
-                  <div class="reaction-picker" v-if="reactionPickerFor === msg.id_msg">
-                    <emoji-picker
-                      class="reaction-emoji-picker"
-                      skin-tone-emoji="👍"
-                      @emoji-click="event => onReactionEmoji(msg.id_msg, event)"
-                    ></emoji-picker>
+                  <div v-if="item.message.files && item.message.files.length" class="bubble-attachments mt-2">
+                    <div
+                      v-for="file in item.message.files"
+                      :key="file.id_file"
+                      class="attachment-item"
+                      :class="{ preview: isInlineImage(file) }"
+                    >
+                      <template v-if="isInlineImage(file)">
+                        <button
+                          type="button"
+                          class="attachment-thumb"
+                          :aria-label="`T�l�charger ${file.filename}`"
+                          @click="downloadAttachment(file)"
+                        >
+                          <img
+                            v-if="attachmentPreviews[file.id_file]"
+                            :src="attachmentPreviews[file.id_file]"
+                            :alt="file.filename"
+                            @load="onAttachmentImageLoad"
+                          />
+                          <span v-else class="spinner-border spinner-border-sm text-primary"></span>
+                        </button>
+                        <div class="attachment-meta">
+                          <div class="attachment-name" v-html="highlightFilename(file.filename)"></div>
+                          <small class="text-muted">{{ formatSize(file.taille) }}</small>
+                        </div>
+                      </template>
+                      <template v-else>
+                        <i class="bi bi-paperclip me-2"></i>
+                        <button class="btn btn-link p-0 attachment-link" type="button" @click="downloadAttachment(file)">
+                          <span v-html="highlightFilename(file.filename)"></span>
+                        </button>
+                        <small class="text-muted ms-2">{{ formatSize(file.taille) }}</small>
+                      </template>
+                    </div>
                   </div>
-                  <button
-                    class="btn btn-light btn-sm add-reaction"
-                    type="button"
-                    @click="toggleReactionPicker(msg.id_msg)"
-                  >
-                    <i class="bi bi-emoji-smile"></i>
-                  </button>
-                </div>
 
-                <div v-if="msg.sentByMe" class="bubble-actions text-end">
-                  <button class="btn btn-action me-1" @click="startEdit(msg)" title="Modifier">
-                    <i class="bi bi-pencil"></i>
-                  </button>
-                  <button class="btn btn-action danger" @click="deleteMessage(msg.id_msg)" title="Supprimer">
-                    <i class="bi bi-trash"></i>
-                  </button>
+                  <div class="reaction-strip mt-2">
+                    <button
+                      v-for="reaction in reactionSummary(item.message)"
+                      :key="reaction.emoji"
+                      class="reaction-chip"
+                      :class="{ mine: reaction.mine }"
+                      type="button"
+                      @click="toggleReaction(item.message.id_msg, reaction.emoji)"
+                    >
+                      <span class="emoji">{{ reaction.emoji }}</span>
+                      <span class="count">{{ reaction.count }}</span>
+                    </button>
+                    <div class="reaction-picker" v-if="reactionPickerFor === item.message.id_msg">
+                      <emoji-picker
+                        class="reaction-emoji-picker"
+                        skin-tone-emoji="??"
+                        @emoji-click="event => onReactionEmoji(item.message.id_msg, event)"
+                      ></emoji-picker>
+                    </div>
+                    <button
+                      class="btn btn-light btn-sm add-reaction"
+                      type="button"
+                      @click="toggleReactionPicker(item.message.id_msg)"
+                    >
+                      <i class="bi bi-emoji-smile"></i>
+                    </button>
+                  </div>
+
+                  <div v-if="item.message.sentByMe" class="bubble-actions text-end">
+                    <button class="btn btn-action me-1" @click="startEdit(item.message)" title="Modifier">
+                      <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-action danger" @click="deleteMessage(item.message.id_msg)" title="Supprimer">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
+          </div>\r\n        </div>
       </div>
-      <form @submit.prevent="sendMessage" class="chat-input">
+      <button
+        v-if="showJumpToLatest"
+        type="button"
+        class="jump-to-latest"
+        @click="jumpToLatest"
+      >
+        <i class="bi bi-arrow-down-short"></i>
+        Derniers messages
+      </button>
+    </div>
+    <form @submit.prevent="sendMessage" class="chat-input">
         <div class="composer-bar">
           <div class="composer-tools">
             <button
@@ -595,6 +632,8 @@ let typingSendTimer = null
 let gifSearchTimer = null
 let gifController = null
 const typingLabel = ref('')
+const isAtBottom = ref(true)
+const showJumpToLatest = ref(false)
 const unreadCounts = ref({})
 const conversationSearch = ref('')
 const conversationFilter = ref('all')
@@ -693,12 +732,29 @@ const filteredConversations = computed(() => {
   } else if (filter === 'groups') {
     list = list.filter(conv => conv.is_group)
   }
-  if (!q) return list
-  return list.filter(conv => {
-    const name = (conv.displayName || conv.titre || '').toLowerCase()
-    const preview = (conv.last?.text || '').toLowerCase()
-    return name.includes(q) || preview.includes(q)
-  })
+  if (q) {
+    list = list.filter(conv => {
+      const name = (conv.displayName || conv.titre || '').toLowerCase()
+      const preview = (conv.last?.text || '').toLowerCase()
+      return name.includes(q) || preview.includes(q)
+    })
+  }
+  return list
+    .slice()
+    .sort((a, b) => {
+      const aFav = isFavorite(a.id) ? 1 : 0
+      const bFav = isFavorite(b.id) ? 1 : 0
+      if (aFav !== bFav) return bFav - aFav
+      const aUnread = getUnreadCount(a) > 0 ? 1 : 0
+      const bUnread = getUnreadCount(b) > 0 ? 1 : 0
+      if (aUnread !== bUnread) return bUnread - aUnread
+      const aTime = a.last?.ts ? new Date(a.last.ts).getTime() : 0
+      const bTime = b.last?.ts ? new Date(b.last.ts).getTime() : 0
+      if (aTime !== bTime) return bTime - aTime
+      const aName = (a.displayName || a.titre || '').toLowerCase()
+      const bName = (b.displayName || b.titre || '').toLowerCase()
+      return aName.localeCompare(bName)
+    })
 })
 
 const conversationFilterStats = computed(() => {
@@ -713,6 +769,19 @@ const conversationFilterStats = computed(() => {
 })
 
 const totalConversations = computed(() => conversations.value.length)
+const conversationBuckets = computed(() => {
+  const list = filteredConversations.value || []
+  if (!list.length) return []
+  if (conversationFilter.value !== 'all') {
+    return [{ key: 'default', title: null, items: list }]
+  }
+  const favorites = list.filter(conv => isFavorite(conv.id))
+  const others = list.filter(conv => !isFavorite(conv.id))
+  const buckets = []
+  if (favorites.length) buckets.push({ key: 'favorites', title: 'Favoris', items: favorites })
+  if (others.length) buckets.push({ key: 'others', title: favorites.length ? 'Autres conversations' : null, items: others })
+  return buckets
+})
 const activeConversationFilter = computed(
   () => conversationFilters.find(filter => filter.value === conversationFilter.value) || conversationFilters[0]
 )
@@ -791,6 +860,19 @@ const displayMessages = computed(() => {
   })
 })
 
+const messageTimeline = computed(() => {
+  const items = []
+  let lastKey = null
+  for (const msg of displayMessages.value || []) {
+    const key = buildDayKey(msg?.ts_msg)
+    if (key !== lastKey) {
+      items.push({ type: 'date', id: `day-${key}`, label: formatDayHeading(msg?.ts_msg) })
+      lastKey = key
+    }
+    items.push({ type: 'message', id: `msg-${msg.id_msg}`, message: msg })
+  }
+  return items
+})
 function clearMessageFilters() {
   messageSearch.value = ''
   messageSearchAuthor.value = 'all'
@@ -1005,19 +1087,34 @@ function markRead() {
 function onScroll() {
   const el = messagesBox.value
   if (!el) return
-  const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 24
-  if (nearBottom) scheduleMarkRead()
+  const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 48
+  isAtBottom.value = nearBottom
+  if (nearBottom) {
+    showJumpToLatest.value = false
+    scheduleMarkRead()
+  } else {
+    showJumpToLatest.value = (messages.value?.length || 0) > 0
+  }
 }
 
-function scrollToBottom() {
+function scrollToBottom(options = {}) {
   const el = messagesBox.value
   if (!el) return
-  el.scrollTop = el.scrollHeight
+  const top = el.scrollHeight
+  const behavior = options.behavior || 'auto'
+  if (typeof el.scrollTo === 'function') el.scrollTo({ top, behavior })
+  else el.scrollTop = top
+  isAtBottom.value = true
+  showJumpToLatest.value = false
 }
 
 function onAttachmentImageLoad() {
   // When an attachment image finishes loading, ensure the latest messages stay visible
   scrollToBottom()
+}
+
+function jumpToLatest() {
+  scrollToBottom({ behavior: 'smooth' })
 }
 
 function requestNotificationPermission() {
@@ -1034,6 +1131,30 @@ function showNotification(title, body) {
   setTimeout(() => n.close(), 4000)
 }
 
+function buildDayKey(ts) {
+  if (!ts) return 'unknown'
+  const date = new Date(ts)
+  if (Number.isNaN(date.getTime())) return 'unknown'
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function formatDayHeading(ts) {
+  if (!ts) return 'Date inconnue'
+  const date = new Date(ts)
+  if (Number.isNaN(date.getTime())) return 'Date inconnue'
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const day = new Date(date)
+  day.setHours(0, 0, 0, 0)
+  const diffDays = Math.round((today - day) / 86400000)
+  if (diffDays === 0) return "Aujourd'hui"
+  if (diffDays === 1) return 'Hier'
+  if (diffDays === -1) return 'Demain'
+  return date.toLocaleDateString('fr-BE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })
+}
 function formatDate(ts) {
   if (!ts) return ''
   const d = new Date(ts)
@@ -1829,6 +1950,8 @@ onMounted(async () => {
 
 watch(selectedConvId, async val => {
   if (val) {
+    isAtBottom.value = true
+    showJumpToLatest.value = false
     selectConversation(val)
     await fetchMessages()
     await fetchCallSessions(val)
@@ -1839,6 +1962,21 @@ watch(selectedConvId, async val => {
     typingLabel.value = ''
   }
 })
+
+watch(
+  () => messages.value.length,
+  (curr, prev) => {
+    if (curr <= prev) return
+    nextTick().then(() => {
+      const lastMessage = messages.value[messages.value.length - 1]
+      if (isAtBottom.value || lastMessage?.sentByMe) {
+        scrollToBottom({ behavior: prev === 0 ? 'auto' : 'smooth' })
+      } else {
+        showJumpToLatest.value = true
+      }
+    })
+  },
+)
 
 onUnmounted(() => {
   if (gifSearchTimer) {
@@ -2199,9 +2337,9 @@ onUnmounted(() => {
 .chat-messages {
   position: relative;
   flex: 1;
-  padding: 2rem 2.25rem;
+  padding: 1.5rem 1.6rem 1.75rem;
   overflow-y: auto;
-  background: radial-gradient(circle at top right, rgba(13, 110, 253, 0.08), transparent 65%), #f5f7fb;
+  background: radial-gradient(circle at top right, rgba(13, 110, 253, 0.06), transparent 60%), #eef2f8;
 }
 .chat-messages::before {
   content: '';
@@ -2214,6 +2352,35 @@ onUnmounted(() => {
 .chat-messages > * {
   position: relative;
   z-index: 1;
+}
+.jump-to-latest {
+  position: absolute;
+  right: 1.75rem;
+  bottom: 1.5rem;
+  border: none;
+  border-radius: 999px;
+  background: #0d6efd;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  box-shadow: 0 12px 30px rgba(13, 110, 253, 0.35);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.jump-to-latest:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 34px rgba(13, 110, 253, 0.4);
+}
+.jump-to-latest:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 2px;
+}
+.jump-to-latest i {
+  font-size: 1rem;
 }
 .chat-state {
   display: flex;
@@ -2231,36 +2398,75 @@ onUnmounted(() => {
 .chat-history {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  min-height: 100%;
+  gap: 0.75rem;
 }
 .messages-stack {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 0.65rem;
+  margin-top: auto;
+  padding-bottom: 1.5rem;
+}
+.timeline-entry {
+  display: contents;
+}
+.day-divider {
+  position: sticky;
+  top: 0.75rem;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 5;
+  margin: 0.5rem 0 0.35rem;
+}
+.day-divider-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(15, 38, 105, 0.12);
+  color: #44537a;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: 0 8px 18px rgba(15, 38, 105, 0.12);
+}
+.day-divider-label::before,
+.day-divider-label::after {
+  content: '';
+  display: block;
+  width: 12px;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.3;
 }
 .chat-bubble {
-  max-width: 72%;
-  padding: 1rem 1.35rem;
-  border-radius: 22px;
+  max-width: min(70%, 420px);
+  padding: 0.65rem 0.9rem;
+  border-radius: 16px;
   word-break: break-word;
   position: relative;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(211, 222, 243, 0.6);
-  box-shadow: 0 18px 38px rgba(15, 38, 105, 0.12);
-  backdrop-filter: blur(6px);
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(207, 218, 240, 0.65);
+  box-shadow: 0 10px 24px rgba(15, 38, 105, 0.15);
+  backdrop-filter: blur(4px);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .chat-bubble.sent {
-  background: linear-gradient(135deg, #2157d3 40%, #0d6efd 100%);
+  background: linear-gradient(135deg, #1d5bff 0%, #4c8dff 100%);
   color: #fff;
   margin-left: auto;
   border-color: transparent;
+  box-shadow: 0 12px 28px rgba(29, 91, 255, 0.28);
 }
 .chat-bubble.received {
-  background: rgba(255, 255, 255, 0.92);
-  color: #2d3245;
+  background: rgba(255, 255, 255, 0.98);
+  color: #1f2333;
   margin-right: auto;
-  border-color: rgba(211, 222, 243, 0.8);
+  border-color: rgba(207, 218, 240, 0.75);
 }
 .chat-bubble:hover {
   transform: translateY(-1px);
@@ -2269,10 +2475,10 @@ onUnmounted(() => {
 .bubble-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  opacity: 0.9;
-  margin-bottom: 0.25rem;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  opacity: 0.85;
+  margin-bottom: 0.2rem;
 }
 .bubble-header .name {
   font-weight: 600;
@@ -2288,15 +2494,16 @@ onUnmounted(() => {
   color: #fff;
 }
 .bubble-body {
-  font-size: 1.02em;
-  line-height: 1.65;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
 }
 .chat-bubble:after {
   content: '';
   position: absolute;
   bottom: 0;
-  width: 14px;
-  height: 14px;
+  width: 11px;
+  height: 11px;
   background: inherit;
 }
 .chat-bubble.received:after {
@@ -2313,8 +2520,8 @@ onUnmounted(() => {
 }
 .bubble-actions {
   position: absolute;
-  right: 0.4rem;
-  bottom: 0.35rem;
+  right: 0.3rem;
+  bottom: 0.25rem;
   opacity: 0;
   transform: translateY(3px);
   transition: all 0.12s ease;
@@ -2766,8 +2973,8 @@ mark.hl {
   border: none;
   background: transparent;
   color: #9aa4b5;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
@@ -2790,22 +2997,16 @@ mark.hl {
   color: #f0a400;
 }
 
-.conv-tile.active .favorite-toggle {
+.conv-item.active .favorite-toggle {
   color: rgba(255, 255, 255, 0.85);
 }
 
-.conv-tile.active .favorite-toggle:hover {
+.conv-item.active .favorite-toggle:hover {
   background: rgba(255, 255, 255, 0.18);
 }
 
-.conv-tile.active .favorite-toggle.active {
+.conv-item.active .favorite-toggle.active {
   color: #ffd976;
-}
-
-.conv-tile.favorite:not(.active) {
-  background: linear-gradient(135deg, rgba(255, 193, 7, 0.12), rgba(255, 193, 7, 0.02));
-  border-color: rgba(255, 193, 7, 0.35);
-  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.18);
 }
 
 .messages-wrapper {
@@ -2829,8 +3030,8 @@ mark.hl {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-  gap: 1.5rem;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  gap: 1.25rem;
   min-height: clamp(520px, 78vh, 880px);
   width: 100%;
 }
@@ -2838,8 +3039,8 @@ mark.hl {
   position: relative;
   display: flex;
   flex-direction: column;
-  padding: 1.5rem;
-  border-radius: 26px;
+  padding: 1.25rem;
+  border-radius: 24px;
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid #dbe2f3;
   box-shadow: 0 18px 48px rgba(15, 38, 105, 0.08);
@@ -2869,15 +3070,6 @@ mark.hl {
   border-color: #0d6efd;
   box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.18);
   background: #fff;
-}
-.conv-list-scroll {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  width: 100%;
 }
 .conv-list-header {
   display: flex;
@@ -2951,167 +3143,204 @@ mark.hl {
   margin: 0 -0.5rem;
   padding: 0 0.5rem 0.5rem;
 }
-.conv-content {
+.conv-empty {
+  background: transparent;
+}
+
+.conv-sections {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 1.1rem;
 }
-.conv-name-row {
+.conv-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 1.2rem;
+}
+
+.conv-section:last-of-type {
+  margin-bottom: 0;
+}
+
+.conv-section-title {
+  margin: 0 0 0.35rem 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6c7898;
+}
+
+.conv-list-scroll {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: 100%;
+}
+
+.conv-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 16px;
+  border: 1px solid transparent;
+  background: rgba(247, 249, 255, 0.92);
+  cursor: pointer;
+  box-shadow: 0 10px 22px rgba(15, 38, 105, 0.08);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.conv-item.unread {
+  border-color: rgba(13, 110, 253, 0.24);
+}
+
+.conv-item.favorite:not(.active) {
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.12), rgba(255, 193, 7, 0.02));
+  border-color: rgba(255, 193, 7, 0.35);
+  box-shadow: 0 8px 20px rgba(255, 193, 7, 0.2);
+}
+
+.conv-item:hover {
+  transform: translateY(-2px);
+  border-color: rgba(13, 110, 253, 0.28);
+  background: #f0f5ff;
+  box-shadow: 0 16px 28px rgba(13, 110, 253, 0.18);
+}
+
+.conv-item.active {
+  background: linear-gradient(135deg, #2157d3, #0d6efd);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 22px 44px rgba(13, 110, 253, 0.35);
+}
+
+.conv-item-leading .avatar-list,
+.conv-item-leading .avatar-list-placeholder {
+  width: 38px;
+  height: 38px;
+}
+
+.conv-item-body {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.conv-item-header {
+  display: flex;
+  align-items: center;
   gap: 0.5rem;
 }
-.conv-meta-right {
+
+.conv-name {
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: #1f3b76;
+}
+
+.conv-item.active .conv-name {
+  color: #fff;
+}
+
+.conv-time {
+  margin-left: auto;
+  font-size: 0.74rem;
+  color: #7383a6;
+}
+
+.conv-item.active .conv-time {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.conv-item-preview {
+  font-size: 0.84rem;
+  color: #6c7898;
+}
+
+.conv-item.active .conv-item-preview {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.conv-item-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.conv-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.conv-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: rgba(99, 102, 241, 0.12);
+  color: #334766;
+  border: 1px solid rgba(99, 102, 241, 0.22);
+}
+
+.conv-tag.favorite {
+  background: rgba(255, 193, 7, 0.16);
+  border-color: rgba(255, 193, 7, 0.32);
+  color: #8f6a00;
+}
+
+.conv-item.active .conv-tag {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.conv-tag i {
+  font-size: 0.75rem;
+}
+
+.conv-item-meta {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
 }
-.conv-preview {
-  font-size: 0.92rem;
-  color: #6c7898;
-}
-.conv-flags {
-  display: flex;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-}
-.conv-flag {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-  background: rgba(13, 110, 253, 0.12);
-  color: #1f3b76;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  text-transform: uppercase;
-}
-.conv-flag.favorite {
-  background: rgba(255, 193, 7, 0.2);
-  color: #8f6a00;
-}
-.conv-flag i {
-  font-size: 0.75rem;
-}
-.conv-empty {
-  background: transparent;
-}
-.conv-tile {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.85rem 1rem;
-  border-radius: 20px;
-  border: 1px solid transparent;
-  background: rgba(248, 250, 255, 0.92);
-  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, border-color 0.18s ease;
-  cursor: pointer;
-  box-shadow: 0 12px 28px rgba(15, 38, 105, 0.08);
-}
-.conv-tile:hover {
-  transform: translateY(-3px);
-  background: #f0f4ff;
-  border-color: rgba(13, 110, 253, 0.18);
-  box-shadow: 0 18px 36px rgba(13, 110, 253, 0.16);
-}
-.conv-tile.active {
-  background: linear-gradient(135deg, #2157d3, #0d6efd);
-  color: #fff;
-  box-shadow: 0 22px 44px rgba(13, 110, 253, 0.35);
-}
-.avatar-list {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  object-fit: cover;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-}
-.avatar-list-placeholder {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #e9eefb;
-  color: #425;
-  font-weight: 700;
-}
-.avatar-wrap {
-  position: relative;
-}
-.group-ind {
-  position: absolute;
-  bottom: -4px;
-  right: -4px;
-  background: #0d6efd;
-  color: #fff;
-  border-radius: 10px;
-  width: 18px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
-}
-.avatar-list-placeholder.group {
-  background: #dfe8ff;
-}
-.conv-name {
-  font-weight: 600;
-}
-.conv-time {
-  font-size: 0.8rem;
-  color: #7a86a5;
-}
-.conv-tile.active .conv-time {
-  color: #e8f1ff;
-}
-.conv-preview {
-  font-size: 0.92rem;
-  color: #6c7898;
-}
-.conv-tile.active .conv-preview {
-  color: rgba(255, 255, 255, 0.85);
-  opacity: 1;
-}
-.conv-tile.active .conv-meta-chip,
-.conv-tile.active .conv-flag {
-  background: rgba(255, 255, 255, 0.18);
-  color: rgba(255, 255, 255, 0.85);
-  border-color: rgba(255, 255, 255, 0.25);
-}
-.conv-tile.active .conv-meta-chip i,
-.conv-tile.active .conv-flag i {
-  color: inherit;
-}
-.conv-tile.active .conv-time {
-  color: rgba(255, 255, 255, 0.75);
-}
+
 .badge-unread {
   background: #ff4757;
   color: #fff;
   font-weight: 700;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   border-radius: 999px;
-  padding: 0.15rem 0.45rem;
+  padding: 0.12rem 0.4rem;
   box-shadow: 0 2px 6px rgba(255, 71, 87, 0.3);
 }
-
 .msg-row {
   display: flex;
   align-items: flex-end;
-  gap: 0.75rem;
-  margin: 0;
+  gap: 0.45rem;
+  margin: 0 0.35rem;
+  padding: 0;
   animation: bubbleIn 0.16s ease;
 }
 .msg-row.sent {
   justify-content: flex-end;
 }
+.msg-row:not(.sent) {
+  justify-content: flex-start;
+}
 @media (max-width: 1200px) {
   .messages-layout {
-    grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
   }
 }
 @media (max-width: 992px) {
@@ -3190,3 +3419,28 @@ mark.hl {
   padding: 0.75rem 1rem;
 }
 </style>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
