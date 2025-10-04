@@ -1,4 +1,7 @@
+version: "3.9"
+
 services:
+  # ────────────────────────────── DATABASE ──────────────────────────────
   db:
     image: postgres:14
     container_name: securechat_db
@@ -12,6 +15,7 @@ services:
       timeout: 3s
       retries: 5
 
+  # ────────────────────────────── BACKEND ──────────────────────────────
   backend:
     build:
       context: ./backend
@@ -25,19 +29,19 @@ services:
     environment:
       - FLASK_APP=app
       - FLASK_ENV=production
-    expose:
-      - "5000"
+    ports:                     # ⚠️ Ajout essentiel pour que Nginx hôte accède à Flask
+      - "5000:5000"
     volumes:
       - ./backend/app/migrations:/app/migrations
       - ./backend/app/static/avatars:/app/app/static/avatars
       - ./backend/app/static/uploads:/app/app/static/uploads
     healthcheck:
-      # nécessite curl dans l'image backend (cf Dockerfile ci-dessus)
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5000/api/health >/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
 
+  # ────────────────────────────── FRONTEND ──────────────────────────────
   frontend:
     build:
       context: ./frontend/secure_messagerie
@@ -47,17 +51,20 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    expose:
-      - "80"
+    ports:                     # ⚠️ Ajout essentiel pour Nginx hôte
+      - "8080:80"
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost/ || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 5
 
+# ────────────────────────────── VOLUMES / NETWORK ──────────────────────────────
 volumes:
   db_data:
 
-networks:
-  securechat_net:
-    external: true
+# Pas besoin d’un réseau externe ici : tout reste sur bridge par défaut.
+# Si tu veux que d’autres conteneurs externes y accèdent → décommente :
+# networks:
+#   securechat_net:
+#     external: true
