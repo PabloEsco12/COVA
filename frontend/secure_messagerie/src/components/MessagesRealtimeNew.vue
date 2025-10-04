@@ -118,9 +118,10 @@
                 </li>
               </ul>
             </div>
-          </div>          <div v-else class="conv-empty text-center text-muted py-4">
+          </div>
+          <div v-else class="conv-empty text-center text-muted py-4">
             <i class="bi bi-search mb-2 d-block fs-4"></i>
-            <span>Aucune conversation trouvee</span>
+            <span>Aucune conversation trouvée</span>
           </div>
         </div>
       </aside>
@@ -299,7 +300,12 @@
                       </div>
                     </template>
                     <template v-else>
-                      {{ item.message.contenu_chiffre || (item.message.files?.length ? `${item.message.files.length} pi�ce(s) jointe(s)` : '') }}
+                      {{
+                        item.message.contenu_chiffre ||
+                          (item.message.files?.length
+                            ? `${item.message.files.length} pièce(s) jointe(s)`
+                            : '')
+                      }}
                     </template>
                   </div>
 
@@ -314,7 +320,7 @@
                         <button
                           type="button"
                           class="attachment-thumb"
-                          :aria-label="`T�l�charger ${file.filename}`"
+                          :aria-label="`Télécharger ${file.filename}`"
                           @click="downloadAttachment(file)"
                         >
                           <img
@@ -355,7 +361,7 @@
                     <div class="reaction-picker" v-if="reactionPickerFor === item.message.id_msg">
                       <emoji-picker
                         class="reaction-emoji-picker"
-                        skin-tone-emoji="??"
+                        skin-tone-emoji="👍"
                         @emoji-click="event => onReactionEmoji(item.message.id_msg, event)"
                       ></emoji-picker>
                     </div>
@@ -390,8 +396,7 @@
         <i class="bi bi-arrow-down-short"></i>
         Derniers messages
       </button>
-    </div>
-    <form @submit.prevent="sendMessage" class="chat-input">
+      <form @submit.prevent="sendMessage" class="chat-input">
         <div class="composer-bar">
           <div class="composer-tools">
             <button
@@ -427,7 +432,7 @@
             v-model="newMessage"
             type="text"
             class="composer-input"
-            placeholder="Écrire un message..."
+            placeholder="Écrire un message..."
             :disabled="loading || sendingMessage"
             @input="handleTyping"
             autocomplete="off"
@@ -1211,7 +1216,7 @@ async function fetchMessages() {
   }
   loading.value = true
   try {
-  const res = await api.get(`/conversations/${selectedConvId.value}/messages/`)
+    const res = await api.get(`/conversations/${selectedConvId.value}/messages/`)
     messages.value = (res.data || []).map(m => ({
       ...m,
       sentByMe: m.sender_id === userId,
@@ -1220,7 +1225,7 @@ async function fetchMessages() {
       reaction_summary: m.reaction_summary || [],
     }))
     await nextTick()
-    scrollToBottom()
+    scrollToBottom({ behavior: 'auto' })
     scheduleMarkRead()
   } catch (e) {
     messages.value = []
@@ -1940,6 +1945,8 @@ onMounted(async () => {
   await fetchConversations()
   if (selectedConvId.value) selectConversation(selectedConvId.value)
   await fetchMessages()
+  await nextTick()
+  scrollToBottom({ behavior: 'auto' })
   await fetchCallSessions()
   ensureSocket()
   if (selectedConvId.value) joinRoom(selectedConvId.value)
@@ -2337,17 +2344,20 @@ onUnmounted(() => {
 .chat-messages {
   position: relative;
   flex: 1;
-  padding: 1.5rem 1.6rem 1.75rem;
+  padding: 1.25rem 1.15rem 1.5rem;
   overflow-y: auto;
-  background: radial-gradient(circle at top right, rgba(13, 110, 253, 0.06), transparent 60%), #eef2f8;
+  background: #efeae2;
+  background-image: radial-gradient(circle at top left, rgba(0, 0, 0, 0.03) 0, transparent 55%),
+    radial-gradient(circle at bottom right, rgba(0, 0, 0, 0.02) 0, transparent 45%);
 }
 .chat-messages::before {
   content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(circle at bottom left, rgba(99, 102, 241, 0.08), transparent 60%);
-  opacity: 0.8;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.25), transparent 18%),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.18), transparent 22%);
+  opacity: 0.6;
 }
 .chat-messages > * {
   position: relative;
@@ -2399,40 +2409,40 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   min-height: 100%;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 .messages-stack {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.4rem;
   margin-top: auto;
-  padding-bottom: 1.5rem;
+  padding-bottom: 1rem;
 }
 .timeline-entry {
   display: contents;
 }
 .day-divider {
   position: sticky;
-  top: 0.75rem;
+  top: 0.4rem;
   display: flex;
   justify-content: center;
   pointer-events: none;
   z-index: 5;
-  margin: 0.5rem 0 0.35rem;
+  margin: 0.35rem 0;
 }
 .day-divider-label {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.25rem 0.75rem;
+  gap: 0.35rem;
+  padding: 0.2rem 0.65rem;
   border-radius: 999px;
-  background: rgba(15, 38, 105, 0.12);
-  color: #44537a;
-  font-size: 0.72rem;
+  background: rgba(50, 55, 60, 0.16);
+  color: #2f3033;
+  font-size: 0.7rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  box-shadow: 0 8px 18px rgba(15, 38, 105, 0.12);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 .day-divider-label::before,
 .day-divider-label::after {
@@ -2441,61 +2451,59 @@ onUnmounted(() => {
   width: 12px;
   height: 1px;
   background: currentColor;
-  opacity: 0.3;
+  opacity: 0.35;
 }
 .chat-bubble {
-  max-width: min(70%, 420px);
-  padding: 0.65rem 0.9rem;
-  border-radius: 16px;
+  max-width: min(65%, 360px);
+  padding: 0.5rem 0.75rem 0.45rem;
+  border-radius: 18px;
   word-break: break-word;
   position: relative;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(207, 218, 240, 0.65);
-  box-shadow: 0 10px 24px rgba(15, 38, 105, 0.15);
-  backdrop-filter: blur(4px);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.05);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 .chat-bubble.sent {
-  background: linear-gradient(135deg, #1d5bff 0%, #4c8dff 100%);
-  color: #fff;
+  background: #d9fdd3;
+  color: #202020;
   margin-left: auto;
-  border-color: transparent;
-  box-shadow: 0 12px 28px rgba(29, 91, 255, 0.28);
+  border-color: rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
 }
 .chat-bubble.received {
-  background: rgba(255, 255, 255, 0.98);
-  color: #1f2333;
+  background: #ffffff;
+  color: #1f1f1f;
   margin-right: auto;
-  border-color: rgba(207, 218, 240, 0.75);
 }
 .chat-bubble:hover {
   transform: translateY(-1px);
-  box-shadow: 0 22px 44px rgba(15, 38, 105, 0.18);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
 }
 .bubble-header {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.78rem;
-  opacity: 0.85;
-  margin-bottom: 0.2rem;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  opacity: 0.75;
+  margin-bottom: 0.15rem;
 }
 .bubble-header .name {
   font-weight: 600;
 }
 .bubble-header .time {
-  font-size: 0.78rem;
-  color: #8a93ad;
+  font-size: 0.72rem;
+  color: #6b6b6b;
 }
 .chat-bubble.sent .bubble-header .time {
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(0, 0, 0, 0.5);
 }
 .chat-bubble.sent .bubble-header .name {
-  color: #fff;
+  color: #1a1a1a;
 }
 .bubble-body {
-  font-size: 0.9rem;
-  line-height: 1.45;
+  font-size: 0.85rem;
+  line-height: 1.4;
   white-space: pre-wrap;
 }
 .chat-bubble:after {
@@ -2507,16 +2515,16 @@ onUnmounted(() => {
   background: inherit;
 }
 .chat-bubble.received:after {
-  left: -6px;
+  left: -5px;
   border-bottom-right-radius: 14px;
   transform: translateY(-2px) rotate(45deg);
-  box-shadow: -2px 2px 4px rgba(0, 0, 0, 0.06);
+  box-shadow: -1px 1px 3px rgba(0, 0, 0, 0.04);
 }
 .chat-bubble.sent:after {
-  right: -6px;
+  right: -5px;
   border-bottom-left-radius: 14px;
   transform: translateY(-2px) rotate(-45deg);
-  box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.05);
 }
 .bubble-actions {
   position: absolute;
@@ -3327,8 +3335,8 @@ mark.hl {
 .msg-row {
   display: flex;
   align-items: flex-end;
-  gap: 0.45rem;
-  margin: 0 0.35rem;
+  gap: 0.35rem;
+  margin: 0 0.2rem;
   padding: 0;
   animation: bubbleIn 0.16s ease;
 }
