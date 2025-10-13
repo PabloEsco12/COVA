@@ -25,7 +25,7 @@ services:
     environment:
       - FLASK_APP=app
       - FLASK_ENV=production
-    # IMPORTANT: publier uniquement sur localhost (pas sur l’IP publique)
+      - FRONTEND_URL=https://covamessagerie.be
     ports:
       - "127.0.0.1:5000:5000"
     volumes:
