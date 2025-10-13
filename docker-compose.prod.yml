@@ -11,8 +11,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
+      start_period: 10s
     labels:
-      - autoheal=true   # ← Autoheal peut aussi surveiller la DB
+      - autoheal=true  # Autoheal peut redémarrer la DB si unhealthy
 
   backend:
     build:
@@ -27,6 +28,7 @@ services:
     environment:
       - FLASK_APP=app
       - FLASK_ENV=production
+    # Expose en local uniquement (reverse-proxy Nginx système)
     ports:
       - "127.0.0.1:5000:5000"
     volumes:
@@ -40,16 +42,18 @@ services:
       retries: 5
       start_period: 25s
     labels:
-      - autoheal=true   # ← important
+      - autoheal=true
 
   frontend:
     build:
       context: ./frontend/secure_messagerie
+      dockerfile: Dockerfile.prod   # ⚠️ utilise l'image Nginx prod, pas Vite dev
     container_name: securechat_frontend
     restart: always
     depends_on:
       backend:
         condition: service_healthy
+    # Servi en local, votre Nginx système reverse-proxy vers :8080
     ports:
       - "127.0.0.1:8080:80"
     healthcheck:
@@ -57,9 +61,9 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 20s
     labels:
-      - autoheal=true   # ← important
+      - autoheal=true
 
   uptime_kuma:
     image: louislam/uptime-kuma:latest
@@ -67,19 +71,19 @@ services:
     restart: always
     environment:
       - BASE_PATH=/monitoring
+    # Exposé en local, reverse-proxy Nginx système vers /monitoring/
     ports:
       - "127.0.0.1:3001:3001"
     volumes:
       - /srv/uptime-kuma:/app/data
-    # pas d’autoheal ici, Kuma t’alerte si lui-même tombe (voir plus bas)
 
   autoheal:
     image: willfarrell/autoheal:latest
     container_name: autoheal
     restart: always
     environment:
-      - AUTOHEAL_CONTAINER_LABEL=only   # ← Ne soigne que les conteneurs avec label autoheal=true
-      - AUTOHEAL_INTERVAL=20            # ← vérifie toutes les 20s
+      - AUTOHEAL_CONTAINER_LABEL=only  # Ne soigne que les conteneurs avec label autoheal=true
+      - AUTOHEAL_INTERVAL=20
       - CURL_TIMEOUT=10
       - DOCKER_SOCK=/var/run/docker.sock
     volumes:
