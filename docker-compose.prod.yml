@@ -8,9 +8,11 @@ services:
       - db_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    labels:
+      - autoheal=true   # ← Autoheal peut aussi surveiller la DB
 
   backend:
     build:
@@ -25,7 +27,6 @@ services:
     environment:
       - FLASK_APP=app
       - FLASK_ENV=production
-      - FRONTEND_URL=https://covamessagerie.be
     ports:
       - "127.0.0.1:5000:5000"
     volumes:
@@ -37,17 +38,18 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+      start_period: 25s
+    labels:
+      - autoheal=true   # ← important
 
   frontend:
     build:
       context: ./frontend/secure_messagerie
-      dockerfile: Dockerfile.prod
     container_name: securechat_frontend
     restart: always
     depends_on:
       backend:
         condition: service_healthy
-    # IMPORTANT: publier sur localhost
     ports:
       - "127.0.0.1:8080:80"
     healthcheck:
@@ -55,6 +57,9 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
+      start_period: 15s
+    labels:
+      - autoheal=true   # ← important
 
   uptime_kuma:
     image: louislam/uptime-kuma:latest
@@ -62,18 +67,21 @@ services:
     restart: always
     environment:
       - BASE_PATH=/monitoring
-    # publier sur localhost
     ports:
       - "127.0.0.1:3001:3001"
     volumes:
       - /srv/uptime-kuma:/app/data
+    # pas d’autoheal ici, Kuma t’alerte si lui-même tombe (voir plus bas)
 
   autoheal:
     image: willfarrell/autoheal:latest
     container_name: autoheal
     restart: always
     environment:
-      - AUTOHEAL_CONTAINER_LABEL=all
+      - AUTOHEAL_CONTAINER_LABEL=only   # ← Ne soigne que les conteneurs avec label autoheal=true
+      - AUTOHEAL_INTERVAL=20            # ← vérifie toutes les 20s
+      - CURL_TIMEOUT=10
+      - DOCKER_SOCK=/var/run/docker.sock
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
