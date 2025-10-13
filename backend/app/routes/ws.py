@@ -73,7 +73,12 @@ def on_typing(data):
     if not user_id or not conv_id:
         return
     room = f"conv_{conv_id}"
-    emit("typing", {"user_id": user_id, "is_typing": is_typing}, to=room, include_self=False)
+    emit(
+        "typing",
+        {"user_id": user_id, "is_typing": is_typing, "conv_id": conv_id},
+        to=room,
+        include_self=False,
+    )
 
 
 @socketio.on("mark_read")
@@ -109,5 +114,8 @@ def on_mark_read(data):
         updated.append(mid)
     if updated:
         db.session.commit()
-        emit("message_read", {"user_id": user_id, "message_ids": updated}, to=f"conv_{conv_id}")
-
+        emit(
+            "message_read",
+            {"user_id": user_id, "message_ids": updated, "conv_id": conv_id},
+            to=f"conv_{conv_id}",
+        )

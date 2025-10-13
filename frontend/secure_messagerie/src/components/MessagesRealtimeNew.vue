@@ -299,12 +299,11 @@
                         <button class="btn btn-sm btn-secondary" @click="cancelEdit">Annuler</button>
                       </div>
                     </template>
-                    <template v-else>
+                                                            <template v-else>
                       {{
                         item.message.contenu_chiffre ||
-                          (item.message.files?.length
-                            ? `${item.message.files.length} pièce(s) jointe(s)`
-                            : '')
+                          attachmentsLabel(item.message.files) ||
+                          ''
                       }}
                     </template>
                   </div>
@@ -694,6 +693,44 @@ function saveFavorites() {
   try {
     localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favoriteConversationIds.value))
   } catch {}
+}
+
+function normalizeMessageText(raw) {
+  if (raw == null) return ''
+  return String(raw)
+    .replace(/\\r\\n/g, '\n')
+    .replace(/\\n/g, '\n')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/\u00a0/g, ' ')
+}
+
+function attachmentsLabel(input) {
+  const count = Array.isArray(input) ? input.length : Number(input) || 0
+  if (!count) return ''
+  const plural = count > 1 ? 's' : ''
+  return `${count} pièce${plural} jointe${plural}`
+}
+
+function previewTextForMessage(message) {
+  if (!message) return ''
+  const compact = normalizeMessageText(message.contenu_chiffre || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (compact) return compact
+  return attachmentsLabel(message.files)
+}
+
+function applyConversationPreview(conv, message) {
+  if (!conv || !message) return
+  const text = previewTextForMessage(message) || 'Message'
+  const ts = message.ts_msg || message.ts || null
+  const sender = message.sender_id ?? (message.sentByMe ? userId : null)
+  conv.last = {
+    text,
+    ts,
+    sentByMe: sender === userId || message.sentByMe === true,
+  }
 }
 
 function toggleFavorite(id) {
@@ -1167,12 +1204,24 @@ function formatDate(ts) {
 }
 
 async function fetchConversations() {
-  try {
-    const res = await api.get(`/conversations/`)
-    conversations.value = (res.data || []).map(c => ({ ...c }))
-    await enrichConversations()
-    applyFavoriteStateToConversations()
-    if (!selectedConvId.value && conversations.value.length) {
+    try {
+      const res = await api.get(`/conversations/`)
+      conversations.value = (res.data || []).map(c => ({ ...c }))
+      for (const conv of conversations.value) {
+        if (conv && conv.last && typeof conv.last.text === 'string') {
+          const preview = previewTextForMessage({
+            contenu_chiffre: conv.last.text,
+            files: conv.last.files || [],
+            ts_msg: conv.last.ts || conv.last.ts_msg,
+            sender_id: conv.last.sender_id,
+            sentByMe: conv.last.sentByMe,
+          })
+          conv.last.text = preview || conv.last.text || 'Message'
+        }
+      }
+      await enrichConversations()
+      applyFavoriteStateToConversations()
+      if (!selectedConvId.value && conversations.value.length) {
       selectConversation(conversations.value[0].id)
     }
   } catch (e) {
@@ -1201,9 +1250,13 @@ async function enrichConversations() {
       const arr = mres.data || []
       const last = arr[arr.length - 1]
       if (last) {
-        const text = (last.contenu_chiffre || '').trim()
-        const fallback = last.files?.length ? `${last.files.length} pièce(s) jointe(s)` : ''
-        conv.last = { text: text || fallback || 'Message', ts: last.ts_msg, sentByMe: last.sender_id === userId }
+        const normalizedLast = {
+          ...last,
+          sender_id: last.sender_id ?? null,
+          contenu_chiffre: normalizeMessageText(last.contenu_chiffre),
+          files: last.files || [],
+        }
+        applyConversationPreview(conv, normalizedLast)
       }
     } catch {}
   }
@@ -1216,16 +1269,23 @@ async function fetchMessages() {
   }
   loading.value = true
   try {
-    const res = await api.get(`/conversations/${selectedConvId.value}/messages/`)
-    messages.value = (res.data || []).map(m => ({
-      ...m,
-      sentByMe: m.sender_id === userId,
-      files: m.files || [],
-      reactions: m.reactions || [],
-      reaction_summary: m.reaction_summary || [],
-    }))
-    await nextTick()
-    scrollToBottom({ behavior: 'auto' })
+      const res = await api.get(`/conversations/${selectedConvId.value}/messages/`)
+      messages.value = (res.data || []).map(m => ({
+        ...m,
+        sentByMe: m.sender_id === userId,
+        sender_id: m.sender_id ?? null,
+        contenu_chiffre: normalizeMessageText(m.contenu_chiffre),
+        files: m.files || [],
+        reactions: m.reactions || [],
+        reaction_summary: m.reaction_summary || [],
+      }))
+      const latest = messages.value[messages.value.length - 1]
+      if (latest) {
+        const convEntry = conversations.value.find(c => c.id === selectedConvId.value)
+        if (convEntry) applyConversationPreview(convEntry, latest)
+      }
+      await nextTick()
+      scrollToBottom({ behavior: 'auto' })
     scheduleMarkRead()
   } catch (e) {
     messages.value = []
@@ -1657,21 +1717,25 @@ async function sendMessage() {
   showEmojiPicker.value = false
   showGifPicker.value = false
   try {
-    const res = await api.post(
-      `/conversations/${selectedConvId.value}/messages/`,
-      formData,
-    )
-    const created = {
-      ...res.data,
-      sentByMe: true,
-      files: res.data.files || [],
-      reactions: res.data.reactions || [],
-      reaction_summary: res.data.reaction_summary || [],
-    }
-    messages.value.push(created)
-    resetPendingFiles()
-    await nextTick()
-    scrollToBottom()
+      const res = await api.post(
+        `/conversations/${selectedConvId.value}/messages/`,
+        formData,
+      )
+      const created = {
+        ...res.data,
+        sentByMe: true,
+        files: res.data.files || [],
+        reactions: res.data.reactions || [],
+        reaction_summary: res.data.reaction_summary || [],
+      }
+      created.sender_id = created.sender_id ?? userId
+      created.contenu_chiffre = normalizeMessageText(created.contenu_chiffre)
+      messages.value.push(created)
+      const convEntry = conversations.value.find(c => c.id === selectedConvId.value)
+      if (convEntry) applyConversationPreview(convEntry, created)
+      resetPendingFiles()
+      await nextTick()
+      scrollToBottom()
   } catch (e) {
     newMessage.value = content
     pendingFiles.value = attachments
@@ -1894,6 +1958,8 @@ function handleIncomingMessage(payload) {
     files: payload.files || [],
     reactions: payload.reactions || [],
     reaction_summary: payload.reaction_summary || [],
+    sender_id: payload.sender_id ?? null,
+    contenu_chiffre: normalizeMessageText(payload.contenu_chiffre),
     sentByMe: payload.sender_id === userId,
   }
   const already = messages.value.some(m => m.id_msg === normalized.id_msg)
@@ -1906,9 +1972,7 @@ function handleIncomingMessage(payload) {
   }
   const convEntry = conversations.value.find(c => c.id === normalized.conv_id)
   if (convEntry) {
-    const text = (normalized.contenu_chiffre || '').trim()
-    const fallback = normalized.files.length ? `${normalized.files.length} pièce(s) jointe(s)` : ''
-    convEntry.last = { text: text || fallback || 'Message', ts: normalized.ts_msg, sentByMe: normalized.sentByMe }
+    applyConversationPreview(convEntry, normalized)
   }
   if (normalized.conv_id === selectedConvId.value) {
     messages.value.push(normalized)
@@ -1917,8 +1981,8 @@ function handleIncomingMessage(payload) {
       if (!normalized.sentByMe) scheduleMarkRead()
     })
     if (!normalized.sentByMe && !document.hasFocus()) {
-      const text = (normalized.contenu_chiffre || '').trim()
-      const fallback = normalized.files.length ? `${normalized.files.length} pièce(s) jointe(s)` : 'Nouveau message'
+      const text = normalized.contenu_chiffre.trim()
+      const fallback = attachmentsLabel(normalized.files) || 'Nouveau message'
       showNotification('Nouveau message', text || fallback)
     }
   } else if (normalized.sender_id !== userId) {
@@ -2173,6 +2237,9 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex: 1;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   backdrop-filter: blur(18px);
 }
@@ -2349,6 +2416,7 @@ onUnmounted(() => {
   background: #efeae2;
   background-image: radial-gradient(circle at top left, rgba(0, 0, 0, 0.03) 0, transparent 55%),
     radial-gradient(circle at bottom right, rgba(0, 0, 0, 0.02) 0, transparent 45%);
+  min-height: 0;
 }
 .chat-messages::before {
   content: '';
@@ -3019,12 +3087,16 @@ mark.hl {
 
 .messages-wrapper {
   position: relative;
+  display: flex;
+  flex-direction: column;
   padding: 1.75rem;
   background: linear-gradient(135deg, rgba(13, 110, 253, 0.07), rgba(255, 255, 255, 0.9));
   border-radius: 32px;
   box-shadow: 0 24px 60px rgba(13, 38, 86, 0.12);
   overflow: hidden;
   margin-bottom: 1.5rem;
+  height: clamp(520px, 78vh, 880px);
+  min-height: clamp(520px, 78vh, 880px);
 }
 .messages-wrapper::before {
   content: '';
@@ -3042,6 +3114,9 @@ mark.hl {
   gap: 1.25rem;
   min-height: clamp(520px, 78vh, 880px);
   width: 100%;
+  height: 100%;
+  min-height: 0;
+  align-items: stretch;
 }
 .conv-list {
   position: relative;
@@ -3052,6 +3127,8 @@ mark.hl {
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid #dbe2f3;
   box-shadow: 0 18px 48px rgba(15, 38, 105, 0.08);
+  height: 100%;
+  min-height: 0;
   backdrop-filter: blur(18px);
   overflow: hidden;
 }
@@ -3150,6 +3227,7 @@ mark.hl {
   overflow-y: auto;
   margin: 0 -0.5rem;
   padding: 0 0.5rem 0.5rem;
+  min-height: 0;
 }
 .conv-empty {
   background: transparent;
@@ -3354,17 +3432,24 @@ mark.hl {
 @media (max-width: 992px) {
   .messages-wrapper {
     padding: 1rem;
+    height: auto;
+    min-height: auto;
   }
   .messages-layout {
     grid-template-columns: 1fr;
     min-height: auto;
+    height: auto;
     gap: 1rem;
   }
   .conv-list {
     border-radius: 24px;
+    height: auto;
+    min-height: 0;
   }
   .chat-container {
     border-radius: 24px;
+    height: auto;
+    min-height: 0;
   }
 }
 @media (max-width: 576px) {
@@ -3427,18 +3512,6 @@ mark.hl {
   padding: 0.75rem 1rem;
 }
 </style>
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
