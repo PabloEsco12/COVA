@@ -25,10 +25,9 @@ services:
     environment:
       - FLASK_APP=app
       - FLASK_ENV=production
-    expose:
-      - "5000"
-    networks:
-      - securechat_net
+    # IMPORTANT: publier uniquement sur localhost (pas sur l’IP publique)
+    ports:
+      - "127.0.0.1:5000:5000"
     volumes:
       - ./backend/app/migrations:/app/migrations
       - ./backend/app/static/avatars:/app/app/static/avatars
@@ -48,10 +47,9 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    expose:
-      - "80"
-    networks:
-      - securechat_net
+    # IMPORTANT: publier sur localhost
+    ports:
+      - "127.0.0.1:8080:80"
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost/ || exit 1"]
       interval: 30s
@@ -62,12 +60,11 @@ services:
     image: louislam/uptime-kuma:latest
     container_name: uptime_kuma
     restart: always
-    expose:
-      - "3001"
-    networks:
-      - securechat_net
     environment:
       - BASE_PATH=/monitoring
+    # publier sur localhost
+    ports:
+      - "127.0.0.1:3001:3001"
     volumes:
       - /srv/uptime-kuma:/app/data
 
@@ -82,7 +79,3 @@ services:
 
 volumes:
   db_data:
-
-networks:
-  securechat_net:
-    driver: bridge
