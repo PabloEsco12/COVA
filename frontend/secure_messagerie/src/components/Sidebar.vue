@@ -158,8 +158,8 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, defineProps, toRefs, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
 import { api, backendBase } from '@/utils/api'
+import { io } from 'socket.io-client'
 
 const props = defineProps({
   isDark: Boolean
@@ -168,7 +168,13 @@ const props = defineProps({
 const { isDark } = toRefs(props)
 const router = useRouter()
 
+const userId = Number(localStorage.getItem('user_id') || 0)
 const unreadCount = ref(0)
+const unreadByConversation = ref({})
+const activeConversationId = ref(null)
+const socketRef = ref(null)
+const conversationIds = ref([])
+const joinedRooms = new Set()
 const pseudo = ref('Utilisateur')
 const avatarUrl = ref(null)
 const isOnline = ref(typeof navigator !== 'undefined' ? navigator.onLine : true)
@@ -216,6 +222,140 @@ const onAvatarError = () => {
   }
 }
 
+const computeUnreadTotal = map =>
+  Object.values(map || {}).reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0)
+
+function setUnreadMap(map) {
+  const normalized = {}
+  if (map && typeof map === 'object') {
+    for (const [key, rawValue] of Object.entries(map)) {
+      const convId = String(key)
+      const count = Math.max(0, Number(rawValue) || 0)
+      if (count > 0) normalized[convId] = count
+    }
+  }
+  unreadByConversation.value = normalized
+  unreadCount.value = computeUnreadTotal(normalized)
+}
+
+function applyUnreadSummary(summary) {
+  const map = summary?.by_conversation || summary?.byConversation || summary || {}
+  setUnreadMap(map)
+  if (summary && Object.prototype.hasOwnProperty.call(summary, 'total')) {
+    const total = Number(summary.total)
+    if (!Number.isNaN(total)) unreadCount.value = total
+  }
+}
+
+async function loadUnreadSummary() {
+  try {
+    const res = await api.get(`/messages/unread_summary`)
+    applyUnreadSummary(res.data || {})
+  } catch (error) {
+    try {
+      const raw = JSON.parse(localStorage.getItem('unread_counts') || '{}') || {}
+      setUnreadMap(raw)
+    } catch {
+      setUnreadMap({})
+    }
+  }
+}
+
+function incrementUnread(convId, delta = 1) {
+  const id = Number(convId)
+  if (!id) return
+  const key = String(id)
+  const current = Number(unreadByConversation.value[key] || 0)
+  const next = current + Number(delta || 0)
+  const map = { ...unreadByConversation.value }
+  if (next > 0) map[key] = next
+  else delete map[key]
+  setUnreadMap(map)
+}
+
+function clearUnread(convId) {
+  const id = Number(convId)
+  if (!id) return
+  const key = String(id)
+  if (!unreadByConversation.value[key]) return
+  const map = { ...unreadByConversation.value }
+  delete map[key]
+  setUnreadMap(map)
+}
+
+function handleUnreadEvent(event) {
+  applyUnreadSummary(event?.detail || {})
+}
+
+function handleActiveConversationEvent(event) {
+  const convId = Number(event?.detail?.convId ?? 0)
+  activeConversationId.value = convId > 0 ? convId : null
+}
+
+function handleSocketMessage(payload) {
+  if (!payload) return
+  const convId = Number(payload.conv_id)
+  if (!convId) return
+  const sender = Number(payload.sender_id ?? payload.user_id ?? 0)
+  if (sender && userId && sender === userId) return
+  if (convId === activeConversationId.value) return
+  incrementUnread(convId)
+}
+
+function handleMessageRead(payload) {
+  if (!payload) return
+  const reader = Number(payload.user_id ?? payload.id_user ?? 0)
+  if (reader && userId && reader !== userId) return
+  const convId = Number(payload.conv_id)
+  if (!convId) return
+  clearUnread(convId)
+}
+
+function ensureSocketConnected() {
+  if (socketRef.value) return
+  try {
+    socketRef.value = io(backendBase, {
+      transports: ['websocket'],
+      auth: { token: localStorage.getItem('access_token') },
+    })
+    socketRef.value.on('connect', () => {
+      joinedRooms.clear()
+      joinKnownRooms()
+    })
+    socketRef.value.on('disconnect', () => {
+      joinedRooms.clear()
+    })
+    socketRef.value.on('message_created', handleSocketMessage)
+    socketRef.value.on('new_message', handleSocketMessage)
+    socketRef.value.on('message_read', handleMessageRead)
+  } catch (error) {
+    socketRef.value = null
+  }
+}
+
+function joinKnownRooms() {
+  if (!socketRef.value) return
+  for (const id of conversationIds.value || []) {
+    const convId = Number(id)
+    if (!convId || joinedRooms.has(convId)) continue
+    socketRef.value.emit('join_conversation', { conv_id: convId })
+    joinedRooms.add(convId)
+  }
+}
+
+async function loadConversations() {
+  try {
+    const res = await api.get(`/conversations/`)
+    const ids = (res.data || [])
+      .map(item => Number(item?.id ?? item?.id_conv ?? 0))
+      .filter(id => Number.isFinite(id) && id > 0)
+    conversationIds.value = ids
+    joinKnownRooms()
+  } catch {
+    conversationIds.value = []
+  }
+}
+
 onMounted(async () => {
   pseudo.value = localStorage.getItem('pseudo') || 'Utilisateur'
   avatarUrl.value = localStorage.getItem('avatar_url') || null
@@ -223,23 +363,19 @@ onMounted(async () => {
   if (typeof window !== 'undefined') {
     window.addEventListener('online', updateNetworkStatus)
     window.addEventListener('offline', updateNetworkStatus)
+    window.addEventListener('cova:unread', handleUnreadEvent)
+    window.addEventListener('cova:active-conversation', handleActiveConversationEvent)
   }
+
+  await loadUnreadSummary()
 
   const token = localStorage.getItem('access_token')
   if (!token) {
     return
   }
 
-  const headers = {
-    Authorization: `Bearer ${token}`
-  }
-
-  try {
-    const res = await api.get(`/messages/unread_count`)
-    unreadCount.value = res.data?.count || 0
-  } catch (e) {
-    unreadCount.value = 0
-  }
+  ensureSocketConnected()
+  await loadConversations()
 
   try {
     const profileRes = await api.get(`/me`)
@@ -285,7 +421,16 @@ onBeforeUnmount(() => {
   if (typeof window !== 'undefined') {
     window.removeEventListener('online', updateNetworkStatus)
     window.removeEventListener('offline', updateNetworkStatus)
+    window.removeEventListener('cova:unread', handleUnreadEvent)
+    window.removeEventListener('cova:active-conversation', handleActiveConversationEvent)
   }
+  if (socketRef.value) {
+    try {
+      socketRef.value.disconnect()
+    } catch {}
+    socketRef.value = null
+  }
+  joinedRooms.clear()
 })
 
 function formatRelativeTime(dateString) {

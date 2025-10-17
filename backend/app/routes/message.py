@@ -8,9 +8,11 @@ from uuid import uuid4
 from flask import Blueprint, current_app, jsonify, request, send_from_directory
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from marshmallow import ValidationError
+from sqlalchemy import func, or_
+from sqlalchemy.orm import aliased
 
 from ..extensions import db, limiter, socketio
-from ..models import Conversation, File, Message, Participation, Reaction
+from ..models import Conversation, File, Message, Participation, Reaction, MessageStatus
 from ..schemas_message import MessageSchema
 
 messages_bp = Blueprint("messages", __name__)
@@ -259,19 +261,51 @@ def toggle_reaction(msg_id):
 @limiter.limit("60/minute")
 def unread_count():
     user_id = int(get_jwt_identity())
-
-    conv_ids = [p.id_conv for p in Participation.query.filter_by(id_user=user_id)]
-    if not conv_ids:
-        return jsonify({"count": 0}), 200
-
+    status_alias = aliased(MessageStatus)
     count = (
-        Message.query.filter(
-            Message.conv_id.in_(conv_ids),
+        db.session.query(func.count(Message.id_msg))
+        .join(Participation, Participation.id_conv == Message.conv_id)
+        .outerjoin(
+            status_alias,
+            (status_alias.id_msg == Message.id_msg) & (status_alias.id_user == user_id),
+        )
+        .filter(
+            Participation.id_user == user_id,
             Message.sender_id != user_id,
-        ).count()
+            or_(status_alias.id_msg.is_(None), status_alias.etat != "read"),
+        )
+        .scalar()
     )
+    return jsonify({"count": int(count or 0)}), 200
 
-    return jsonify({"count": count}), 200
+
+@messages_bp.route("/messages/unread_summary", methods=["GET"])
+@jwt_required()
+@limiter.limit("60/minute")
+def unread_summary():
+    user_id = int(get_jwt_identity())
+    status_alias = aliased(MessageStatus)
+    rows = (
+        db.session.query(
+            Message.conv_id.label("conv_id"),
+            func.count(Message.id_msg).label("unread_count"),
+        )
+        .join(Participation, Participation.id_conv == Message.conv_id)
+        .outerjoin(
+            status_alias,
+            (status_alias.id_msg == Message.id_msg) & (status_alias.id_user == user_id),
+        )
+        .filter(
+            Participation.id_user == user_id,
+            Message.sender_id != user_id,
+            or_(status_alias.id_msg.is_(None), status_alias.etat != "read"),
+        )
+        .group_by(Message.conv_id)
+        .all()
+    )
+    by_conv = {str(conv_id): int(count or 0) for conv_id, count in rows}
+    total = int(sum(by_conv.values()))
+    return jsonify({"total": total, "by_conversation": by_conv}), 200
 
 
 # Utilities imported late to avoid circular import

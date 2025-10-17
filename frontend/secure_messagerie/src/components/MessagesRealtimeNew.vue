@@ -392,7 +392,8 @@
                 </div>
               </div>
             </div>
-          </div>\r\n        </div>
+          </div>
+        </div>
       </div>
       <button
         v-if="showJumpToLatest"
@@ -704,6 +705,83 @@ function saveFavorites() {
   } catch {}
 }
 
+function applyUnreadCountsToConversations() {
+  if (!Array.isArray(conversations.value)) return
+  for (const conv of conversations.value) {
+    const key = favoriteKey(conv.id)
+    conv.unread_count = Number(unreadCounts.value[key] || 0)
+  }
+}
+
+function saveUnreadToStorage(map = unreadCounts.value) {
+  try {
+    localStorage.setItem('unread_counts', JSON.stringify(map || {}))
+  } catch {}
+}
+
+function setUnreadCounts(map, options = {}) {
+  const { persist = true } = options
+  const normalized = {}
+  if (map && typeof map === 'object') {
+    for (const [rawKey, rawValue] of Object.entries(map)) {
+      const key = favoriteKey(rawKey)
+      const count = Math.max(0, Number(rawValue) || 0)
+      if (count > 0) normalized[key] = count
+    }
+  }
+  unreadCounts.value = normalized
+  applyUnreadCountsToConversations()
+  if (persist) saveUnreadToStorage(normalized)
+}
+
+function loadUnreadFromStorage() {
+  try {
+    const raw = JSON.parse(localStorage.getItem('unread_counts') || '{}') || {}
+    setUnreadCounts(raw, { persist: false })
+  } catch {
+    setUnreadCounts({}, { persist: false })
+  }
+}
+
+async function refreshUnreadFromServer() {
+  try {
+    const res = await api.get(`/messages/unread_summary`)
+    const map = res.data?.by_conversation || {}
+    setUnreadCounts(map)
+  } catch {
+    loadUnreadFromStorage()
+  }
+}
+
+function incrementUnread(convId, delta = 1) {
+  if (!convId) return
+  const key = favoriteKey(convId)
+  const current = Number(unreadCounts.value[key] || 0)
+  const next = current + Number(delta || 0)
+  const map = { ...unreadCounts.value }
+  if (next > 0) map[key] = next
+  else delete map[key]
+  setUnreadCounts(map)
+}
+
+function clearUnread(convId) {
+  if (!convId) return
+  const key = favoriteKey(convId)
+  if (!unreadCounts.value[key]) {
+    const conv = conversations.value.find(c => c.id === convId)
+    if (conv) conv.unread_count = 0
+    return
+  }
+  const map = { ...unreadCounts.value }
+  delete map[key]
+  setUnreadCounts(map)
+}
+
+function broadcastActiveConversation(convId) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('cova:active-conversation', { detail: { convId } }))
+}
+
 function normalizeMessageText(raw) {
   if (raw == null) return ''
   const str = String(raw)
@@ -849,6 +927,19 @@ const conversationFilterStats = computed(() => {
     if (conv.is_group) stats.groups += 1
   }
   return stats
+})
+
+const unreadSummary = computed(() => {
+  const map = {}
+  let total = 0
+  for (const conv of conversations.value || []) {
+    const count = getUnreadCount(conv)
+    if (count > 0) {
+      map[String(conv.id)] = count
+    }
+    total += count
+  }
+  return { total, byConversation: map }
 })
 
 const totalConversations = computed(() => conversations.value.length)
@@ -1005,19 +1096,6 @@ function highlightFilename(name) {
 function toggleMessageSearch() {
   showMessageSearch.value = !showMessageSearch.value
   if (!showMessageSearch.value) messageSearch.value = ''
-}
-
-function loadUnread() {
-  try {
-    unreadCounts.value = JSON.parse(localStorage.getItem('unread_counts') || '{}') || {}
-  } catch {
-    unreadCounts.value = {}
-  }
-}
-function saveUnread() {
-  try {
-    localStorage.setItem('unread_counts', JSON.stringify(unreadCounts.value || {}))
-  } catch {}
 }
 
 const titleSuggestion = computed(() => {
@@ -1269,6 +1347,7 @@ async function fetchConversations() {
       }
       await enrichConversations()
       applyFavoriteStateToConversations()
+      applyUnreadCountsToConversations()
       if (!selectedConvId.value && conversations.value.length) {
       selectConversation(conversations.value[0].id)
     }
@@ -1452,13 +1531,9 @@ function selectConversation(id) {
   }
   const conv = conversations.value.find(c => c.id === id)
   currentConvTitle.value = conv ? conv.displayName || conv.titre : 'Messagerie'
-  if (conv) conv.unread_count = 0
-  const key = favoriteKey(id)
-  if (unreadCounts.value[key]) {
-    unreadCounts.value[key] = 0
-    saveUnread()
-  }
+  clearUnread(id)
   joinRoom(id)
+  broadcastActiveConversation(id)
 }
 
 const partnerName = computed(() => {
@@ -2034,27 +2109,32 @@ function handleIncomingMessage(payload) {
       showNotification('Nouveau message', text || fallback)
     }
   } else if (normalized.sender_id !== userId) {
-    const key = favoriteKey(normalized.conv_id)
-    const nextCount = (unreadCounts.value[key] || 0) + 1
-    unreadCounts.value[key] = nextCount
-    if (convEntry) convEntry.unread_count = nextCount
-    saveUnread()
+    incrementUnread(normalized.conv_id)
   } else if (convEntry) {
-    convEntry.unread_count = 0
-    const key = favoriteKey(normalized.conv_id)
-    if (unreadCounts.value[key]) {
-      unreadCounts.value[key] = 0
-      saveUnread()
-    }
+    clearUnread(normalized.conv_id)
   }
 }
 
+const visibilityHandler = () => {
+  if (!document.hidden) scheduleMarkRead()
+}
+
+watch(
+  unreadSummary,
+  summary => {
+    if (typeof window === 'undefined') return
+    window.dispatchEvent(new CustomEvent('cova:unread', { detail: summary }))
+  },
+  { deep: true, immediate: true },
+)
+
 onMounted(async () => {
   requestNotificationPermission()
-  loadUnread()
+  loadUnreadFromStorage()
   loadFavorites()
   await fetchContacts()
   await fetchConversations()
+  await refreshUnreadFromServer()
   if (selectedConvId.value) selectConversation(selectedConvId.value)
   await fetchMessages()
   await nextTick()
@@ -2062,24 +2142,24 @@ onMounted(async () => {
   await fetchCallSessions()
   ensureSocket()
   if (selectedConvId.value) joinRoom(selectedConvId.value)
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) scheduleMarkRead()
-  })
+  document.addEventListener('visibilitychange', visibilityHandler)
 })
 
 watch(selectedConvId, async val => {
-  if (val) {
-    isAtBottom.value = true
-    showJumpToLatest.value = false
-    selectConversation(val)
-    await fetchMessages()
-    await fetchCallSessions(val)
-    resetPendingFiles()
-    showEmojiPicker.value = false
-    showGifPicker.value = false
-    reactionPickerFor.value = null
-    typingLabel.value = ''
+  if (!val) {
+    broadcastActiveConversation(null)
+    return
   }
+  isAtBottom.value = true
+  showJumpToLatest.value = false
+  selectConversation(val)
+  await fetchMessages()
+  await fetchCallSessions(val)
+  resetPendingFiles()
+  showEmojiPicker.value = false
+  showGifPicker.value = false
+  reactionPickerFor.value = null
+  typingLabel.value = ''
 })
 
 watch(
@@ -2114,6 +2194,8 @@ onUnmounted(() => {
       window.URL.revokeObjectURL(url)
     } catch {}
   }
+  document.removeEventListener('visibilitychange', visibilityHandler)
+  broadcastActiveConversation(null)
 })
 </script>
 
