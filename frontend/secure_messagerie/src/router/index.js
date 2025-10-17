@@ -2,6 +2,7 @@
 
 import { createRouter, createWebHistory } from 'vue-router'
 import Login from '../components/Login.vue'
+import LoginTotp from '../components/LoginTotp.vue'
 import Register from '../components/Register.vue'
 import Dashboard from '../components/Dashboard.vue'
 import DashboardHome from '../components/DashboardHomeEnhanced.vue'
@@ -20,6 +21,7 @@ const routes = [
   { path: '/', redirect: '/login' },
   { path: '/login', component: Login },
   { path: '/register', component: Register },
+  { path: '/login/totp', component: LoginTotp },
   { path: '/reset-password', component: ResetPassword },
   { path: '/new-password', component: NewPassword },
   {
@@ -46,7 +48,7 @@ const router = createRouter({
 
 // Interdiction d’accès au dashboard si non connecté
 router.beforeEach((to, from, next) => {
-  const publicPages = ['/login', '/register', '/reset-password', '/new-password']
+  const publicPages = ['/login', '/login/totp', '/register', '/reset-password', '/new-password']
   const isPublic = publicPages.includes(to.path) || to.path.startsWith('/confirm-email')
   const isDashboard = to.path.startsWith('/dashboard')
   const loggedIn = !!localStorage.getItem('access_token')

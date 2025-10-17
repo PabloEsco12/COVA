@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="auth-page">
     <div class="auth-orb orb-primary"></div>
     <div class="auth-orb orb-secondary"></div>
@@ -7,41 +7,30 @@
         <div class="auth-illustration__overlay"></div>
         <div class="auth-illustration__content">
           <div class="auth-badge">
-            <i class="bi bi-shield-check me-2"></i>
-            Messagerie souveraine
+            <i class="bi bi-shield-lock-fill me-2"></i>
+            Verification en deux etapes
           </div>
           <h1>
-            Collaborez en toute confiance avec
+            Confirmez votre identite avec
             <span class="brand-text">COVA</span>
           </h1>
           <p>
-            Centralisez les échanges sensibles de votre organisation dans une interface
-            moderne, sûre et pensée pour les équipes exigeantes.
+            Saisissez le code genere par votre application d’authentification afin de finaliser la connexion.
           </p>
           <ul class="auth-feature-list">
             <li>
-              <span class="feature-icon"><i class="bi bi-lock-fill"></i></span>
-              Chiffrement de bout en bout et conformité RGPD.
+              <span class="feature-icon"><i class="bi bi-shield-check"></i></span>
+              Protection additionnelle pour votre messagerie securisee.
             </li>
             <li>
-              <span class="feature-icon"><i class="bi bi-lightning-charge-fill"></i></span>
-              Notifications en temps réel et canaux dédiés.
+              <span class="feature-icon"><i class="bi bi-phone"></i></span>
+              Codes disponibles sur votre application mobile ou desktop favourite.
             </li>
             <li>
-              <span class="feature-icon"><i class="bi bi-people-fill"></i></span>
-              Collaboration fluide entre équipes internes et partenaires.
+              <span class="feature-icon"><i class="bi bi-clock-history"></i></span>
+              Chaque code expire rapidement, assurez-vous d’utiliser le plus recent.
             </li>
           </ul>
-          <div class="auth-metrics">
-            <div>
-              <strong>+250</strong>
-              <span>équipes actives</span>
-            </div>
-            <div>
-              <strong>24/7</strong>
-              <span>support dédié</span>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -49,101 +38,125 @@
         <div class="auth-card__brand">
           <img src="@/assets/logo_COVA.png" alt="Logo COVA" class="auth-card__logo" />
           <div>
-            <p class="auth-card__subtitle">Heureux de vous revoir</p>
-            <h2 class="auth-card__title">Connectez-vous à votre espace sécurisé</h2>
+            <p class="auth-card__subtitle">Verification requise</p>
+            <h2 class="auth-card__title">Entrez votre code TOTP</h2>
           </div>
         </div>
 
-        <form @submit.prevent="handleLogin" class="auth-form">
-          <div class="input-field">
-            <span class="input-field__icon"><i class="bi bi-envelope-fill"></i></span>
-            <input
-              v-model="email"
-              type="email"
-              class="input-field__control"
-              placeholder=" "
-              required
-              autocomplete="username"
-            >
-            <label class="input-field__label">Adresse e-mail professionnelle</label>
-          </div>
+        <div class="auth-context" v-if="userEmail">
+          <i class="bi bi-envelope"></i>
+          <span>{{ userEmail }}</span>
+        </div>
 
+        <form @submit.prevent="handleTotp" class="auth-form">
           <div class="input-field">
-            <span class="input-field__icon"><i class="bi bi-lock-fill"></i></span>
+            <span class="input-field__icon"><i class="bi bi-shield-lock-fill"></i></span>
             <input
-              v-model="password"
-              type="password"
+              v-model="code"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              maxlength="6"
               class="input-field__control"
               placeholder=" "
+              autocomplete="one-time-code"
               required
-              autocomplete="current-password"
             >
-            <label class="input-field__label">Mot de passe</label>
-            <router-link to="/reset-password" class="input-field__action">
-              <i class="bi bi-question-circle"></i>
-              Mot de passe oublié ?
-            </router-link>
+            <label class="input-field__label">Code TOTP</label>
+            <small class="input-field__hint">Saisissez le code a 6 chiffres affiche par votre application.</small>
           </div>
 
           <button type="submit" class="btn-auth" :disabled="loading">
             <span v-if="loading" class="spinner-border spinner-border-sm"></span>
-            <span v-else>Se connecter</span>
+            <span v-else>Valider et continuer</span>
+          </button>
+
+          <button
+            type="button"
+            class="btn-auth-secondary"
+            :disabled="loading"
+            @click="cancelTotp"
+          >
+            Retour a la connexion
           </button>
         </form>
 
         <div v-if="error" class="alert alert-danger text-center animate__animated animate__shakeX mt-3">
           {{ error }}
         </div>
-
-        <p class="auth-card__footer">
-          Pas encore de compte ?
-          <router-link to="/register">Rejoindre la plateforme</router-link>
-        </p>
       </section>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import { onMounted, ref } from 'vue'
 import { api, backendBase } from '@/utils/api'
 import { useRouter } from 'vue-router'
 
-const email = ref('')
-const password = ref('')
+const code = ref('')
 const error = ref('')
 const loading = ref(false)
+const userEmail = ref('')
 const router = useRouter()
-// Normalize API base so it always ends with '/api'
-// Use centralized API base + backend origin
+
+const pendingKey = 'pending_totp'
+let pendingAuth = null
 
 onMounted(() => {
-  if (localStorage.getItem('access_token')) {
-    router.push('/dashboard')
+  const raw = sessionStorage.getItem(pendingKey)
+  if (!raw) {
+    router.replace('/login')
+    return
+  }
+
+  try {
+    const parsed = JSON.parse(raw)
+    if (!parsed?.email || !parsed?.password) {
+      throw new Error('pending login missing data')
+    }
+    pendingAuth = parsed
+    userEmail.value = parsed.email
+  } catch (e) {
+    sessionStorage.removeItem(pendingKey)
+    router.replace('/login')
   }
 })
 
-async function handleLogin() {
+async function handleTotp() {
   error.value = ''
+  if (!pendingAuth) {
+    router.replace('/login')
+    return
+  }
+
+  if (!code.value.trim()) {
+    error.value = 'Merci de saisir votre code TOTP.'
+    return
+  }
+
   loading.value = true
   try {
     const res = await api.post(`/login`, {
-      email: email.value,
-      password: password.value,
+      email: pendingAuth.email,
+      password: pendingAuth.password,
+      code: code.value.trim(),
     })
+
     localStorage.setItem('access_token', res.data.access_token)
     localStorage.setItem('refresh_token', res.data.refresh_token)
     localStorage.setItem('pseudo', res.data.user?.pseudo || '')
     localStorage.setItem('user_id', res.data.user?.id || '')
     localStorage.setItem('user_email', res.data.user?.email || '')
 
+    sessionStorage.removeItem(pendingKey)
+
     try {
       const profile = await api.get(`/me`)
       if (profile.data.avatar) {
         localStorage.setItem(
           'avatar_url',
-          `${backendBase}/static/avatars/${profile.data.avatar}`
+          `${backendBase}/static/avatars/${profile.data.avatar}`,
         )
       } else {
         localStorage.removeItem('avatar_url')
@@ -151,16 +164,12 @@ async function handleLogin() {
     } catch (e) {
       // ignore profile fetch errors
     }
+
     router.push('/dashboard')
   } catch (err) {
     if (err.response?.data?.require_totp) {
-      sessionStorage.setItem('pending_totp', JSON.stringify({
-        email: email.value,
-        password: password.value,
-      }))
-      loading.value = false
-      router.push('/login/totp')
-      return
+      error.value = 'Code TOTP invalide. Reessayez avec le code le plus recent.'
+      code.value = ''
     } else if (err.response?.data?.error) {
       error.value = err.response.data.error
     } else {
@@ -169,6 +178,11 @@ async function handleLogin() {
   } finally {
     loading.value = false
   }
+}
+
+function cancelTotp() {
+  sessionStorage.removeItem(pendingKey)
+  router.push('/login')
 }
 </script>
 
@@ -313,31 +327,13 @@ async function handleLogin() {
 }
 
 .feature-icon {
-  width: 2.4rem;
-  height: 2.4rem;
-  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.16);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   font-size: 1.1rem;
-}
-
-.auth-metrics {
-  display: flex;
-  gap: 2.5rem;
-  margin-top: 0.5rem;
-}
-
-.auth-metrics strong {
-  display: block;
-  font-size: 1.8rem;
-  font-weight: 700;
-}
-
-.auth-metrics span {
-  font-size: 0.92rem;
-  color: rgba(255, 255, 255, 0.8);
 }
 
 .auth-card {
@@ -348,15 +344,18 @@ async function handleLogin() {
   backdrop-filter: blur(18px);
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 2rem;
+  position: relative;
+  align-items: center;
   text-align: center;
+  max-width: 480px;
+  width: 100%;
 }
 
 .auth-card__brand {
   display: flex;
-  gap: 1rem;
   align-items: center;
+  gap: 1rem;
   flex-direction: column;
   margin-bottom: 1rem;
   width: 100%;
@@ -371,24 +370,35 @@ async function handleLogin() {
 
 .auth-card__subtitle {
   margin: 0;
-  font-size: 0.92rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #1959c2;
-  font-weight: 600;
+  font-size: 0.95rem;
+  color: rgba(16, 23, 40, 0.65);
 }
 
 .auth-card__title {
-  margin: 0.35rem 0 0;
-  font-size: 1.65rem;
+  margin: 0;
+  font-size: clamp(1.8rem, 3vw, 2.2rem);
   font-weight: 700;
   color: #101728;
+}
+
+.auth-context {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  background: rgba(25, 89, 194, 0.08);
+  color: #1959c2;
+  font-weight: 600;
+  max-width: fit-content;
+  margin: 0 auto;
 }
 
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.4rem;
   width: 100%;
   max-width: 360px;
   margin: 0 auto;
@@ -449,26 +459,6 @@ async function handleLogin() {
   letter-spacing: 0.02em;
 }
 
-.input-field__action {
-  position: absolute;
-  right: 1.4rem;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 0.85rem;
-  color: #1959c2;
-  font-weight: 600;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  transition: color 0.2s ease;
-}
-
-.input-field__action:hover,
-.input-field__action:focus {
-  color: #0f2f6b;
-}
-
 .input-field__hint {
   margin-top: 0.6rem;
   margin-left: 3.2rem;
@@ -500,23 +490,23 @@ async function handleLogin() {
   box-shadow: 0 18px 35px rgba(25, 89, 194, 0.35);
 }
 
-.auth-card__footer {
-  margin-top: 2.25rem;
-  text-align: center;
-  font-size: 0.95rem;
-  color: rgba(16, 23, 40, 0.75);
-}
-
-.auth-card__footer a {
+.btn-auth-secondary {
+  margin-top: 0.5rem;
+  border: 1px solid rgba(25, 89, 194, 0.4);
+  border-radius: 16px;
+  padding: 0.9rem;
+  background: transparent;
   color: #1959c2;
+  font-size: 0.98rem;
   font-weight: 600;
-  text-decoration: none;
-  margin-left: 0.3rem;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  width: 100%;
 }
 
-.auth-card__footer a:hover,
-.auth-card__footer a:focus {
-  text-decoration: underline;
+.btn-auth-secondary:not(:disabled):hover,
+.btn-auth-secondary:not(:disabled):focus {
+  background: rgba(25, 89, 194, 0.08);
+  transform: translateY(-1px);
 }
 
 .alert {
@@ -563,12 +553,6 @@ async function handleLogin() {
     align-items: center;
   }
 
-  .input-field__action {
-    position: static;
-    transform: none;
-    margin-top: 0.75rem;
-  }
-
   .input-field__hint {
     margin-left: 0;
   }
@@ -581,10 +565,6 @@ async function handleLogin() {
 
   .auth-feature-list li {
     font-size: 0.95rem;
-  }
-
-  .auth-metrics {
-    gap: 1.5rem;
   }
 }
 </style>

@@ -1,6 +1,7 @@
 <template>
-  <div class="messages-wrapper">
-    <div class="messages-layout">
+  <div class="messages-page">
+    <div class="messages-wrapper">
+      <div class="messages-layout">
       <!-- Conversations list -->
       <aside class="conv-list">
         <div class="conv-list-header">
@@ -44,13 +45,12 @@
             class="conv-filter-btn"
             :class="{ active: conversationFilter === filter.value }"
             :aria-pressed="conversationFilter === filter.value"
+            :title="filter.label"
             @click="setConversationFilter(filter.value)"
           >
-            <span class="filter-label">
-              <i class="bi" :class="filter.icon"></i>
-              <span>{{ filter.label }}</span>
-            </span>
-            <span class="filter-count">{{ conversationFilterStats[filter.value] ?? 0 }}</span>
+            <i class="bi conv-filter-icon" :class="filter.icon" aria-hidden="true"></i>
+            <span class="sr-only">{{ filter.label }}</span>
+            <span class="filter-count" aria-hidden="true">{{ conversationFilterStats[filter.value] ?? 0 }}</span>
           </button>
         </div>
         <div class="conv-scroll">
@@ -81,37 +81,39 @@
                         <span v-if="conv.is_group" class="group-ind"><i class="bi bi-people-fill"></i></span>
                       </div>
                     </div>
-                    <div class="conv-item-body">
-                      <div class="conv-item-header">
-                        <span class="conv-name text-truncate">{{ conv.displayName || conv.titre }}</span>
-                        <span class="conv-time">{{ formatTime(conv.last?.ts) }}</span>
-                      </div>
-                      <div class="conv-item-preview text-truncate">
-                        <span v-if="conv.last && conv.last.sentByMe" class="text-muted">Vous: </span>
-                        {{ conv.last ? conv.last.text : 'Aucun message' }}
-                      </div>
-                      <div class="conv-item-footer">
-                        <div class="conv-tags">
-                          <span v-if="conv.is_group" class="conv-tag">
-                            <i class="bi bi-people-fill me-1"></i>Groupe
-                          </span>
-                          <span v-if="isFavorite(conv.id)" class="conv-tag favorite">
-                            <i class="bi bi-star-fill me-1"></i>Favori
-                          </span>
+                    <div class="conv-item-main">
+                      <div class="conv-top-row">
+                        <div class="conv-name-block">
+                          <span class="conv-name text-truncate">{{ conv.displayName || conv.titre }}</span>
+                          <div class="conv-tags">
+                            <span v-if="conv.is_group" class="conv-tag">
+                              <i class="bi bi-people-fill me-1"></i>Groupe
+                            </span>
+                            <span v-if="isFavorite(conv.id)" class="conv-tag favorite">
+                              <i class="bi bi-star-fill me-1"></i>Favori
+                            </span>
+                          </div>
                         </div>
-                        <div class="conv-item-meta">
+                        <div class="conv-meta">
+                          <span class="conv-time">{{ formatTime(conv.last?.ts) }}</span>
                           <span v-if="getUnreadCount(conv)" class="badge-unread">{{ getUnreadCount(conv) }}</span>
-                          <button
-                            type="button"
-                            class="favorite-toggle"
-                            :class="{ active: isFavorite(conv.id) }"
-                            :aria-pressed="isFavorite(conv.id)"
-                            :title="isFavorite(conv.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'"
-                            @click.stop="toggleFavorite(conv.id)"
-                          >
-                            <i class="bi" :class="isFavorite(conv.id) ? 'bi-star-fill' : 'bi-star'"></i>
-                          </button>
                         </div>
+                      </div>
+                      <div class="conv-bottom-row">
+                        <div class="conv-item-preview text-truncate">
+                          <span v-if="conv.last && conv.last.sentByMe" class="conv-preview-prefix">Vous:</span>
+                          <span>{{ conv.last ? conv.last.text : 'Aucun message' }}</span>
+                        </div>
+                        <button
+                          type="button"
+                          class="favorite-toggle"
+                          :class="{ active: isFavorite(conv.id) }"
+                          :aria-pressed="isFavorite(conv.id)"
+                          :title="isFavorite(conv.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'"
+                          @click.stop="toggleFavorite(conv.id)"
+                        >
+                          <i class="bi" :class="isFavorite(conv.id) ? 'bi-star-fill' : 'bi-star'"></i>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -279,7 +281,7 @@
                 <span class="day-divider-label">{{ item.label }}</span>
               </div>
               <div
-                v-if="item.type !== 'date'"
+                v-if="item.type !== 'date' && isRenderableMessage(item.message)"
                 class="msg-row"
                 :class="{ sent: item.message.sentByMe }"
               >
@@ -299,12 +301,18 @@
                         <button class="btn btn-sm btn-secondary" @click="cancelEdit">Annuler</button>
                       </div>
                     </template>
-                                                            <template v-else>
-                      {{
-                        item.message.contenu_chiffre ||
-                          attachmentsLabel(item.message.files) ||
-                          ''
-                      }}
+                    <template v-else>
+                      <div
+                        v-if="formattedMessageText(item.message)"
+                        class="message-text"
+                        v-html="formattedMessageText(item.message)"
+                      ></div>
+                      <div
+                        v-else-if="item.message.files && item.message.files.length"
+                        class="message-text placeholder text-muted"
+                      >
+                        {{ attachmentsLabel(item.message.files) }}
+                      </div>
                     </template>
                   </div>
 
@@ -601,6 +609,7 @@
     </div>
   </div>
 </div>
+</div>
 </template>
 
 <script setup>
@@ -697,11 +706,16 @@ function saveFavorites() {
 
 function normalizeMessageText(raw) {
   if (raw == null) return ''
-  return String(raw)
-    .replace(/\\r\\n/g, '\n')
-    .replace(/\\n/g, '\n')
+  const str = String(raw)
+  return str
+    // handle escaped newline sequences first
+    .replace(/\\+r\\+n/gi, '\n')
+    .replace(/\\+n/gi, '\n')
+    .replace(/\\+r/gi, '\n')
+    // handle actual carriage returns/new lines
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
     .replace(/\u00a0/g, ' ')
 }
 
@@ -710,6 +724,33 @@ function attachmentsLabel(input) {
   if (!count) return ''
   const plural = count > 1 ? 's' : ''
   return `${count} pièce${plural} jointe${plural}`
+}
+
+function formattedMessageText(message) {
+  const normalized = normalizeMessageText(message?.contenu_chiffre ?? '')
+  if (!normalized) return ''
+
+  // Preserve intentional blank lines but drop trailing whitespace-only lines
+  const trimmedEnd = normalized.replace(/(\s*\n)*\s*$/, '')
+  if (!trimmedEnd.trim()) {
+    return ''
+  }
+
+  const escaped = trimmedEnd
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
+  return escaped.replace(/\n/g, '<br>')
+}
+
+function isRenderableMessage(message) {
+  if (!message) return false
+  const hasText = !!formattedMessageText(message)
+  const hasFiles = Array.isArray(message.files) && message.files.length > 0
+  return hasText || hasFiles
 }
 
 function previewTextForMessage(message) {
@@ -876,6 +917,8 @@ const lastMessageAt = computed(() => {
 
 const displayMessages = computed(() => {
   let list = messages.value || []
+  // Remove empty system/placeholder messages
+  list = list.filter(isRenderableMessage)
   // Author filter
   if (messageSearchAuthor.value === 'me') list = list.filter(m => m.sender_id === userId)
   else if (messageSearchAuthor.value === 'others') list = list.filter(m => m.sender_id !== userId)
@@ -906,6 +949,11 @@ const messageTimeline = computed(() => {
   const items = []
   let lastKey = null
   for (const msg of displayMessages.value || []) {
+    const hasText = !!formattedMessageText(msg)
+    const hasFiles = Array.isArray(msg?.files) && msg.files.length > 0
+    if (!hasText && !hasFiles) {
+      continue
+    }
     const key = buildDayKey(msg?.ts_msg)
     if (key !== lastKey) {
       items.push({ type: 'date', id: `day-${key}`, label: formatDayHeading(msg?.ts_msg) })
@@ -2522,14 +2570,14 @@ onUnmounted(() => {
   opacity: 0.35;
 }
 .chat-bubble {
-  max-width: min(65%, 360px);
-  padding: 0.5rem 0.75rem 0.45rem;
-  border-radius: 18px;
+  max-width: min(54%, 440px);
+  padding: 0.45rem 0.85rem 0.4rem;
+  border-radius: 14px;
   word-break: break-word;
   position: relative;
   background: #ffffff;
   border: 1px solid rgba(0, 0, 0, 0.04);
-  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 .chat-bubble.sent {
@@ -2537,7 +2585,7 @@ onUnmounted(() => {
   color: #202020;
   margin-left: auto;
   border-color: rgba(0, 0, 0, 0.05);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 .chat-bubble.received {
   background: #ffffff;
@@ -2571,7 +2619,7 @@ onUnmounted(() => {
 }
 .bubble-body {
   font-size: 0.85rem;
-  line-height: 1.4;
+  line-height: 1.3;
   white-space: pre-wrap;
 }
 .chat-bubble:after {
@@ -2975,56 +3023,57 @@ mark.hl {
 }
 
 .conv-filters {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.1rem;
 }
 
 .conv-filter-btn {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem;
-  padding: 0.35rem 0.75rem;
-  border-radius: 999px;
-  border: 1px solid #dbe2f3;
-  background: linear-gradient(135deg, #f5f7ff 0%, #eef3ff 100%);
-  color: #1f3b76;
-  font-weight: 600;
-  font-size: 0.78rem;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-  box-shadow: 0 2px 6px rgba(13, 110, 253, 0.12);
-}
-
-.conv-filter-btn .filter-label {
+  position: relative;
+  width: 50px;
+  height: 50px;
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-}
-
-.conv-filter-btn .filter-label i {
-  font-size: 0.85rem;
+  justify-content: center;
+  border-radius: 16px;
+  border: 1px solid rgba(219, 226, 243, 0.9);
+  background: rgba(255, 255, 255, 0.78);
+  color: #1f3b76;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  box-shadow: 0 4px 12px rgba(13, 110, 253, 0.12);
 }
 
 .conv-filter-btn .filter-count {
-  background: rgba(13, 110, 253, 0.12);
-  color: #0d6efd;
-  padding: 0.05rem 0.45rem;
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  min-width: 22px;
+  padding: 0.1rem 0.4rem;
   border-radius: 999px;
+  background: rgba(13, 110, 253, 0.16);
+  color: #0d6efd;
   font-weight: 700;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(13, 110, 253, 0.16);
+}
+
+.conv-filter-icon {
+  font-size: 1.1rem;
 }
 
 .conv-filter-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(13, 110, 253, 0.22);
+  transform: translateY(-2px);
+  border-color: rgba(13, 110, 253, 0.35);
+  box-shadow: 0 10px 22px rgba(13, 110, 253, 0.2);
+  background: rgba(230, 238, 255, 0.9);
 }
 
 .conv-filter-btn:focus-visible {
-  outline: 2px solid rgba(13, 110, 253, 0.35);
+  outline: 2px solid rgba(13, 110, 253, 0.4);
   outline-offset: 2px;
 }
 
@@ -3032,25 +3081,25 @@ mark.hl {
   background: linear-gradient(135deg, #2157d3 0%, #0d6efd 100%);
   color: #fff;
   border-color: transparent;
-  box-shadow: 0 10px 24px rgba(13, 110, 253, 0.35);
+  box-shadow: 0 12px 26px rgba(13, 110, 253, 0.32);
 }
 
 .conv-filter-btn.active .filter-count {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.2);
   color: #fff;
+  box-shadow: none;
 }
 
-.conv-filter-btn.active .filter-label i,
-.conv-filter-btn.active .filter-label span {
-  color: inherit;
+.conv-filter-btn.active .conv-filter-icon {
+  color: #fff;
 }
 
 .favorite-toggle {
   border: none;
   background: transparent;
-  color: #9aa4b5;
-  width: 26px;
-  height: 26px;
+  color: #97a3bb;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
@@ -3060,7 +3109,7 @@ mark.hl {
 
 .favorite-toggle:hover {
   color: #f3a712;
-  background: rgba(243, 167, 18, 0.15);
+  background: rgba(243, 167, 18, 0.16);
   transform: translateY(-1px);
 }
 
@@ -3070,11 +3119,11 @@ mark.hl {
 }
 
 .favorite-toggle.active {
-  color: #f0a400;
+  color: #f3a712;
 }
 
 .conv-item.active .favorite-toggle {
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .conv-item.active .favorite-toggle:hover {
@@ -3082,21 +3131,45 @@ mark.hl {
 }
 
 .conv-item.active .favorite-toggle.active {
-  color: #ffd976;
+  color: #ffe08a;
+}
+
+.messages-page {
+  min-height: 100vh;
+  height: 100vh;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .messages-wrapper {
   position: relative;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  padding: 1.75rem;
+  padding: 1.4rem 1.6rem 1.6rem 1.3rem;
   background: linear-gradient(135deg, rgba(13, 110, 253, 0.07), rgba(255, 255, 255, 0.9));
   border-radius: 32px;
   box-shadow: 0 24px 60px rgba(13, 38, 86, 0.12);
   overflow: hidden;
-  margin-bottom: 1.5rem;
-  height: clamp(520px, 78vh, 880px);
-  min-height: clamp(520px, 78vh, 880px);
+  margin-bottom: 0;
+  height: 100%;
+  min-height: 0;
 }
 .messages-wrapper::before {
   content: '';
@@ -3110,19 +3183,19 @@ mark.hl {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
   gap: 1.25rem;
-  min-height: clamp(520px, 78vh, 880px);
   width: 100%;
-  height: 100%;
+  flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
   align-items: stretch;
 }
 .conv-list {
   position: relative;
   display: flex;
   flex-direction: column;
-  padding: 1.25rem;
+  padding: 1.1rem 1rem;
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid #dbe2f3;
@@ -3269,88 +3342,168 @@ mark.hl {
 }
 
 .conv-item {
-  display: grid;
-  grid-template-columns: auto 1fr;
+  position: relative;
+  display: flex;
   align-items: center;
-  gap: 0.7rem;
-  padding: 0.65rem 0.75rem;
+  gap: 0.75rem;
+  padding: 0.65rem 0.8rem;
   border-radius: 16px;
   border: 1px solid transparent;
-  background: rgba(247, 249, 255, 0.92);
+  background: rgba(255, 255, 255, 0.7);
   cursor: pointer;
-  box-shadow: 0 10px 22px rgba(15, 38, 105, 0.08);
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+  overflow: hidden;
 }
 
-.conv-item.unread {
-  border-color: rgba(13, 110, 253, 0.24);
+.conv-item::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  bottom: 8px;
+  width: 4px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background 0.18s ease;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.conv-item > * {
+  position: relative;
+  z-index: 1;
+}
+
+.conv-item.unread::before {
+  background: linear-gradient(180deg, rgba(13, 110, 253, 0.85), rgba(99, 102, 241, 0.6));
+}
+
+.conv-item.unread .conv-name {
+  font-weight: 700;
+  color: #153d7a;
+}
+
+.conv-item.unread .conv-item-preview {
+  color: #2d466f;
 }
 
 .conv-item.favorite:not(.active) {
-  background: linear-gradient(135deg, rgba(255, 193, 7, 0.12), rgba(255, 193, 7, 0.02));
+  background: rgba(255, 249, 224, 0.92);
   border-color: rgba(255, 193, 7, 0.35);
-  box-shadow: 0 8px 20px rgba(255, 193, 7, 0.2);
+  box-shadow: 0 10px 30px rgba(255, 193, 7, 0.2);
+}
+
+.conv-item.favorite:not(.active)::before {
+  background: linear-gradient(180deg, rgba(255, 193, 7, 0.95), rgba(255, 160, 0, 0.7));
 }
 
 .conv-item:hover {
-  transform: translateY(-2px);
-  border-color: rgba(13, 110, 253, 0.28);
-  background: #f0f5ff;
-  box-shadow: 0 16px 28px rgba(13, 110, 253, 0.18);
+  transform: translateY(-1px);
+  background: rgba(13, 110, 253, 0.12);
+  border-color: rgba(13, 110, 253, 0.26);
+  box-shadow: 0 12px 28px rgba(13, 110, 253, 0.16);
+}
+
+.conv-item:hover::before {
+  background: linear-gradient(180deg, rgba(13, 110, 253, 0.55), rgba(99, 102, 241, 0.4));
 }
 
 .conv-item.active {
-  background: linear-gradient(135deg, #2157d3, #0d6efd);
-  border-color: transparent;
+  background: linear-gradient(135deg, #3372ff, #0d6efd);
+  border-color: rgba(13, 110, 253, 0.65);
+  box-shadow: 0 18px 36px rgba(13, 110, 253, 0.28);
   color: #fff;
-  box-shadow: 0 22px 44px rgba(13, 110, 253, 0.35);
+}
+
+.conv-item.active::before {
+  background: rgba(255, 255, 255, 0.75);
 }
 
 .conv-item-leading .avatar-list,
 .conv-item-leading .avatar-list-placeholder {
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
 }
 
-.conv-item-body {
-  display: grid;
+.conv-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
   gap: 0.35rem;
 }
 
-.conv-item-header {
+.conv-top-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.conv-name-block {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
+  min-width: 0;
+  flex: 1;
 }
 
 .conv-name {
   margin: 0;
   font-weight: 600;
-  font-size: 0.92rem;
+  font-size: 0.95rem;
   color: #1f3b76;
 }
 
-.conv-item.active .conv-name {
-  color: #fff;
+.conv-meta {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #7383a6;
+  font-size: 0.74rem;
 }
 
 .conv-time {
-  margin-left: auto;
-  font-size: 0.74rem;
-  color: #7383a6;
+  color: inherit;
 }
 
-.conv-item.active .conv-time {
-  color: rgba(255, 255, 255, 0.78);
+.conv-bottom-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
 }
 
 .conv-item-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   font-size: 0.84rem;
-  color: #6c7898;
+  color: #5b6b88;
+  min-width: 0;
+  flex: 1;
+}
+
+.conv-preview-prefix {
+  font-weight: 600;
+  color: #4a5b80;
+  white-space: nowrap;
+}
+
+.conv-item.active .conv-name,
+.conv-item.active .conv-item-preview,
+.conv-item.active .conv-preview-prefix,
+.conv-item.active .conv-meta {
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .conv-item.active .conv-item-preview {
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.conv-item.active .conv-preview-prefix {
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .conv-item-footer {
@@ -3363,52 +3516,59 @@ mark.hl {
 .conv-tags {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
+  flex-wrap: wrap;
 }
 
 .conv-tag {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.12rem 0.45rem;
+  gap: 0.25rem;
+  padding: 0.15rem 0.5rem;
   border-radius: 999px;
-  font-size: 0.7rem;
+  font-size: 0.66rem;
   font-weight: 600;
-  background: rgba(99, 102, 241, 0.12);
-  color: #334766;
-  border: 1px solid rgba(99, 102, 241, 0.22);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: rgba(31, 59, 118, 0.08);
+  color: #1f3b76;
+  border: 1px solid rgba(31, 59, 118, 0.18);
 }
 
 .conv-tag.favorite {
-  background: rgba(255, 193, 7, 0.16);
-  border-color: rgba(255, 193, 7, 0.32);
-  color: #8f6a00;
+  background: rgba(255, 193, 7, 0.22);
+  border-color: rgba(255, 193, 7, 0.4);
+  color: #7a5400;
 }
 
 .conv-item.active .conv-tag {
-  background: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.3);
-  color: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .conv-tag i {
-  font-size: 0.75rem;
-}
-
-.conv-item-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
+  font-size: 0.68rem;
 }
 
 .badge-unread {
-  background: #ff4757;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  padding: 0.12rem 0.45rem;
+  background: #0d6efd;
   color: #fff;
   font-weight: 700;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   border-radius: 999px;
-  padding: 0.12rem 0.4rem;
-  box-shadow: 0 2px 6px rgba(255, 71, 87, 0.3);
+  box-shadow: 0 3px 8px rgba(13, 110, 253, 0.25);
+}
+
+.conv-item.active .badge-unread {
+  background: rgba(255, 255, 255, 0.92);
+  color: #0d47a1;
+  box-shadow: none;
 }
 .msg-row {
   display: flex;
@@ -3426,12 +3586,18 @@ mark.hl {
 }
 @media (max-width: 1200px) {
   .messages-layout {
-    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+    grid-template-columns: minmax(210px, 260px) minmax(0, 1fr);
   }
 }
 @media (max-width: 992px) {
-  .messages-wrapper {
+  .messages-page {
+    min-height: auto;
+    height: auto;
     padding: 1rem;
+  }
+  .messages-wrapper {
+    padding: 1.1rem;
+    border-radius: 24px;
     height: auto;
     min-height: auto;
   }
@@ -3512,16 +3678,5 @@ mark.hl {
   padding: 0.75rem 1rem;
 }
 </style>
-
-
-
-
-
-
-
-
-
-
-
 
 

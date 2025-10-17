@@ -341,13 +341,16 @@ function formatRelativeTime(dateString) {
 
 <style scoped>
 .sidebar {
-  min-width: 240px;
+  width: clamp(200px, 19vw, 240px);
+  min-width: 200px;
   position: sticky;
   top: 0;
   height: 100vh;
   overflow-y: auto;
+  padding: 1.4rem 1.2rem;
   border-right: 1px solid rgba(255, 255, 255, 0.05);
-  transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+  transition: background 0.35s ease, color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+  box-shadow: 18px 0 38px rgba(15, 23, 42, 0.08);
 }
 
 .sidebar::-webkit-scrollbar {
@@ -360,15 +363,48 @@ function formatRelativeTime(dateString) {
 }
 
 .sidebar-light {
-  background: linear-gradient(180deg, #f8f9fa 0%, #dbeafe 100%);
+  background: linear-gradient(180deg, #f9fbff 0%, #e7eeff 55%, #d9e6ff 100%);
   color: #1f2933;
-  border-color: rgba(0, 0, 0, 0.08);
+  border-color: rgba(13, 110, 253, 0.08);
 }
 
 .sidebar-dark {
-  background: linear-gradient(180deg, #101522 0%, #0a1733 100%);
+  background: radial-gradient(circle at 12% 10%, rgba(37, 99, 235, 0.28), transparent 60%),
+    linear-gradient(180deg, #0d1322 0%, #081024 100%);
   color: #e5e7eb;
   border-color: rgba(255, 255, 255, 0.06);
+}
+
+.brand-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.9rem 0.65rem;
+  border-radius: 20px;
+  background: linear-gradient(160deg, rgba(13, 110, 253, 0.12), rgba(13, 110, 253, 0));
+  box-shadow: 0 12px 24px rgba(13, 110, 253, 0.16);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+}
+
+.brand-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 32px rgba(13, 110, 253, 0.18);
+  background: linear-gradient(160deg, rgba(13, 110, 253, 0.18), rgba(13, 110, 253, 0.04));
+}
+
+.sidebar-dark .brand-link {
+  background: linear-gradient(160deg, rgba(59, 130, 246, 0.22), rgba(13, 110, 253, 0.06));
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.6);
+}
+
+.sidebar-dark .brand-link:hover {
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.65);
+}
+
+.sidebar-light .brand-link {
+  background: linear-gradient(160deg, rgba(13, 110, 253, 0.1), rgba(13, 110, 253, 0.02));
 }
 
 .brand-link h4 {
@@ -435,7 +471,7 @@ function formatRelativeTime(dateString) {
 
 .sidebar-actions .btn {
   border-radius: 12px;
-  padding: 0.65rem 1rem;
+  padding: 0.55rem 0.85rem;
   font-weight: 600;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
@@ -449,10 +485,12 @@ function formatRelativeTime(dateString) {
   color: inherit;
   display: flex;
   align-items: center;
+  gap: 0.55rem;
   border-radius: 12px;
-  padding: 0.6rem 0.75rem;
-  font-weight: 500;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  padding: 0.52rem 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .sidebar .nav-link .badge {
@@ -461,6 +499,8 @@ function formatRelativeTime(dateString) {
 
 .sidebar .nav-link:hover {
   background: rgba(13, 110, 253, 0.12);
+  transform: translateX(3px);
+  box-shadow: 0 8px 18px rgba(13, 110, 253, 0.18);
 }
 
 .sidebar-dark .nav-link {
@@ -475,20 +515,22 @@ function formatRelativeTime(dateString) {
 .sidebar-dark .nav-link.router-link-exact-active {
   background: rgba(59, 130, 246, 0.25);
   color: #f8fafc;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.35), 0 10px 22px rgba(15, 23, 42, 0.28);
 }
 
 .sidebar-light .nav-link.active,
 .sidebar-light .nav-link.router-link-exact-active {
   background: #0d6efd;
   color: #fff;
+  box-shadow: 0 12px 24px rgba(13, 110, 253, 0.24);
 }
 
 .sidebar-section-title {
   text-transform: uppercase;
-  font-size: 0.7rem;
-  letter-spacing: 0.08em;
-  color: rgba(148, 163, 184, 0.85);
-  margin-bottom: 0.5rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  color: rgba(148, 163, 184, 0.8);
+  margin-bottom: 0.45rem;
 }
 
 .sidebar-light .sidebar-section-title {
