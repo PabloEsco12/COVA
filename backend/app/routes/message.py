@@ -146,17 +146,19 @@ def send_message(conv_id):
         db.session.add(file_rec)
 
     db.session.commit()
-    payload = _message_schema(user_id).dump(msg)
-    rooms = {f"conv_{conv_id}"}
+    payload_sender = _message_schema(user_id).dump(msg)
+    socketio.emit("message_created", payload_sender, to=f"conv_{conv_id}")
+
     try:
         participants = conv.participations if conv and hasattr(conv, "participations") else []
-        for participation in participants or []:
-            rooms.add(f"user_{participation.id_user}")
     except Exception:
         participants = []
-    for room in rooms:
-        socketio.emit("message_created", payload, to=room)
-    return jsonify(payload), 201
+    for participation in participants or []:
+        schema = _message_schema(participation.id_user)
+        personal_payload = schema.dump(msg)
+        socketio.emit("message_created", personal_payload, to=f"user_{participation.id_user}")
+
+    return jsonify(payload_sender), 201
 
 
 @messages_bp.route("/conversations/<int:conv_id>/messages/<int:msg_id>", methods=["PUT", "DELETE"])

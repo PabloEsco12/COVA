@@ -656,6 +656,7 @@ let gifSearchTimer = null
 let gifController = null
 let conversationsRefreshTimer = null
 const callWindowWatchers = new Map()
+let typingClearTimer = null
 const typingLabel = ref('')
 const isAtBottom = ref(true)
 const showJumpToLatest = ref(false)
@@ -802,6 +803,37 @@ function scheduleConversationsRefresh(delay = 250) {
       await fetchConversations()
     } catch {}
   }, delay)
+}
+
+function typingDisplayName(convId, remoteId) {
+  if (!remoteId || remoteId === userId) return ''
+  const conv = conversations.value.find(c => c.id === convId)
+  const fromConv = conv?.participants?.find?.(p => p.id_user === remoteId)?.pseudo
+  if (fromConv) return fromConv
+  const contactsEntry = contactsMap.value || {}
+  const contactKey = String(remoteId)
+  const fromContacts = contactsEntry[contactKey]?.pseudo
+  if (fromContacts) return fromContacts
+  return ''
+}
+
+function handleTypingEvent(payload) {
+  if (!payload || payload.conv_id !== selectedConvId.value) return
+  if (payload.user_id === userId) return
+  if (typingClearTimer) {
+    clearTimeout(typingClearTimer)
+    typingClearTimer = null
+  }
+  if (payload.is_typing) {
+    typingLabel.value = label + " est en train d\u00e9crire..."
+    typingLabel.value = (label || "Quelqu'un") + " est en train d\u00e9crire..."
+    typingClearTimer = setTimeout(() => {
+      typingLabel.value = ''
+      typingClearTimer = null
+    }, 2200)
+  } else {
+    typingLabel.value = ''
+  }
 }
 
 function normalizeMessageText(raw) {
@@ -1218,7 +1250,6 @@ watch(showConvModal, async open => {
 watch(selectedUsers, () => {
   if (!convTitle.value) convTitle.value = derivedTitle()
 })
-
 function ensureSocket() {
   if (socket.value) return
   try {
@@ -1226,10 +1257,7 @@ function ensureSocket() {
       transports: ['websocket'],
       auth: { token: localStorage.getItem('access_token') },
     })
-    socket.value.on('typing', payload => {
-      if (!payload || payload.conv_id !== selectedConvId.value) return
-      typingLabel.value = payload.is_typing ? "Quelqu'un est en train d'écrire..." : ''
-    })
+    socket.value.on('typing', handleTypingEvent)
     const onMessage = payload => handleIncomingMessage(payload)
     socket.value.on('message_created', onMessage)
     socket.value.on('new_message', onMessage)
@@ -1383,16 +1411,18 @@ async function fetchConversations() {
 }
 
 async function enrichConversations() {
-  const token = localStorage.getItem('access_token')
   for (const conv of conversations.value) {
     try {
+      const d = await api.get(`/conversations/${conv.id}`)
+      const parts = d.data?.participants || []
+      conv.participants = parts
       if (!conv.is_group) {
-        const d = await api.get(`/conversations/${conv.id}`)
-        const parts = d.data?.participants || []
         const other = parts.find(p => p.id_user !== userId)
         conv.displayName = other?.pseudo || conv.titre
         conv.other_user_id = other?.id_user
-        conv.avatar_url = contactsMap.value[conv.other_user_id]?.avatar_url || null
+        const contactEntry = contactsMap.value || {}
+        const contactKey = conv.other_user_id != null ? String(conv.other_user_id) : ''
+        conv.avatar_url = contactKey ? (contactEntry[contactKey]?.avatar_url || null) : null
       } else {
         conv.displayName = conv.titre
         conv.avatar_url = null
@@ -2280,6 +2310,10 @@ onUnmounted(() => {
     clearInterval(timer)
   }
   callWindowWatchers.clear()
+  if (typingClearTimer) {
+    clearTimeout(typingClearTimer)
+    typingClearTimer = null
+  }
   if (conversationsRefreshTimer) {
     clearTimeout(conversationsRefreshTimer)
     conversationsRefreshTimer = null
@@ -3850,5 +3884,6 @@ mark.hl {
   padding: 0.75rem 1rem;
 }
 </style>
+
 
 
