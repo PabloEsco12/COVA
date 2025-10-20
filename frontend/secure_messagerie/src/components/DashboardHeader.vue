@@ -74,17 +74,4 @@ function logout() {
 function onAvatarError() {  try { localStorage.removeItem("avatar_url") } catch {}  avatarUrl.value = null }
 </script>
 
-<style scoped>
-.theme-toggle {
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
-}
-.header-bar {
-  transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
-}
-.header-bar-dark {
-  background: rgba(22, 27, 34, 0.96);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
-}
-</style>
-
-
+<style scoped src="../styles/components/DashboardHeader.css"></style>

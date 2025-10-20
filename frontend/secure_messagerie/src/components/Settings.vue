@@ -368,17 +368,4 @@ async function confirmDelete() {
 }
 </script>
 
-<style scoped>
-.avatar-lg { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 8px #0002; }
-.danger-zone { background: #fffaf9 }
-
-/* Modal custom léger basé sur Bootstrap */
-.custom-modal { position: fixed; top: 0; left: 0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; z-index: 1050; }
-.custom-modal-dialog { max-width: 520px; width: 92%; }
-.custom-modal-content { background: #fff; border-radius: .75rem; box-shadow: 0 12px 40px rgba(0,0,0,.15); overflow: hidden; }
-.custom-modal-header { display:flex; align-items:center; justify-content:space-between; padding: .85rem 1rem; border-bottom: 1px solid #eee; }
-.custom-modal-title { margin: 0; }
-.custom-modal-body { padding: 1rem; }
-.custom-modal-footer { display:flex; gap:.5rem; justify-content:flex-end; padding: .85rem 1rem; border-top: 1px solid #eee; }
-.modal-backdrop.show { opacity: .25; }
-</style>
+<style scoped src="../styles/components/Settings.css"></style>

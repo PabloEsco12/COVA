@@ -1,0 +1,15 @@
+.invitations-container {
+  max-width: 580px;
+  margin: 2rem auto;
+  background: #fff;
+  border-radius: 18px;
+}
+
+.list-group-item {
+  border: none;
+  border-bottom: 1px solid #f3f4f7;
+  background: transparent;
+}
+.list-group-item:last-child {
+  border-bottom: none;
+}

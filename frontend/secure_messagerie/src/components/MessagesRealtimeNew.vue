@@ -609,7 +609,7 @@
         <div class="modal-footer sticky-footer d-flex align-items-center">
           <div class="text-muted small me-auto">{{ selectedUsers.length }} participant(s) sélectionné(s)</div>
           <button class="btn btn-secondary" @click="showConvModal = false">Annuler</button>
-          <button class="btn btn-create" @click="createConversation" :disabled="creatingConv || selectedUsers.length === 0 || !convTitle">
+          <button class="btn btn-create" @click="submitConversationCreation" :disabled="creatingConv || selectedUsers.length === 0 || !convTitle">
             <span v-if="creatingConv" class="spinner-border spinner-border-sm me-1"></span>
             <i v-else class="bi bi-chat-dots me-1"></i>
             <span>Créer</span>
@@ -671,10 +671,25 @@
 import { ref, reactive, onMounted, nextTick, watch, computed, onUnmounted } from 'vue'
 import axios from 'axios'
 import { api, backendBase } from '@/utils/api'
-import { io } from 'socket.io-client'
+import {
+  listContacts,
+  listConversations,
+  getConversation,
+  getConversationMessages,
+  createConversationRoom,
+  updateConversationTitle,
+  leaveConversationRoom,
+  deleteConversationRoom,
+  getUnreadSummary,
+  sendConversationMessage,
+  toggleMessageReaction,
+  listConversationCalls,
+  createConversationCall,
+} from '@/services/messagingService'
 import LogoUrl from '@/assets/logo_COVA.png'
 import 'emoji-picker-element'
 // backendBase provided by central api util
+import { CovaSocket } from '@/services/socketService'
 
 const conversations = ref([])
 const selectedConvId = ref(null)
@@ -693,7 +708,21 @@ const selectedUsers = ref([])
 const convTitle = ref('')
 const creatingConv = ref(false)
 const currentConvTitle = ref('')
-const socket = ref(null)
+let socketClient = null
+let socketConnected = false
+const socketListeners = {
+  connect: () => handleSocketConnect(),
+  disconnect: () => handleSocketDisconnect(),
+  typing: payload => handleTypingEvent(payload),
+  message_created: payload => handleIncomingMessage(payload),
+  new_message: payload => handleIncomingMessage(payload),
+  reaction_updated: payload => {
+    if (!payload) return
+    applyReactionUpdate(payload.message_id, payload)
+  },
+  call_created: payload => handleCallCreated(payload),
+  call_ended: payload => handleCallEnded(payload),
+}
 let lastJoinedConv = null
 let markReadTimer = null
 let typingSendTimer = null
@@ -815,8 +844,8 @@ function loadUnreadFromStorage() {
 
 async function refreshUnreadFromServer() {
   try {
-    const res = await api.get(`/messages/unread_summary`)
-    const map = res.data?.by_conversation || {}
+    const summary = await getUnreadSummary()
+    const map = summary?.by_conversation || {}
     setUnreadCounts(map)
   } catch {
     loadUnreadFromStorage()
@@ -857,7 +886,7 @@ function scheduleConversationsRefresh(delay = 250) {
   conversationsRefreshTimer = setTimeout(async () => {
     conversationsRefreshTimer = null
     try {
-      await fetchConversations()
+      await loadConversations()
     } catch {}
   }, delay)
 }
@@ -953,12 +982,9 @@ async function performRenameFromModal() {
     return false
   }
   try {
-    await api.patch(
-      `/conversations/${selectedConvId.value}/title`,
-      { titre: newTitle },
-    )
+    await updateConversationTitle(selectedConvId.value, newTitle)
     currentConvTitle.value = newTitle
-    await fetchConversations()
+    await loadConversations()
     return true
   } catch (error) {
     actionModal.error = "Impossible de renommer la conversation pour le moment."
@@ -970,7 +996,7 @@ async function performLeaveConversation() {
   const convId = selectedConvId.value
   if (!convId) return false
   try {
-    await api.post(`/conversations/${convId}/leave`, {})
+    await leaveConversationRoom(convId)
     removeFavorite(convId)
     conversations.value = conversations.value.filter(c => c.id !== convId)
     const map = { ...callSessionsMap.value }
@@ -978,7 +1004,7 @@ async function performLeaveConversation() {
     callSessionsMap.value = map
     selectedConvId.value = null
     messages.value = []
-    if (conversations.value.length) selectConversation(conversations.value[0].id)
+    if (conversations.value.length) await selectConversation(conversations.value[0].id)
     return true
   } catch (error) {
     actionModal.error = "Impossible de quitter la conversation pour le moment."
@@ -990,7 +1016,7 @@ async function performDeleteConversation() {
   const convId = selectedConvId.value
   if (!convId) return false
   try {
-    await api.delete(`/conversations/${convId}`)
+    await deleteConversationRoom(convId)
     removeFavorite(convId)
     conversations.value = conversations.value.filter(c => c.id !== convId)
     const map = { ...callSessionsMap.value }
@@ -998,7 +1024,7 @@ async function performDeleteConversation() {
     callSessionsMap.value = map
     selectedConvId.value = null
     messages.value = []
-    if (conversations.value.length) selectConversation(conversations.value[0].id)
+    if (conversations.value.length) await selectConversation(conversations.value[0].id)
     return true
   } catch (error) {
     actionModal.error = "Impossible de supprimer la conversation pour le moment."
@@ -1426,45 +1452,76 @@ watch(
 watch(selectedUsers, () => {
   if (!convTitle.value) convTitle.value = derivedTitle()
 })
-function ensureSocket() {
-  if (socket.value) return
-  try {
-    socket.value = io(backendBase, {
-      transports: ['websocket'],
-      auth: { token: localStorage.getItem('access_token') },
+async function ensureSocket() {
+  if (socketClient && socketConnected) return socketClient
+  if (!socketClient) {
+    socketClient = new CovaSocket({
+      baseUrl: backendBase,
+      tokenProvider: () => localStorage.getItem('access_token') || '',
     })
-    socket.value.on('typing', handleTypingEvent)
-    const onMessage = payload => handleIncomingMessage(payload)
-    socket.value.on('message_created', onMessage)
-    socket.value.on('new_message', onMessage)
-    socket.value.on('reaction_updated', payload => {
-      if (!payload) return
-      applyReactionUpdate(payload.message_id, payload)
-    })
-    socket.value.on('call_created', handleCallCreated)
-    socket.value.on('call_ended', handleCallEnded)
-  } catch (e) {
-    // ignore connection errors
   }
+  try {
+    await socketClient.connect()
+    socketConnected = true
+    registerSocketHandlers()
+  } catch (error) {
+    console.error('Unable to connect to realtime service', error)
+    socketConnected = false
+  }
+  return socketConnected ? socketClient : null
+}
+function registerSocketHandlers() {
+  if (!socketClient) return
+  socketClient.on('typing', socketListeners.typing)
+  socketClient.on('message_created', socketListeners.message_created)
+  socketClient.on('new_message', socketListeners.new_message)
+  socketClient.on('reaction_updated', socketListeners.reaction_updated)
+  socketClient.on('call_created', socketListeners.call_created)
+  socketClient.on('call_ended', socketListeners.call_ended)
+  socketClient.on('connect', socketListeners.connect)
+  socketClient.on('disconnect', socketListeners.disconnect)
 }
 
-function joinRoom(convId) {
-  ensureSocket()
-  if (!socket.value) return
+function unregisterSocketHandlers() {
+  if (!socketClient) return
+  socketClient.off('typing', socketListeners.typing)
+  socketClient.off('message_created', socketListeners.message_created)
+  socketClient.off('new_message', socketListeners.new_message)
+  socketClient.off('reaction_updated', socketListeners.reaction_updated)
+  socketClient.off('call_created', socketListeners.call_created)
+  socketClient.off('call_ended', socketListeners.call_ended)
+  socketClient.off('connect', socketListeners.connect)
+  socketClient.off('disconnect', socketListeners.disconnect)
+}
+
+function handleSocketConnect() {
+  socketConnected = true
+  if (lastJoinedConv) socketClient?.joinConversation(lastJoinedConv)
+}
+
+function handleSocketDisconnect() {
+  socketConnected = false
+}
+
+async function joinRoom(convId) {
+  const instance = await ensureSocket()
+  if (!instance) return
   if (lastJoinedConv && lastJoinedConv !== convId) {
-    socket.value.emit('leave_conversation', { conv_id: lastJoinedConv })
+    instance.leaveConversation(lastJoinedConv)
   }
-  socket.value.emit('join_conversation', { conv_id: convId })
+  instance.joinConversation(convId)
   lastJoinedConv = convId
 }
 
 function handleTyping() {
-  ensureSocket()
-  if (!socket.value || !selectedConvId.value) return
-  socket.value.emit('typing', { conv_id: selectedConvId.value, is_typing: true })
+  ensureSocket().then(instance => {
+    if (!instance || !selectedConvId.value) return
+    instance.typing(selectedConvId.value, true)
+  })
   if (typingSendTimer) clearTimeout(typingSendTimer)
   typingSendTimer = setTimeout(() => {
-    socket.value?.emit('typing', { conv_id: selectedConvId.value, is_typing: false })
+    if (!selectedConvId.value || !socketClient || !socketConnected) return
+    socketClient.typing(selectedConvId.value, false)
   }, 1200)
 }
 
@@ -1476,10 +1533,13 @@ function scheduleMarkRead() {
 }
 
 function markRead() {
-  ensureSocket()
-  if (!socket.value || !selectedConvId.value) return
+  if (!selectedConvId.value) return
   const ids = messages.value.filter(m => !m.sentByMe).map(m => m.id_msg)
-  if (ids.length) socket.value.emit('mark_read', { conv_id: selectedConvId.value, message_ids: ids })
+  if (!ids.length) return
+  ensureSocket().then(instance => {
+    if (!instance) return
+    instance.markRead(selectedConvId.value, ids)
+  })
 }
 
 function onScroll() {
@@ -1559,10 +1619,10 @@ function formatDate(ts) {
   return d.toLocaleString('fr-BE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
 }
 
-async function fetchConversations() {
+async function loadConversations() {
     try {
-      const res = await api.get(`/conversations/`)
-      conversations.value = (res.data || []).map(c => ({ ...c }))
+      const data = await listConversations()
+      conversations.value = (data || []).map(c => ({ ...c }))
       for (const conv of conversations.value) {
         if (conv && conv.last && typeof conv.last.text === 'string') {
           const preview = previewTextForMessage({
@@ -1579,8 +1639,8 @@ async function fetchConversations() {
       applyFavoriteStateToConversations()
       applyUnreadCountsToConversations()
       if (!selectedConvId.value && conversations.value.length) {
-      selectConversation(conversations.value[0].id)
-    }
+        await selectConversation(conversations.value[0].id)
+      }
   } catch (e) {
     conversations.value = []
   }
@@ -1589,8 +1649,8 @@ async function fetchConversations() {
 async function enrichConversations() {
   for (const conv of conversations.value) {
     try {
-      const d = await api.get(`/conversations/${conv.id}`)
-      const parts = d.data?.participants || []
+      const details = await getConversation(conv.id)
+      const parts = details?.participants || []
       conv.participants = parts
       if (!conv.is_group) {
         const other = parts.find(p => p.id_user !== userId)
@@ -1605,8 +1665,8 @@ async function enrichConversations() {
       }
     } catch {}
     try {
-      const mres = await api.get(`/conversations/${conv.id}/messages/`)
-      const arr = mres.data || []
+      const messagesData = await getConversationMessages(conv.id)
+      const arr = messagesData || []
       const last = arr[arr.length - 1]
       if (last) {
         const normalizedLast = {
@@ -1621,15 +1681,15 @@ async function enrichConversations() {
   }
 }
 
-async function fetchMessages() {
+async function loadMessages() {
   if (!selectedConvId.value) {
     messages.value = []
     return
   }
   loading.value = true
   try {
-      const res = await api.get(`/conversations/${selectedConvId.value}/messages/`)
-      messages.value = (res.data || []).map(m => ({
+      const data = await getConversationMessages(selectedConvId.value)
+      messages.value = (data || []).map(m => ({
         ...m,
         sentByMe: m.sender_id === userId,
         sender_id: m.sender_id ?? null,
@@ -1654,7 +1714,7 @@ async function fetchMessages() {
 }
 
 function refresh() {
-  fetchMessages()
+  loadMessages()
 }
 
 function normalizeCall(session) {
@@ -1683,11 +1743,11 @@ function upsertCallSession(call) {
   setCallSessions(call.conv_id, existing)
 }
 
-async function fetchCallSessions(convId = selectedConvId.value) {
+async function loadCallSessions(convId = selectedConvId.value) {
   if (!convId) return
   try {
-    const res = await api.get(`/conversations/${convId}/calls`)
-    const normalized = (res.data || []).map(normalizeCall).filter(Boolean)
+    const data = await listConversationCalls(convId)
+    const normalized = (data || []).map(normalizeCall).filter(Boolean)
     setCallSessions(convId, normalized)
     if (normalized.length) {
       updateConversationPreviewWithCall(normalized[normalized.length - 1])
@@ -1748,11 +1808,8 @@ async function startCall(callType) {
   if (!selectedConvId.value || callActionPending.value) return
   callActionPending.value = callType
   try {
-    const res = await api.post(
-      `/conversations/${selectedConvId.value}/calls`,
-      { type: callType },
-    )
-    const call = normalizeCall(res.data)
+    const created = await createConversationCall(selectedConvId.value, { type: callType })
+    const call = normalizeCall(created)
     handleCallCreated(call)
     joinCall(call)
   } catch (error) {
@@ -1810,14 +1867,14 @@ async function endCall(call) {
   }
 }
 
-function selectConversation(id) {
+async function selectConversation(id) {
   if (selectedConvId.value !== id) {
     selectedConvId.value = id
   }
   const conv = conversations.value.find(c => c.id === id)
   currentConvTitle.value = conv ? conv.displayName || conv.titre : 'Messagerie'
   clearUnread(id)
-  joinRoom(id)
+  await joinRoom(id)
   broadcastActiveConversation(id)
 }
 
@@ -2113,16 +2170,13 @@ async function sendMessage() {
   showEmojiPicker.value = false
   showGifPicker.value = false
   try {
-      const res = await api.post(
-        `/conversations/${selectedConvId.value}/messages/`,
-        formData,
-      )
+      const res = await sendConversationMessage(selectedConvId.value, formData)
       const created = {
-        ...res.data,
+        ...res,
         sentByMe: true,
-        files: res.data.files || [],
-        reactions: res.data.reactions || [],
-        reaction_summary: res.data.reaction_summary || [],
+        files: res.files || [],
+        reactions: res.reactions || [],
+        reaction_summary: res.reaction_summary || [],
       }
       created.sender_id = created.sender_id ?? userId
       created.contenu_chiffre = normalizeMessageText(created.contenu_chiffre)
@@ -2154,7 +2208,7 @@ async function confirmEdit() {
     )
     editingId.value = null
     editContent.value = ''
-    await fetchMessages()
+    await loadMessages()
   } catch {}
 }
 
@@ -2168,14 +2222,14 @@ async function deleteMessage(id) {
     await api.delete(
       `/conversations/${selectedConvId.value}/messages/${id}`,
     )
-    await fetchMessages()
+    await loadMessages()
   } catch {}
 }
 
-async function fetchContacts() {
+async function loadContacts() {
   try {
-    const res = await api.get(`/contacts?statut=accepted`)
-    contacts.value = res.data.contacts || []
+    const data = await listContacts('accepted')
+    contacts.value = data?.contacts || data || []
   } catch {
     contacts.value = []
   }
@@ -2185,28 +2239,26 @@ function openConvModal() {
   selectedUsers.value = []
   convTitle.value = ''
   convSearch.value = ''
-  fetchContacts()
+  loadContacts()
   showConvModal.value = true
 }
 
-async function createConversation() {
+async function submitConversationCreation() {
   if (!convTitle.value) return
   creatingConv.value = true
   try {
-    const res = await api.post(
-      `/conversations/`,
-      {
-        titre: convTitle.value,
-        participants: selectedUsers.value,
-        is_group: selectedUsers.value.length > 1,
-      },
-    )
+    const payload = {
+      titre: convTitle.value,
+      participants: selectedUsers.value,
+      is_group: selectedUsers.value.length > 1,
+    }
+    const created = await createConversationRoom(payload)
     showConvModal.value = false
     creatingConv.value = false
-    await fetchConversations()
-    if (res.data && res.data.id) {
-      selectConversation(res.data.id)
-      await fetchMessages()
+    await loadConversations()
+    if (created && created.id) {
+      await selectConversation(created.id)
+      await loadMessages()
     }
   } catch (e) {
     creatingConv.value = false
@@ -2246,11 +2298,8 @@ function selectReaction(msgId, emoji) {
 
 async function toggleReaction(msgId, emoji) {
   try {
-    const res = await api.post(
-      `/messages/${msgId}/reactions`,
-      { emoji },
-    )
-    applyReactionUpdate(msgId, res.data)
+    const res = await toggleMessageReaction(msgId, emoji)
+    applyReactionUpdate(msgId, res)
   } catch {}
 }
 
@@ -2349,8 +2398,10 @@ watch(
 
 function handleIncomingMessage(payload) {
   if (!payload) return
+  const convId = Number(payload.conv_id ?? payload.convId ?? payload.conv?.id ?? payload.id_conv ?? payload.conv_id ?? 0)
   const normalized = {
     ...payload,
+    conv_id: convId,
     files: payload.files || [],
     reactions: payload.reactions || [],
     reaction_summary: payload.reaction_summary || [],
@@ -2358,7 +2409,7 @@ function handleIncomingMessage(payload) {
     contenu_chiffre: normalizeMessageText(payload.contenu_chiffre),
     sentByMe: payload.sender_id === userId,
   }
-  const already = messages.value.some(m => m.id_msg === normalized.id_msg)
+  const already = messages.value.some(m => Number(m.id_msg) === Number(normalized.id_msg))
   if (already) {
     applyReactionUpdate(normalized.id_msg, {
       reactions: normalized.reactions,
@@ -2366,13 +2417,13 @@ function handleIncomingMessage(payload) {
     })
     return
   }
-  const convEntry = conversations.value.find(c => c.id === normalized.conv_id)
+  const convEntry = conversations.value.find(c => Number(c.id) === convId)
   if (convEntry) {
     applyConversationPreview(convEntry, normalized)
   } else {
     scheduleConversationsRefresh(50)
   }
-  if (normalized.conv_id === selectedConvId.value) {
+  if (convId === Number(selectedConvId.value)) {
     if (loading.value) loading.value = false
     messages.value.push(normalized)
     nextTick().then(() => {
@@ -2381,13 +2432,13 @@ function handleIncomingMessage(payload) {
     })
     if (!normalized.sentByMe && !document.hasFocus()) {
       const text = normalized.contenu_chiffre.trim()
-      const fallback = attachmentsLabel(normalized.files) || 'Nouveau message'
+    const fallback = attachmentsLabel(normalized.files) || 'Nouveau message'
       showNotification('Nouveau message', text || fallback)
     }
   } else if (normalized.sender_id !== userId) {
-    incrementUnread(normalized.conv_id)
+    incrementUnread(convId)
   } else if (convEntry) {
-    clearUnread(normalized.conv_id)
+    clearUnread(convId)
   }
 }
 
@@ -2408,16 +2459,16 @@ onMounted(async () => {
   requestNotificationPermission()
   loadUnreadFromStorage()
   loadFavorites()
-  await fetchContacts()
-  await fetchConversations()
+  await loadContacts()
+  await loadConversations()
   await refreshUnreadFromServer()
-  if (selectedConvId.value) selectConversation(selectedConvId.value)
-  await fetchMessages()
+  if (selectedConvId.value) await selectConversation(selectedConvId.value)
+  await loadMessages()
   await nextTick()
   scrollToBottom({ behavior: 'auto' })
-  await fetchCallSessions()
-  ensureSocket()
-  if (selectedConvId.value) joinRoom(selectedConvId.value)
+  await loadCallSessions()
+  await ensureSocket()
+  if (selectedConvId.value) await joinRoom(selectedConvId.value)
   document.addEventListener('visibilitychange', visibilityHandler)
 })
 
@@ -2429,9 +2480,9 @@ watch(selectedConvId, async val => {
   }
   isAtBottom.value = true
   showJumpToLatest.value = false
-  selectConversation(val)
-  await fetchMessages()
-  await fetchCallSessions(val)
+  await selectConversation(val)
+  await loadMessages()
+  await loadCallSessions(val)
   resetPendingFiles()
   showEmojiPicker.value = false
   showGifPicker.value = false
@@ -2479,6 +2530,16 @@ onUnmounted(() => {
     clearTimeout(typingClearTimer)
     typingClearTimer = null
   }
+  unregisterSocketHandlers()
+  if (socketClient) {
+    if (lastJoinedConv) {
+      socketClient.leaveConversation(lastJoinedConv)
+    }
+    socketClient.disconnect()
+  }
+  socketClient = null
+  socketConnected = false
+  lastJoinedConv = null
   if (conversationsRefreshTimer) {
     clearTimeout(conversationsRefreshTimer)
     conversationsRefreshTimer = null
@@ -2491,1667 +2552,18 @@ onUnmounted(() => {
 })
 </script>
 
-<style scoped>
-/* Create conversation modal styles */
-.modal-backdrop-custom .modal-dialog {
-  width: clamp(900px, 85vw, 1200px);
-  max-width: none;
-}
-.glass-modal {
-  border: 1px solid rgba(13, 110, 253, 0.12);
-  border-radius: 20px;
-  box-shadow: 0 20px 60px rgba(16, 24, 40, 0.35);
-  background: #fff;
-  height: clamp(620px, 80vh, 780px);
-  display: flex;
-  flex-direction: column;
-}
-.gradient-header {
-  background: linear-gradient(135deg, #2157d3 0%, #1a5ecc 50%, #0d6efd 100%);
-}
-.input-icon {
-  position: relative;
-}
-.input-icon i {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #8aa2d3;
-}
-.modal-body {
-  flex: 1 1 auto;
-  overflow: hidden;
-}
-.contact-list {
-  max-height: calc(80vh - 200px);
-  overflow-y: auto;
-  padding-right: 4px;
-}
-.contact-item {
-  padding: 0.55rem 0.5rem;
-  border-bottom: 1px solid #f1f3f7;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
-}
-.contact-item:hover {
-  background: #f4f8ff;
-}
-.contact-item.selected {
-  background: #eef4ff;
-  border-color: #d9e6ff;
-}
-.check-circle {
-  width: 20px;
-  height: 20px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: #e9eefb;
-  color: #668;
-  font-size: 0.85rem;
-}
-.check-circle.checked {
-  background: #0d6efd;
-  color: #fff;
-  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
-}
-.contact-item:last-child {
-  border-bottom: none;
-}
-.avatar-md {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  object-fit: cover;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
-}
-.avatar-md-placeholder {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #e9eefb;
-  color: #506;
-  font-weight: 600;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-}
-.selected-chips {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.35rem 0.7rem;
-  border: 1px solid #e8ecf5;
-  border-radius: 999px;
-  background: #f8faff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-}
-.chip-avatar-lg {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-.chip-initials {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: #e9eefb;
-  color: #506;
-  font-weight: 600;
-  border-radius: 50%;
-  width: 24px;
-  height: 24px;
-}
-.step-label {
-  font-weight: 600;
-  color: #1f3b76;
-  letter-spacing: 0.2px;
-}
-.btn-soft {
-  border: 1px solid transparent;
-}
-.btn-soft-primary {
-  background: #eaf1ff;
-  color: #0d6efd;
-  border-color: #dbe7ff;
-}
-.btn-soft-primary:hover {
-  background: #e0ebff;
-  color: #0a58ca;
-}
-.btn-soft-danger {
-  background: #ffe9ea;
-  color: #dc3545;
-  border-color: #ffd6d9;
-}
-.btn-soft-danger:hover {
-  background: #ffdfe2;
-  color: #bb2d3b;
-}
-.btn-create {
-  background: linear-gradient(135deg, #2157d3, #0d6efd);
-  color: #fff;
-  border: none;
-  box-shadow: 0 10px 24px rgba(13, 110, 253, 0.35);
-  padding: 0.6rem 1.1rem;
-  font-weight: 600;
-}
-.btn-create:disabled {
-  opacity: 0.65;
-  box-shadow: none;
-}
+<style scoped src="../styles/components/MessagesRealtimeNew.css"></style>
 
-/* Chat styles */
-.chat-container {
-  position: relative;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 28px;
-  border: 1px solid #d6def2;
-  box-shadow: 0 28px 60px rgba(15, 38, 105, 0.15);
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  flex: 1;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-  backdrop-filter: blur(18px);
-}
-.chat-container::before {
-  content: '';
-  position: absolute;
-  top: -120px;
-  left: -80px;
-  width: 280px;
-  height: 280px;
-  background: radial-gradient(circle, rgba(13, 110, 253, 0.18), transparent 70%);
-  opacity: 0.4;
-  pointer-events: none;
-}
-.chat-header {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-  padding: 1.5rem 1.75rem 1.25rem;
-  border-bottom: 1px solid #e3e8f3;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.55), rgba(239, 243, 255, 0.95));
-  z-index: 2;
-  box-shadow: 0 12px 30px rgba(15, 38, 105, 0.08);
-}
-.chat-header-icon {
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, rgba(13, 110, 253, 0.18), rgba(13, 110, 253, 0.05));
-  color: #2157d3;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.4rem;
-  box-shadow: inset 0 0 0 1px rgba(13, 110, 253, 0.12);
-}
-.chat-title-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.chat-title {
-  margin: 0;
-  font-size: 1.45rem;
-  font-weight: 700;
-  color: #152347;
-}
-.chat-subtitle {
-  margin: 0.35rem 0 0;
-  color: #6c7898;
-  font-size: 0.95rem;
-}
-.chat-subtitle.typing {
-  color: #1f7a55;
-  font-weight: 600;
-}
-.chat-meta {
-  margin-top: 0.75rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-.chat-meta-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.25rem 0.65rem;
-  border-radius: 999px;
-  border: 1px solid #dbe2f3;
-  background: rgba(13, 110, 253, 0.08);
-  color: #1f3b76;
-  font-weight: 600;
-  font-size: 0.8rem;
-  letter-spacing: 0.01em;
-}
-.chat-meta-chip i {
-  font-size: 0.9rem;
-}
-.chat-actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-.chat-action-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 14px;
-  border: 1px solid #dbe2f3;
-  background: #f6f8ff;
-  color: #1f3b76;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1rem;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
-}
-.chat-action-btn:hover {
-  transform: translateY(-2px);
-  background: linear-gradient(135deg, rgba(13, 110, 253, 0.18), rgba(13, 110, 253, 0.05));
-  border-color: rgba(13, 110, 253, 0.45);
-  color: #0d6efd;
-  box-shadow: 0 12px 28px rgba(13, 110, 253, 0.18);
-}
-.chat-action-btn:focus-visible {
-  outline: 2px solid rgba(13, 110, 253, 0.3);
-  outline-offset: 2px;
-}
-.chat-action-btn.dropdown-toggle::after {
-  display: none;
-}
-.chat-actions .dropdown-menu {
-  border-radius: 16px;
-  padding: 0.35rem 0;
-  box-shadow: 0 18px 40px rgba(15, 38, 105, 0.12);
-}
-.call-banner {
-  margin: 0 1.75rem 1rem;
-  padding: 0.85rem 1.2rem;
-  border-radius: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  border: 1px solid rgba(13, 110, 253, 0.25);
-  background: rgba(13, 110, 253, 0.12);
-  color: #123d8c;
-  box-shadow: 0 12px 32px rgba(13, 110, 253, 0.12);
-}
-.call-banner.audio {
-  border-color: rgba(25, 135, 84, 0.25);
-  background: rgba(25, 135, 84, 0.12);
-  color: #0f5132;
-}
-.call-banner-info {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-}
-.call-banner-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.6);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
-  font-size: 1.2rem;
-}
-.call-banner-title {
-  font-weight: 700;
-  font-size: 1rem;
-  margin-bottom: 0.1rem;
-}
-.call-banner-meta {
-  font-size: 0.85rem;
-  color: inherit;
-  opacity: 0.8;
-}
-.call-banner-actions .btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  border-radius: 999px;
-  padding-inline: 1rem;
-}
-.chat-messages {
-  position: relative;
-  flex: 1;
-  padding: 1.25rem 1.15rem 1.5rem;
-  overflow-y: auto;
-  background: #efeae2;
-  background-image: radial-gradient(circle at top left, rgba(0, 0, 0, 0.03) 0, transparent 55%),
-    radial-gradient(circle at bottom right, rgba(0, 0, 0, 0.02) 0, transparent 45%);
-  min-height: 0;
-}
-.chat-messages::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.25), transparent 18%),
-    linear-gradient(0deg, rgba(255, 255, 255, 0.18), transparent 22%);
-  opacity: 0.6;
-}
-.chat-messages > * {
-  position: relative;
-  z-index: 1;
-}
-.jump-to-latest {
-  position: absolute;
-  right: 1.75rem;
-  bottom: 1.5rem;
-  border: none;
-  border-radius: 999px;
-  background: #0d6efd;
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.85rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  box-shadow: 0 12px 30px rgba(13, 110, 253, 0.35);
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-.jump-to-latest:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 14px 34px rgba(13, 110, 253, 0.4);
-}
-.jump-to-latest:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.6);
-  outline-offset: 2px;
-}
-.jump-to-latest i {
-  font-size: 1rem;
-}
-.chat-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  min-height: 220px;
-  color: #6c7898;
-  text-align: center;
-}
-.chat-state.chat-empty i {
-  color: #9aa4c3;
-}
-.chat-history {
-  display: flex;
-  flex-direction: column;
-  min-height: 100%;
-  gap: 0.5rem;
-}
-.messages-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  margin-top: auto;
-  padding-bottom: 1rem;
-}
-.timeline-entry {
-  display: contents;
-}
-.day-divider {
-  position: sticky;
-  top: 0.4rem;
-  display: flex;
-  justify-content: center;
-  pointer-events: none;
-  z-index: 5;
-  margin: 0.35rem 0;
-}
-.day-divider-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.2rem 0.65rem;
-  border-radius: 999px;
-  background: rgba(50, 55, 60, 0.16);
-  color: #2f3033;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-.day-divider-label::before,
-.day-divider-label::after {
-  content: '';
-  display: block;
-  width: 12px;
-  height: 1px;
-  background: currentColor;
-  opacity: 0.35;
-}
-.chat-bubble {
-  max-width: min(54%, 440px);
-  padding: 0.45rem 0.85rem 0.4rem;
-  border-radius: 14px;
-  word-break: break-word;
-  position: relative;
-  background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.04);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
-}
-.chat-bubble.sent {
-  background: #d9fdd3;
-  color: #202020;
-  margin-left: auto;
-  border-color: rgba(0, 0, 0, 0.05);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-.chat-bubble.received {
-  background: #ffffff;
-  color: #1f1f1f;
-  margin-right: auto;
-}
-.chat-bubble:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
-}
-.bubble-header {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.72rem;
-  opacity: 0.75;
-  margin-bottom: 0.15rem;
-}
-.bubble-header .name {
-  font-weight: 600;
-}
-.bubble-header .time {
-  font-size: 0.72rem;
-  color: #6b6b6b;
-}
-.chat-bubble.sent .bubble-header .time {
-  color: rgba(0, 0, 0, 0.5);
-}
-.chat-bubble.sent .bubble-header .name {
-  color: #1a1a1a;
-}
-.bubble-body {
-  font-size: 0.85rem;
-  line-height: 1.3;
-  white-space: pre-wrap;
-}
-.chat-bubble:after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  width: 11px;
-  height: 11px;
-  background: inherit;
-}
-.chat-bubble.received:after {
-  left: -5px;
-  border-bottom-right-radius: 14px;
-  transform: translateY(-2px) rotate(45deg);
-  box-shadow: -1px 1px 3px rgba(0, 0, 0, 0.04);
-}
-.chat-bubble.sent:after {
-  right: -5px;
-  border-bottom-left-radius: 14px;
-  transform: translateY(-2px) rotate(-45deg);
-  box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.05);
-}
-.bubble-actions {
-  position: absolute;
-  right: 0.3rem;
-  bottom: 0.25rem;
-  opacity: 0;
-  transform: translateY(3px);
-  transition: all 0.12s ease;
-  pointer-events: none;
-}
-.chat-bubble:hover .bubble-actions {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-}
-.btn.btn-action {
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
-  border: none;
-  padding: 0.25rem 0.4rem;
-  border-radius: 8px;
-  backdrop-filter: saturate(140%) blur(2px);
-}
-.btn.btn-action:hover {
-  background: rgba(255, 255, 255, 0.28);
-}
-.btn.btn-action.danger {
-  background: rgba(255, 75, 90, 0.25);
-  color: #fff;
-}
-.btn.btn-action.danger:hover {
-  background: rgba(255, 75, 90, 0.35);
-}
-.chat-input {
-  padding: 1.25rem 1.75rem;
-  border-top: 1px solid #e3e8f3;
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 0 0 28px 28px;
-  position: relative;
-  box-shadow: 0 -8px 24px rgba(15, 38, 105, 0.08);
-}
-.composer-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  border-radius: 18px;
-  background: rgba(248, 250, 255, 0.9);
-  border: 1px solid #dbe2f3;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65), 0 12px 30px rgba(15, 38, 105, 0.12);
-  padding: 0.6rem 0.75rem;
-}
-.composer-tools {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.composer-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  border: 1px solid #dbe2f3;
-  background: #f6f8ff;
-  color: #1f3b76;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.05rem;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
-}
-.composer-icon:hover:enabled {
-  transform: translateY(-2px);
-  background: linear-gradient(135deg, rgba(13, 110, 253, 0.18), rgba(13, 110, 253, 0.05));
-  border-color: rgba(13, 110, 253, 0.4);
-  color: #0d6efd;
-  box-shadow: 0 12px 28px rgba(13, 110, 253, 0.18);
-}
-.composer-icon:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-.composer-input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  color: #1f2937;
-  font-size: 1rem;
-  padding: 0.4rem 0.5rem;
-}
-.composer-input:focus {
-  outline: none;
-  box-shadow: none;
-}
-.composer-send {
-  width: 46px;
-  height: 46px;
-  border-radius: 16px;
-  border: none;
-  background: linear-gradient(135deg, #2157d3, #0d6efd);
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.1rem;
-  box-shadow: 0 18px 36px rgba(13, 110, 253, 0.28);
-  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
-}
-.composer-send:disabled {
-  opacity: 0.5;
-  box-shadow: none;
-  cursor: not-allowed;
-}
-.composer-send:not(:disabled):hover {
-  transform: translateY(-2px);
-  box-shadow: 0 24px 44px rgba(13, 110, 253, 0.32);
-}
-.pending-files {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-top: 0.75rem;
-}
-.pending-file {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.45rem 0.7rem;
-  border: 1px solid #dbe2f3;
-  border-radius: 14px;
-  background: rgba(248, 250, 255, 0.95);
-  box-shadow: 0 8px 20px rgba(13, 110, 253, 0.12);
-}
-.pending-thumb {
-  width: 48px;
-  height: 48px;
-  border-radius: 10px;
-  overflow: hidden;
-  background: #e5ecff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.pending-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.pending-details {
-  min-width: 0;
-}
-.pending-name {
-  font-weight: 600;
-  max-width: 180px;
-}
-.emoji-popover,
-.gif-popover {
-  position: absolute;
-  bottom: 90px;
-  left: 110px;
-  z-index: 30;
-  background: #fff;
-  border-radius: 16px;
-  border: 1px solid rgba(13, 110, 253, 0.2);
-  box-shadow: 0 18px 40px rgba(13, 110, 253, 0.15);
-  padding: 0.75rem;
-}
-.emoji-popover {
-  width: 320px;
-}
-.composer-emoji-picker {
-  width: 100%;
-  height: 320px;
-  border-radius: 12px;
-}
-.gif-popover {
-  width: 360px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.gif-search .input-group-text {
-  background: #f1f4ff;
-  border-color: #dbe2f3;
-}
-.gif-search .form-control,
-.gif-search .btn {
-  border-color: #dbe2f3;
-}
-.chat-search .input-group-text {
-  background: rgba(248, 250, 255, 0.95);
-  border: none;
-  color: #3d4f7c;
-}
-.chat-search .form-control,
-.chat-search .btn,
-.chat-search .form-select {
-  border: none;
-  background: transparent;
-  color: #1f3b76;
-}
-.chat-search .btn {
-  color: #1f3b76;
-}
-.chat-search .btn:hover {
-  color: #0d6efd;
-}
-.chat-search {
-  padding: 1.25rem 1.75rem;
-  background: rgba(255, 255, 255, 0.9);
-  border-bottom: 1px solid #e3e8f3;
-}
-.chat-search-bar {
-  border-radius: 14px;
-  overflow: hidden;
-  box-shadow: 0 12px 28px rgba(13, 110, 253, 0.08);
-}
-.chat-search-bar .form-control {
-  padding: 0.6rem 0.9rem;
-}
-.chat-search-bar .btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.chat-search-grid {
-  margin-top: 1rem !important;
-}
-.search-result-count {
-  color: #6c7898;
-}
-mark.hl {
-  background: #fff3cd;
-  color: inherit;
-  padding: 0 2px;
-  border-radius: 3px;
-}
-.chat-search .input-group-text {
-  background: #f1f4ff;
-  border-color: #dbe2f3;
-}
-.chat-search .form-control,
-.chat-search .btn {
-  border-color: #dbe2f3;
-}
-.gif-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.5rem;
-  max-height: 260px;
-  overflow-y: auto;
-  padding-right: 0.25rem;
-}
-.gif-thumb {
-  border: none;
-  padding: 0;
-  border-radius: 12px;
-  overflow: hidden;
-  background: transparent;
-  cursor: pointer;
-  box-shadow: 0 6px 16px rgba(13, 110, 253, 0.14);
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
-}
-.gif-thumb:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 10px 26px rgba(13, 110, 253, 0.2);
-}
-.gif-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.gif-loading {
-  min-height: 96px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.reaction-strip {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-.reaction-chip {
-  border: 1px solid #dbe2f3;
-  border-radius: 999px;
-  background: #f0f4ff;
-  color: #1f3b76;
-  padding: 0.1rem 0.6rem;
-  font-size: 0.85rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-.reaction-chip.mine {
-  background: #0d6efd;
-  border-color: #0d6efd;
-  color: #fff;
-}
-.reaction-chip .emoji {
-  font-size: 1rem;
-}
-.reaction-picker {
-  position: relative;
-  z-index: 10;
-  background: #fff;
-  border: 1px solid rgba(13, 110, 253, 0.2);
-  border-radius: 14px;
-  box-shadow: 0 16px 38px rgba(13, 110, 253, 0.18);
-  padding: 0.35rem;
-}
-.reaction-emoji-picker {
-  width: 220px;
-  height: 240px;
-  border-radius: 12px;
-}
-.add-reaction {
-  border-radius: 999px;
-}
-.spinning {
-  animation: rotate 0.9s linear infinite;
-}
-@keyframes rotate {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-.bubble-attachments {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-.attachment-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.45rem 0.6rem;
-  border-radius: 12px;
-  background: #f0f4ff;
-}
-.attachment-item.preview {
-  background: #fff;
-  border: 1px solid rgba(13, 110, 253, 0.2);
-  box-shadow: 0 10px 28px rgba(13, 110, 253, 0.18);
-  align-items: stretch;
-}
-.attachment-thumb {
-  border: none;
-  background: transparent;
-  padding: 0;
-  width: 140px;
-  height: 140px;
-  border-radius: 12px;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.attachment-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.attachment-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  justify-content: center;
-  max-width: 180px;
-}
-.attachment-name {
-  font-weight: 600;
-  word-break: break-word;
-}
-.attachment-item:not(.preview) .attachment-link {
-  font-size: 0.95rem;
-  font-weight: 600;
-}
 
-.conv-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.1rem;
-}
 
-.conv-filter-btn {
-  position: relative;
-  width: 50px;
-  height: 50px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 16px;
-  border: 1px solid rgba(219, 226, 243, 0.9);
-  background: rgba(255, 255, 255, 0.78);
-  color: #1f3b76;
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
-  box-shadow: 0 4px 12px rgba(13, 110, 253, 0.12);
-}
 
-.conv-filter-btn .filter-count {
-  position: absolute;
-  bottom: -4px;
-  right: -4px;
-  min-width: 22px;
-  padding: 0.1rem 0.4rem;
-  border-radius: 999px;
-  background: rgba(13, 110, 253, 0.16);
-  color: #0d6efd;
-  font-weight: 700;
-  font-size: 0.68rem;
-  text-align: center;
-  box-shadow: 0 2px 6px rgba(13, 110, 253, 0.16);
-}
 
-.conv-filter-icon {
-  font-size: 1.1rem;
-}
 
-.conv-filter-btn:hover {
-  transform: translateY(-2px);
-  border-color: rgba(13, 110, 253, 0.35);
-  box-shadow: 0 10px 22px rgba(13, 110, 253, 0.2);
-  background: rgba(230, 238, 255, 0.9);
-}
 
-.conv-filter-btn:focus-visible {
-  outline: 2px solid rgba(13, 110, 253, 0.4);
-  outline-offset: 2px;
-}
 
-.conv-filter-btn.active {
-  background: linear-gradient(135deg, #2157d3 0%, #0d6efd 100%);
-  color: #fff;
-  border-color: transparent;
-  box-shadow: 0 12px 26px rgba(13, 110, 253, 0.32);
-}
 
-.conv-filter-btn.active .filter-count {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
-  box-shadow: none;
-}
 
-.conv-filter-btn.active .conv-filter-icon {
-  color: #fff;
-}
 
-.favorite-toggle {
-  border: none;
-  background: transparent;
-  color: #97a3bb;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
-}
-
-.favorite-toggle:hover {
-  color: #f3a712;
-  background: rgba(243, 167, 18, 0.16);
-  transform: translateY(-1px);
-}
-
-.favorite-toggle:focus-visible {
-  outline: 2px solid rgba(13, 110, 253, 0.4);
-  outline-offset: 1px;
-}
-
-.favorite-toggle.active {
-  color: #f3a712;
-}
-
-.conv-item.active .favorite-toggle {
-  color: rgba(255, 255, 255, 0.82);
-}
-
-.conv-item.active .favorite-toggle:hover {
-  background: rgba(255, 255, 255, 0.18);
-}
-
-.conv-item.active .favorite-toggle.active {
-  color: #ffe08a;
-}
-
-.messages-page {
-  min-height: 100vh;
-  height: 100vh;
-  padding: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  width: 100%;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border: 0;
-}
-
-.messages-wrapper {
-  position: relative;
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  padding: 1.4rem 1.6rem 1.6rem 1.3rem;
-  background: linear-gradient(135deg, rgba(13, 110, 253, 0.07), rgba(255, 255, 255, 0.9));
-  border-radius: 32px;
-  box-shadow: 0 24px 60px rgba(13, 38, 86, 0.12);
-  overflow: hidden;
-  margin-bottom: 0;
-  height: 100%;
-  min-height: 0;
-}
-.messages-wrapper::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at top left, rgba(13, 110, 253, 0.12), transparent 55%),
-    radial-gradient(circle at bottom right, rgba(99, 102, 241, 0.12), transparent 45%);
-  pointer-events: none;
-}
-.messages-layout {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
-  gap: 1.25rem;
-  width: 100%;
-  flex: 1 1 auto;
-  min-height: 0;
-  height: 100%;
-  align-items: stretch;
-}
-.conv-list {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  padding: 1.1rem 1rem;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid #dbe2f3;
-  box-shadow: 0 18px 48px rgba(15, 38, 105, 0.08);
-  height: 100%;
-  min-height: 0;
-  backdrop-filter: blur(18px);
-  overflow: hidden;
-}
-.conv-list::before {
-  content: '';
-  position: absolute;
-  top: -60px;
-  right: -60px;
-  width: 200px;
-  height: 200px;
-  background: radial-gradient(circle, rgba(13, 110, 253, 0.15), transparent 65%);
-  opacity: 0.6;
-  pointer-events: none;
-}
-.conv-search input {
-  border-radius: 14px;
-  border: 1px solid #dbe2f3;
-  background: rgba(255, 255, 255, 0.85);
-  padding-left: 2.6rem;
-  height: 42px;
-  box-shadow: 0 8px 24px rgba(13, 110, 253, 0.08);
-}
-.conv-search input:focus {
-  border-color: #0d6efd;
-  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.18);
-  background: #fff;
-}
-.conv-list-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.25rem;
-}
-.conv-title {
-  margin: 0;
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: #1f3b76;
-}
-.conv-subtitle {
-  margin: 0.35rem 0 0;
-  color: #6c7898;
-  font-size: 0.9rem;
-}
-.conv-create-btn {
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #2157d3, #0d6efd);
-  color: #fff;
-  border: none;
-  box-shadow: 0 18px 36px rgba(13, 110, 253, 0.26);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-.conv-create-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 24px 44px rgba(13, 110, 253, 0.32);
-}
-.conv-create-btn:focus-visible {
-  outline: 2px solid rgba(13, 110, 253, 0.4);
-  outline-offset: 2px;
-}
-.conv-tools {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-bottom: 1.25rem;
-}
-.conv-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-.conv-meta-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.25rem 0.65rem;
-  border-radius: 999px;
-  border: 1px solid #dbe2f3;
-  background: rgba(13, 110, 253, 0.08);
-  color: #1f3b76;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-.conv-meta-chip i {
-  font-size: 0.85rem;
-}
-.conv-scroll {
-  flex: 1;
-  overflow-y: auto;
-  margin: 0 -0.5rem;
-  padding: 0 0.5rem 0.5rem;
-  min-height: 0;
-}
-.conv-empty {
-  background: transparent;
-}
-
-.conv-sections {
-  display: flex;
-  flex-direction: column;
-  gap: 1.1rem;
-}
-.conv-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  margin-bottom: 1.2rem;
-}
-
-.conv-section:last-of-type {
-  margin-bottom: 0;
-}
-
-.conv-section-title {
-  margin: 0 0 0.35rem 0.35rem;
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #6c7898;
-}
-
-.conv-list-scroll {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  width: 100%;
-}
-
-.conv-item {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.65rem 0.8rem;
-  border-radius: 16px;
-  border: 1px solid transparent;
-  background: rgba(255, 255, 255, 0.7);
-  cursor: pointer;
-  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
-  overflow: hidden;
-}
-
-.conv-item::before {
-  content: '';
-  position: absolute;
-  left: 8px;
-  top: 8px;
-  bottom: 8px;
-  width: 4px;
-  border-radius: 999px;
-  background: transparent;
-  transition: background 0.18s ease;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.conv-item > * {
-  position: relative;
-  z-index: 1;
-}
-
-.conv-item.unread::before {
-  background: linear-gradient(180deg, rgba(13, 110, 253, 0.85), rgba(99, 102, 241, 0.6));
-}
-
-.conv-item.unread .conv-name {
-  font-weight: 700;
-  color: #153d7a;
-}
-
-.conv-item.unread .conv-item-preview {
-  color: #2d466f;
-}
-
-.conv-item.favorite:not(.active) {
-  background: rgba(255, 249, 224, 0.92);
-  border-color: rgba(255, 193, 7, 0.35);
-  box-shadow: 0 10px 30px rgba(255, 193, 7, 0.2);
-}
-
-.conv-item.favorite:not(.active)::before {
-  background: linear-gradient(180deg, rgba(255, 193, 7, 0.95), rgba(255, 160, 0, 0.7));
-}
-
-.conv-item:hover {
-  transform: translateY(-1px);
-  background: rgba(13, 110, 253, 0.12);
-  border-color: rgba(13, 110, 253, 0.26);
-  box-shadow: 0 12px 28px rgba(13, 110, 253, 0.16);
-}
-
-.conv-item:hover::before {
-  background: linear-gradient(180deg, rgba(13, 110, 253, 0.55), rgba(99, 102, 241, 0.4));
-}
-
-.conv-item.active {
-  background: linear-gradient(135deg, #3372ff, #0d6efd);
-  border-color: rgba(13, 110, 253, 0.65);
-  box-shadow: 0 18px 36px rgba(13, 110, 253, 0.28);
-  color: #fff;
-}
-
-.conv-item.active::before {
-  background: rgba(255, 255, 255, 0.75);
-}
-
-.conv-item-leading .avatar-list,
-.conv-item-leading .avatar-list-placeholder {
-  width: 44px;
-  height: 44px;
-}
-
-.conv-item-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.conv-top-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  min-width: 0;
-}
-
-.conv-name-block {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  min-width: 0;
-  flex: 1;
-}
-
-.conv-name {
-  margin: 0;
-  font-weight: 600;
-  font-size: 0.95rem;
-  color: #1f3b76;
-}
-
-.conv-meta {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  color: #7383a6;
-  font-size: 0.74rem;
-}
-
-.conv-time {
-  color: inherit;
-}
-
-.conv-bottom-row {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  min-width: 0;
-}
-
-.conv-item-preview {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.84rem;
-  color: #5b6b88;
-  min-width: 0;
-  flex: 1;
-}
-
-.conv-preview-prefix {
-  font-weight: 600;
-  color: #4a5b80;
-  white-space: nowrap;
-}
-
-.conv-item.active .conv-name,
-.conv-item.active .conv-item-preview,
-.conv-item.active .conv-preview-prefix,
-.conv-item.active .conv-meta {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.conv-item.active .conv-item-preview {
-  color: rgba(255, 255, 255, 0.88);
-}
-
-.conv-item.active .conv-preview-prefix {
-  color: rgba(255, 255, 255, 0.95);
-}
-
-.conv-item-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.conv-tags {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  flex-wrap: wrap;
-}
-
-.conv-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  background: rgba(31, 59, 118, 0.08);
-  color: #1f3b76;
-  border: 1px solid rgba(31, 59, 118, 0.18);
-}
-
-.conv-tag.favorite {
-  background: rgba(255, 193, 7, 0.22);
-  border-color: rgba(255, 193, 7, 0.4);
-  color: #7a5400;
-}
-
-.conv-item.active .conv-tag {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.55);
-  color: rgba(255, 255, 255, 0.92);
-}
-
-.conv-tag i {
-  font-size: 0.68rem;
-}
-
-.badge-unread {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 22px;
-  padding: 0.12rem 0.45rem;
-  background: #0d6efd;
-  color: #fff;
-  font-weight: 700;
-  font-size: 0.72rem;
-  border-radius: 999px;
-  box-shadow: 0 3px 8px rgba(13, 110, 253, 0.25);
-}
-
-.conv-item.active .badge-unread {
-  background: rgba(255, 255, 255, 0.92);
-  color: #0d47a1;
-  box-shadow: none;
-}
-.msg-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.35rem;
-  margin: 0 0.2rem;
-  padding: 0;
-  animation: bubbleIn 0.16s ease;
-}
-.msg-row.sent {
-  justify-content: flex-end;
-}
-.msg-row:not(.sent) {
-  justify-content: flex-start;
-}
-
-.action-modal-backdrop {
-  padding: 1.5rem;
-}
-
-.action-modal-card {
-  background: #ffffff;
-  border-radius: 24px;
-  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.32);
-  width: min(420px, 92vw);
-  padding: 1.9rem 1.8rem 1.6rem;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.action-modal-close {
-  position: absolute;
-  top: 18px;
-  right: 18px;
-  z-index: 1;
-}
-
-.action-modal-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.action-modal-icon {
-  height: 52px;
-  width: 52px;
-  border-radius: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-}
-
-.action-modal-icon.rename {
-  background: rgba(13, 110, 253, 0.12);
-  color: #0d6efd;
-}
-
-.action-modal-icon.leave {
-  background: rgba(255, 193, 7, 0.18);
-  color: #b18500;
-}
-
-.action-modal-icon.delete {
-  background: rgba(220, 53, 69, 0.18);
-  color: #c62828;
-}
-
-.action-modal-body {
-  color: #414d63;
-}
-
-.action-modal-message {
-  line-height: 1.5;
-  margin-bottom: 0;
-}
-
-.action-modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 0.25rem;
-}
-
-.action-modal-footer .btn {
-  min-width: 120px;
-  border-radius: 999px;
-  font-weight: 600;
-}
-
-.action-modal-footer .btn-outline-secondary {
-  background: #f8f9fb;
-  border: 1px solid #d7dce5;
-  color: #4a5468;
-}
-
-.action-modal-footer .btn-outline-secondary:hover:enabled {
-  background: #eef1f6;
-}
-
-.action-modal-footer .btn-danger {
-  box-shadow: 0 10px 25px rgba(220, 53, 69, 0.25);
-}
-
-.action-modal-footer .btn-primary {
-  box-shadow: 0 10px 25px rgba(13, 110, 253, 0.25);
-}
-
-.action-modal-footer .spinner-border {
-  width: 1rem;
-  height: 1rem;
-}
-
-@media (max-width: 1200px) {
-  .messages-layout {
-    grid-template-columns: minmax(210px, 260px) minmax(0, 1fr);
-  }
-}
-@media (max-width: 992px) {
-  .messages-page {
-    min-height: auto;
-    height: auto;
-    padding: 1rem;
-  }
-  .messages-wrapper {
-    padding: 1.1rem;
-    border-radius: 24px;
-    height: auto;
-    min-height: auto;
-  }
-  .messages-layout {
-    grid-template-columns: 1fr;
-    min-height: auto;
-    height: auto;
-    gap: 1rem;
-  }
-  .conv-list {
-    border-radius: 24px;
-    height: auto;
-    min-height: 0;
-  }
-  .chat-container {
-    border-radius: 24px;
-    height: auto;
-    min-height: 0;
-  }
-}
-@media (max-width: 576px) {
-  .chat-header {
-    flex-wrap: wrap;
-    gap: 1rem;
-  }
-  .chat-actions {
-    width: 100%;
-    justify-content: flex-start;
-  }
-  .composer-bar {
-    flex-wrap: wrap;
-    padding: 0.75rem;
-  }
-  .composer-input {
-    width: 100%;
-  }
-}
-.avatar-xs {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  object-fit: cover;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-
-@keyframes bubbleIn {
-  from {
-    opacity: 0;
-    transform: translateY(4px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.modal-backdrop-custom {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(17, 24, 39, 0.45);
-  backdrop-filter: blur(6px) saturate(160%);
-  -webkit-backdrop-filter: blur(6px) saturate(160%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1050;
-  padding: 2vh 2vw;
-}
-
-.sticky-footer {
-  position: sticky;
-  bottom: 0;
-  background: #fff;
-  border-top: 1px solid #eef1f6;
-  padding: 0.75rem 1rem;
-}
-</style>
 
 
 

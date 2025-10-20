@@ -1,0 +1,18 @@
+.hero { position: relative; border-radius: 18px; }
+.hero-bg { position:absolute; inset:0; background: linear-gradient(135deg,#2157d3 0%,#0d6efd 60%,#57a0ff 100%); opacity: 0.95; }
+.hero-content { position: relative; z-index: 1; padding: 22px; }
+.avatar-hero { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+.avatar-hero.placeholder { background:#ffffff22; padding: 10px; border-radius: 50%; }
+.text-white-75 { color: rgba(255,255,255,0.85); }
+
+/* Tiles */
+.tile { border: 1px solid #e7ecf7; border-radius: 16px; box-shadow: 0 8px 22px rgba(13,110,253,0.08); transition: transform .12s ease, box-shadow .12s ease; }
+.tile:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(13,110,253,0.12); }
+.icon-wrap { width: 42px; height: 42px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem; }
+.tile-label { color: #6b789a; font-size: .9rem; }
+.tile-value { font-size: 1.4rem; font-weight: 700; color: #1b2b59; }
+
+/* Status */
+.status-dot { width: 10px; height: 10px; border-radius: 50%; display:inline-block; }
+.status-dot.ok { background: #28a745; box-shadow: 0 0 0 4px rgba(40,167,69,0.12); }
+.status-dot.ko { background: #dc3545; box-shadow: 0 0 0 4px rgba(220,53,69,0.12); }

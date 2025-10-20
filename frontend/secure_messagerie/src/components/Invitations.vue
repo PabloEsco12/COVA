@@ -85,20 +85,4 @@ function refresh() {
 onMounted(fetchInvitations)
 </script>
 
-<style scoped>
-.invitations-container {
-  max-width: 580px;
-  margin: 2rem auto;
-  background: #fff;
-  border-radius: 18px;
-}
-
-.list-group-item {
-  border: none;
-  border-bottom: 1px solid #f3f4f7;
-  background: transparent;
-}
-.list-group-item:last-child {
-  border-bottom: none;
-}
-</style>
+<style scoped src="../styles/components/Invitations.css"></style>

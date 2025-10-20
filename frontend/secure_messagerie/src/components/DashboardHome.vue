@@ -86,12 +86,4 @@ function onAvatarError() {
 }
 </script>
 
-<style scoped>
-.avatar-lg {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  object-fit: cover;
-  box-shadow: 0 2px 8px #0002;
-}
-</style>
+<style scoped src="../styles/components/DashboardHome.css"></style>

@@ -282,29 +282,4 @@ function pickSuggestion(u) {
 }
 </script>
 
-<style scoped>
-.contacts-container { max-width: 580px; margin: 2rem auto; background: #fff; border-radius: 18px; }
-.list-group-item { border: none; border-bottom: 1px solid #f3f4f7; background: transparent; }
-.list-group-item:last-child { border-bottom: none; }
-.badge { font-size: 0.97em; }
-.avatar-sm { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
-.avatar-sm-placeholder { width: 36px; height: 36px; border-radius: 50%; display:flex; align-items:center; justify-content:center; background:#e9eefb; color:#506; font-weight:600; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
-
-/* Fancy modal */
-.fancy-overlay { position: fixed; inset: 0; background: rgba(23,27,51,.25); backdrop-filter: blur(3px); z-index: 1080; display:flex; align-items:center; justify-content:center; padding:1rem; }
-.fancy-modal { width:100%; max-width:520px; border-radius:16px; overflow:hidden; background:#fff; box-shadow: 0 12px 40px rgba(0,0,0,.15); }
-.fancy-header { display:flex; align-items:center; justify-content:space-between; padding:.9rem 1rem; background: linear-gradient(90deg,#f4f7ff,#ffffff); border-bottom:1px solid #eef1f7; }
-.fancy-body { padding: 1rem; }
-.fancy-footer { display:flex; gap:.5rem; justify-content:flex-end; padding:.75rem 1rem; border-top:1px solid #eef1f7; }
-.has-icon .input-group-text { background:#f7f9ff; }
-.fade-enter-active,.fade-leave-active{ transition: opacity .18s ease; }
-.fade-enter-from,.fade-leave-to{ opacity:0; }
-
-/* Suggestions */
-.suggest-box{ border:1px solid #e7ecf6; border-radius:12px; overflow:hidden; box-shadow: 0 6px 22px rgba(16,24,40,.08); margin-bottom:.5rem; }
-.suggest-item{ display:flex; align-items:center; gap:.5rem; padding:.5rem .6rem; cursor:pointer; background:#fff; }
-.suggest-item + .suggest-item{ border-top:1px solid #f1f3f8; }
-.suggest-item:hover{ background:#f7faff; }
-.avatar-suggest{ width:32px; height:32px; border-radius:50%; object-fit:cover; }
-.avatar-suggest-placeholder{ width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:#e9eefb; color:#4a5275; font-weight:700; }
-</style>
+<style scoped src="../styles/components/Contacts.css"></style>
