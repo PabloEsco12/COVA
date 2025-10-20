@@ -219,6 +219,15 @@
           <button class="btn btn-primary btn-sm" type="button" @click="joinCall(latestCall)">
             <i class="bi bi-box-arrow-in-right me-1"></i>Rejoindre
           </button>
+          <button
+            v-if="latestCall && latestCall.isMine"
+            class="btn btn-outline-danger btn-sm ms-2"
+            type="button"
+            :disabled="endingCallId === latestCall.id"
+            @click="endCall(latestCall)"
+          >
+            <i class="bi bi-telephone-x me-1"></i>Terminer
+          </button>
         </div>
       </div>
       <div v-if="showMessageSearch" class="chat-search">
@@ -645,6 +654,7 @@ let markReadTimer = null
 let typingSendTimer = null
 let gifSearchTimer = null
 let gifController = null
+const callWindowWatchers = new Map()
 const typingLabel = ref('')
 const isAtBottom = ref(true)
 const showJumpToLatest = ref(false)
@@ -659,6 +669,7 @@ const conversationFilters = [
   { value: 'favorites', label: 'Favoris', icon: 'bi-star' },
   { value: 'groups', label: 'Groupes', icon: 'bi-people' },
 ]
+const endingCallId = ref(null)
 const loadingPreviewIds = new Set()
 function favoriteKey(id) {
   return String(id)
@@ -989,8 +1000,11 @@ const selectedCallSessions = computed(() => {
   if (!convId) return []
   return callSessionsMap.value[convId] || []
 })
+const activeCallSessions = computed(() => {
+  return (selectedCallSessions.value || []).filter(session => !session?.ended_at)
+})
 const latestCall = computed(() => {
-  const list = selectedCallSessions.value || []
+  const list = activeCallSessions.value || []
   if (!list.length) return null
   const sorted = list.slice().sort((a, b) => new Date(b.started_at || 0) - new Date(a.started_at || 0))
   return sorted[0] || null
@@ -1213,6 +1227,7 @@ function ensureSocket() {
       applyReactionUpdate(payload.message_id, payload)
     })
     socket.value.on('call_created', handleCallCreated)
+    socket.value.on('call_ended', handleCallEnded)
   } catch (e) {
     // ignore connection errors
   }
@@ -1442,6 +1457,15 @@ function setCallSessions(convId, sessions) {
   callSessionsMap.value = { ...callSessionsMap.value, [convId]: safeList }
 }
 
+function upsertCallSession(call) {
+  if (!call || !call.conv_id) return
+  const existing = (callSessionsMap.value[call.conv_id] || []).slice()
+  const idx = existing.findIndex(item => item.id === call.id)
+  if (idx >= 0) existing[idx] = call
+  else existing.push(call)
+  setCallSessions(call.conv_id, existing)
+}
+
 async function fetchCallSessions(convId = selectedConvId.value) {
   if (!convId) return
   try {
@@ -1474,12 +1498,13 @@ function updateConversationPreviewWithCall(call) {
   if (!call) return
   const conv = conversations.value.find(c => c.id === call.conv_id)
   if (!conv) return
-  const callTs = call.started_at || null
+  const callTs = call.ended_at || call.started_at || null
   const currentTs = conv.last?.ts || null
   if (callTs && currentTs && new Date(currentTs) > new Date(callTs)) return
+  const suffix = call.ended_at ? 'terminé' : 'démarré'
   conv.last = {
-    text: `${callTypeLabel(call.call_type)} démarré`,
-    ts: call.started_at,
+    text: `${callTypeLabel(call.call_type)} ${suffix}`,
+    ts: callTs,
     sentByMe: call.isMine,
   }
 }
@@ -1487,16 +1512,19 @@ function updateConversationPreviewWithCall(call) {
 function handleCallCreated(payload) {
   const call = normalizeCall(payload)
   if (!call || !call.conv_id) return
-  const existing = (callSessionsMap.value[call.conv_id] || []).slice()
-  const idx = existing.findIndex(item => item.id === call.id)
-  if (idx >= 0) existing[idx] = call
-  else existing.push(call)
-  existing.sort((a, b) => new Date(a.started_at || 0) - new Date(b.started_at || 0))
-  setCallSessions(call.conv_id, existing)
+  upsertCallSession(call)
   updateConversationPreviewWithCall(call)
   if (call.conv_id === selectedConvId.value && !call.isMine && document.hidden) {
     showNotification(callTypeLabel(call.call_type), `Lancé par ${callInitiatorLabel(call)}`)
   }
+}
+
+function handleCallEnded(payload) {
+  const call = normalizeCall(payload)
+  if (!call || !call.conv_id) return
+  stopCallWatcher(call.id)
+  upsertCallSession(call)
+  updateConversationPreviewWithCall(call)
 }
 
 async function startCall(callType) {
@@ -1521,8 +1549,48 @@ async function startCall(callType) {
 function joinCall(call) {
   if (!call || !call.join_url) return
   try {
-    window.open(call.join_url, '_blank', 'noopener')
+    const win = window.open(call.join_url, '_blank', 'noopener')
+    if (win) watchCallWindow(call, win)
   } catch {}
+}
+
+function stopCallWatcher(callId) {
+  if (!callId) return
+  const timer = callWindowWatchers.get(callId)
+  if (timer) {
+    clearInterval(timer)
+    callWindowWatchers.delete(callId)
+  }
+}
+
+function watchCallWindow(call, win) {
+  if (!call || !win || !call.isMine || !call.id) return
+  stopCallWatcher(call.id)
+  const timer = setInterval(() => {
+    if (win.closed) {
+      clearInterval(timer)
+      callWindowWatchers.delete(call.id)
+      endCall(call)
+    }
+  }, 1500)
+  callWindowWatchers.set(call.id, timer)
+}
+
+async function endCall(call) {
+  if (!call || call.ended_at || !call.conv_id || !call.id) return
+  if (endingCallId.value === call.id) return
+  endingCallId.value = call.id
+  stopCallWatcher(call.id)
+  try {
+    const res = await api.post(
+      `/conversations/${call.conv_id}/calls/${call.id}/end`,
+    )
+    handleCallEnded(res.data)
+  } catch (error) {
+    console.error('Unable to end call', error)
+  } finally {
+    if (endingCallId.value === call.id) endingCallId.value = null
+  }
 }
 
 function selectConversation(id) {
@@ -2194,6 +2262,10 @@ onUnmounted(() => {
       window.URL.revokeObjectURL(url)
     } catch {}
   }
+  for (const timer of callWindowWatchers.values()) {
+    clearInterval(timer)
+  }
+  callWindowWatchers.clear()
   document.removeEventListener('visibilitychange', visibilityHandler)
   broadcastActiveConversation(null)
 })

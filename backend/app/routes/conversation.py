@@ -181,6 +181,41 @@ def list_calls(conv_id):
     return jsonify([_serialize_call(call) for call in calls]), 200
 
 
+@conversation_bp.route("/<int:conv_id>/calls/<int:call_id>/end", methods=["POST"])
+@jwt_required()
+def end_call(conv_id, call_id):
+    """Mark an ongoing call session as ended and notify participants."""
+    user_id = int(get_jwt_identity())
+    conv = Conversation.query.get(conv_id)
+    if not conv:
+        return jsonify({"error": "Conversation introuvable"}), 404
+
+    participation = Participation.query.filter_by(id_conv=conv_id, id_user=user_id).first()
+    if not participation:
+        return jsonify({"error": "Accès refusé"}), 403
+
+    try:
+        CallSession.__table__.create(db.session.get_bind(), checkfirst=True)
+    except Exception:
+        current_app.logger.exception("call_session table creation failed")
+
+    call = CallSession.query.filter_by(id_call=call_id, conv_id=conv_id).first()
+    if not call:
+        return jsonify({"error": "Appel introuvable"}), 404
+
+    if call.ended_at:
+        payload = _serialize_call(call)
+        socketio.emit("call_ended", payload, to=f"conv_{conv_id}")
+        return jsonify(payload), 200
+
+    call.ended_at = datetime.utcnow()
+    db.session.commit()
+
+    payload = _serialize_call(call)
+    socketio.emit("call_ended", payload, to=f"conv_{conv_id}")
+    return jsonify(payload), 200
+
+
 @conversation_bp.route("/<int:conv_id>/add_member", methods=["POST"])
 @jwt_required()
 def add_member(conv_id):
