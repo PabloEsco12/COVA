@@ -143,7 +143,7 @@ def send_message(conv_id):
             taille=saved.get("size"),
             sha256=saved.get("sha256"),
         )
-    db.session.add(file_rec)
+        db.session.add(file_rec)
 
     db.session.commit()
     payload = _message_schema(user_id).dump(msg)
