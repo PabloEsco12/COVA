@@ -614,7 +614,52 @@
             <i v-else class="bi bi-chat-dots me-1"></i>
             <span>Créer</span>
           </button>
+      </div>
+    </div>
+  </div>
+</div>
+  <div v-if="actionModal.open" class="modal-backdrop-custom action-modal-backdrop">
+    <div class="action-modal-card">
+      <button
+        type="button"
+        class="btn-close action-modal-close"
+        aria-label="Fermer"
+        @click="closeActionModal"
+        :disabled="actionModal.loading"
+      ></button>
+      <div class="action-modal-header">
+        <div class="action-modal-icon" :class="actionModal.type">
+          <i class="bi" :class="actionModal.type === 'delete' ? 'bi-trash3-fill' : actionModal.type === 'leave' ? 'bi-box-arrow-right' : 'bi-pencil-square'"></i>
         </div>
+        <h5 class="mb-0">{{ actionModal.title }}</h5>
+      </div>
+      <div class="action-modal-body">
+        <p class="action-modal-message">{{ actionModal.message }}</p>
+        <div v-if="actionModal.type === 'rename'" class="mb-3">
+          <label class="form-label fw-semibold">Nouveau titre</label>
+          <input
+            ref="actionModalInput"
+            v-model="actionModal.input"
+            type="text"
+            maxlength="100"
+            class="form-control"
+            placeholder="Titre de la conversation"
+            :disabled="actionModal.loading"
+          />
+        </div>
+        <p v-if="actionModal.error" class="text-danger small mb-0">{{ actionModal.error }}</p>
+      </div>
+      <div class="action-modal-footer">
+        <button class="btn btn-outline-secondary" type="button" :disabled="actionModal.loading" @click="closeActionModal">Annuler</button>
+        <button
+          type="button"
+          :class="['btn', 'btn-' + actionModal.confirmVariant]"
+          :disabled="actionModal.loading || (actionModal.type === 'rename' && !(actionModal.input || '').trim())"
+          @click="confirmActionModal"
+        >
+          <span v-if="actionModal.loading" class="spinner-border spinner-border-sm me-2"></span>
+          {{ actionModal.confirmLabel }}
+        </button>
       </div>
     </div>
   </div>
@@ -623,7 +668,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, watch, computed, onUnmounted } from 'vue'
+import { ref, reactive, onMounted, nextTick, watch, computed, onUnmounted } from 'vue'
 import axios from 'axios'
 import { api, backendBase } from '@/utils/api'
 import { io } from 'socket.io-client'
@@ -657,6 +702,18 @@ let gifController = null
 let conversationsRefreshTimer = null
 const callWindowWatchers = new Map()
 let typingClearTimer = null
+const actionModal = reactive({
+  open: false,
+  type: '',
+  title: '',
+  message: '',
+  input: '',
+  confirmLabel: 'Confirmer',
+  confirmVariant: 'primary',
+  loading: false,
+  error: '',
+})
+const actionModalInput = ref(null)
 const typingLabel = ref('')
 const isAtBottom = ref(true)
 const showJumpToLatest = ref(false)
@@ -825,14 +882,127 @@ function handleTypingEvent(payload) {
     typingClearTimer = null
   }
   if (payload.is_typing) {
+    const label = typingDisplayName(payload.conv_id, payload.user_id) || "Quelqu'un"
     typingLabel.value = label + " est en train d\u00e9crire..."
-    typingLabel.value = (label || "Quelqu'un") + " est en train d\u00e9crire..."
     typingClearTimer = setTimeout(() => {
       typingLabel.value = ''
       typingClearTimer = null
     }, 2200)
   } else {
     typingLabel.value = ''
+  }
+}
+
+function openActionModal(options = {}) {
+  actionModal.open = true
+  actionModal.type = options.type || ''
+  actionModal.title = options.title || ''
+  actionModal.message = options.message || ''
+  actionModal.input = options.input ?? ''
+  actionModal.confirmLabel = options.confirmLabel || 'Confirmer'
+  actionModal.confirmVariant = options.confirmVariant || 'primary'
+  actionModal.loading = false
+  actionModal.error = ''
+  if (actionModal.type === 'rename') {
+    nextTick(() => {
+      try {
+        actionModalInput.value?.focus()
+        actionModalInput.value?.select?.()
+      } catch {}
+    })
+  }
+}
+
+function closeActionModal() {
+  if (actionModal.loading) return
+  actionModal.open = false
+  actionModal.type = ''
+  actionModal.input = ''
+  actionModal.error = ''
+}
+
+async function confirmActionModal() {
+  if (!actionModal.open || actionModal.loading) return
+  if (!selectedConvId.value) return
+  actionModal.error = ''
+  actionModal.loading = true
+  let success = false
+  try {
+    if (actionModal.type === 'rename') {
+      success = await performRenameFromModal()
+    } else if (actionModal.type === 'leave') {
+      success = await performLeaveConversation()
+    } else if (actionModal.type === 'delete') {
+      success = await performDeleteConversation()
+    } else {
+      success = true
+    }
+  } catch (error) {
+    console.error('Action modal error', error)
+    actionModal.error = "Une erreur s'est produite. Veuillez réessayer."
+  } finally {
+    actionModal.loading = false
+  }
+  if (success) closeActionModal()
+}
+
+async function performRenameFromModal() {
+  const newTitle = (actionModal.input || '').trim()
+  if (!newTitle) {
+    actionModal.error = 'Le titre ne peut pas être vide.'
+    return false
+  }
+  try {
+    await api.patch(
+      `/conversations/${selectedConvId.value}/title`,
+      { titre: newTitle },
+    )
+    currentConvTitle.value = newTitle
+    await fetchConversations()
+    return true
+  } catch (error) {
+    actionModal.error = "Impossible de renommer la conversation pour le moment."
+    return false
+  }
+}
+
+async function performLeaveConversation() {
+  const convId = selectedConvId.value
+  if (!convId) return false
+  try {
+    await api.post(`/conversations/${convId}/leave`, {})
+    removeFavorite(convId)
+    conversations.value = conversations.value.filter(c => c.id !== convId)
+    const map = { ...callSessionsMap.value }
+    delete map[convId]
+    callSessionsMap.value = map
+    selectedConvId.value = null
+    messages.value = []
+    if (conversations.value.length) selectConversation(conversations.value[0].id)
+    return true
+  } catch (error) {
+    actionModal.error = "Impossible de quitter la conversation pour le moment."
+    return false
+  }
+}
+
+async function performDeleteConversation() {
+  const convId = selectedConvId.value
+  if (!convId) return false
+  try {
+    await api.delete(`/conversations/${convId}`)
+    removeFavorite(convId)
+    conversations.value = conversations.value.filter(c => c.id !== convId)
+    const map = { ...callSessionsMap.value }
+    delete map[convId]
+    callSessionsMap.value = map
+    selectedConvId.value = null
+    messages.value = []
+    if (conversations.value.length) selectConversation(conversations.value[0].id)
+    return true
+  } catch (error) {
+    actionModal.error = "Impossible de supprimer la conversation pour le moment."
+    return false
   }
 }
 
@@ -1247,6 +1417,12 @@ watch(showConvModal, async open => {
     } catch {}
   }
 })
+watch(
+  () => actionModal.input,
+  () => {
+    if (actionModal.type === 'rename' && actionModal.error) actionModal.error = ''
+  },
+)
 watch(selectedUsers, () => {
   if (!convTitle.value) convTitle.value = derivedTitle()
 })
@@ -1667,55 +1843,43 @@ function formatTime(ts) {
     : d.toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit' })
 }
 
-async function promptRename() {
+function promptRename() {
   if (!selectedConvId.value) return
-  const t = prompt('Nouveau titre', currentConvTitle.value || '')
-  if (!t || !t.trim()) return
-  try {
-    await api.patch(
-      `/conversations/${selectedConvId.value}/title`,
-      { titre: t.trim() },
-    )
-    currentConvTitle.value = t.trim()
-    await fetchConversations()
-  } catch {}
+  const convName = currentConvTitle.value || 'Conversation'
+  openActionModal({
+    type: 'rename',
+    title: 'Renommer la conversation',
+    message: `Choisissez un nouveau titre pour '${convName}'.`,
+    input: convName,
+    confirmLabel: 'Renommer',
+    confirmVariant: 'primary',
+  })
 }
 
-async function leaveConversation() {
+function leaveConversation() {
   if (!selectedConvId.value) return
-  const convId = selectedConvId.value
-  if (!confirm('Quitter cette conversation ?')) return
-  try {
-    await api.post(
-      `/conversations/${selectedConvId.value}/leave`,
-      {},
-    )
-    removeFavorite(convId)
-    conversations.value = conversations.value.filter(c => c.id !== convId)
-    const map = { ...callSessionsMap.value }
-    delete map[convId]
-    callSessionsMap.value = map
-    selectedConvId.value = null
-    messages.value = []
-    if (conversations.value.length) selectConversation(conversations.value[0].id)
-  } catch {}
+  const conv = conversations.value.find(c => c.id === selectedConvId.value)
+  const convName = conv?.displayName || conv?.titre || 'cette conversation'
+  openActionModal({
+    type: 'leave',
+    title: 'Quitter la conversation',
+    message: `Vous êtes sur le point de quitter '${convName}'. Vous ne recevrez plus de nouveaux messages et devrez être réinvité pour revenir.`,
+    confirmLabel: 'Quitter',
+    confirmVariant: 'danger',
+  })
 }
 
-async function deleteConversation() {
+function deleteConversation() {
   if (!selectedConvId.value) return
-  const convId = selectedConvId.value
-  if (!confirm('Supprimer définitivement cette conversation ?')) return
-  try {
-    await api.delete(`/conversations/${selectedConvId.value}`)
-    removeFavorite(convId)
-    conversations.value = conversations.value.filter(c => c.id !== convId)
-    const map = { ...callSessionsMap.value }
-    delete map[convId]
-    callSessionsMap.value = map
-    selectedConvId.value = null
-    messages.value = []
-    if (conversations.value.length) selectConversation(conversations.value[0].id)
-  } catch {}
+  const conv = conversations.value.find(c => c.id === selectedConvId.value)
+  const convName = conv?.displayName || conv?.titre || 'cette conversation'
+  openActionModal({
+    type: 'delete',
+    title: 'Supprimer la conversation',
+    message: `Cette action supprimera définitivement '${convName}', y compris tous les messages associés. Voulez-vous continuer ?`,
+    confirmLabel: 'Supprimer',
+    confirmVariant: 'danger',
+  })
 }
 
 function triggerFilePicker() {
@@ -2258,6 +2422,7 @@ onMounted(async () => {
 })
 
 watch(selectedConvId, async val => {
+  closeActionModal()
   if (!val) {
     broadcastActiveConversation(null)
     return
@@ -2318,6 +2483,9 @@ onUnmounted(() => {
     clearTimeout(conversationsRefreshTimer)
     conversationsRefreshTimer = null
   }
+  actionModal.open = false
+  actionModal.loading = false
+  actionModal.error = ''
   document.removeEventListener('visibilitychange', visibilityHandler)
   broadcastActiveConversation(null)
 })
@@ -3790,6 +3958,106 @@ mark.hl {
 .msg-row:not(.sent) {
   justify-content: flex-start;
 }
+
+.action-modal-backdrop {
+  padding: 1.5rem;
+}
+
+.action-modal-card {
+  background: #ffffff;
+  border-radius: 24px;
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.32);
+  width: min(420px, 92vw);
+  padding: 1.9rem 1.8rem 1.6rem;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.action-modal-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 1;
+}
+
+.action-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.action-modal-icon {
+  height: 52px;
+  width: 52px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+}
+
+.action-modal-icon.rename {
+  background: rgba(13, 110, 253, 0.12);
+  color: #0d6efd;
+}
+
+.action-modal-icon.leave {
+  background: rgba(255, 193, 7, 0.18);
+  color: #b18500;
+}
+
+.action-modal-icon.delete {
+  background: rgba(220, 53, 69, 0.18);
+  color: #c62828;
+}
+
+.action-modal-body {
+  color: #414d63;
+}
+
+.action-modal-message {
+  line-height: 1.5;
+  margin-bottom: 0;
+}
+
+.action-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.action-modal-footer .btn {
+  min-width: 120px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.action-modal-footer .btn-outline-secondary {
+  background: #f8f9fb;
+  border: 1px solid #d7dce5;
+  color: #4a5468;
+}
+
+.action-modal-footer .btn-outline-secondary:hover:enabled {
+  background: #eef1f6;
+}
+
+.action-modal-footer .btn-danger {
+  box-shadow: 0 10px 25px rgba(220, 53, 69, 0.25);
+}
+
+.action-modal-footer .btn-primary {
+  box-shadow: 0 10px 25px rgba(13, 110, 253, 0.25);
+}
+
+.action-modal-footer .spinner-border {
+  width: 1rem;
+  height: 1rem;
+}
+
 @media (max-width: 1200px) {
   .messages-layout {
     grid-template-columns: minmax(210px, 260px) minmax(0, 1fr);
