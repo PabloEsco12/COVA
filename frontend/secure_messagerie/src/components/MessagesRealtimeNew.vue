@@ -654,6 +654,7 @@ let markReadTimer = null
 let typingSendTimer = null
 let gifSearchTimer = null
 let gifController = null
+let conversationsRefreshTimer = null
 const callWindowWatchers = new Map()
 const typingLabel = ref('')
 const isAtBottom = ref(true)
@@ -791,6 +792,16 @@ function clearUnread(convId) {
 function broadcastActiveConversation(convId) {
   if (typeof window === 'undefined') return
   window.dispatchEvent(new CustomEvent('cova:active-conversation', { detail: { convId } }))
+}
+
+function scheduleConversationsRefresh(delay = 250) {
+  if (conversationsRefreshTimer) return
+  conversationsRefreshTimer = setTimeout(async () => {
+    conversationsRefreshTimer = null
+    try {
+      await fetchConversations()
+    } catch {}
+  }, delay)
 }
 
 function normalizeMessageText(raw) {
@@ -2164,8 +2175,11 @@ function handleIncomingMessage(payload) {
   const convEntry = conversations.value.find(c => c.id === normalized.conv_id)
   if (convEntry) {
     applyConversationPreview(convEntry, normalized)
+  } else {
+    scheduleConversationsRefresh(50)
   }
   if (normalized.conv_id === selectedConvId.value) {
+    if (loading.value) loading.value = false
     messages.value.push(normalized)
     nextTick().then(() => {
       scrollToBottom()
@@ -2266,6 +2280,10 @@ onUnmounted(() => {
     clearInterval(timer)
   }
   callWindowWatchers.clear()
+  if (conversationsRefreshTimer) {
+    clearTimeout(conversationsRefreshTimer)
+    conversationsRefreshTimer = null
+  }
   document.removeEventListener('visibilitychange', visibilityHandler)
   broadcastActiveConversation(null)
 })

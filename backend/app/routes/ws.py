@@ -29,6 +29,7 @@ def on_connect(auth):
     if not user_id:
         return False  # Refuse connection
     session["user_id"] = user_id
+    join_room(f"user_{user_id}")
     emit("connected", {"user_id": user_id})
 
 

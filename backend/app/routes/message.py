@@ -143,11 +143,19 @@ def send_message(conv_id):
             taille=saved.get("size"),
             sha256=saved.get("sha256"),
         )
-        db.session.add(file_rec)
+    db.session.add(file_rec)
 
     db.session.commit()
     payload = _message_schema(user_id).dump(msg)
-    socketio.emit("message_created", payload, to=f"conv_{conv_id}")
+    rooms = {f"conv_{conv_id}"}
+    try:
+        participants = conv.participations if conv and hasattr(conv, "participations") else []
+        for participation in participants or []:
+            rooms.add(f"user_{participation.id_user}")
+    except Exception:
+        participants = []
+    for room in rooms:
+        socketio.emit("message_created", payload, to=room)
     return jsonify(payload), 201
 
 
