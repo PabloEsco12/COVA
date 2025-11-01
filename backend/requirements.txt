@@ -1,20 +1,18 @@
-Flask==2.3.3
-Flask-SQLAlchemy==3.0.5
-Flask-Migrate==4.0.4
-Flask-JWT-Extended==4.6.0
+fastapi==0.111.0
+uvicorn[standard]==0.30.0
+SQLAlchemy==2.0.31
+asyncpg==0.29.0
+alembic==1.13.2
+greenlet==3.0.3
+pydantic==2.8.2
+pydantic-settings==2.3.4
+redis==5.0.7
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+psycopg[binary]==3.1.19
 python-dotenv==1.0.1
-psycopg2-binary==2.9.9        # client Postgres
-passlib[bcrypt]==1.7.4        # hash mot de passe
-cryptography==42.0.5          # clés RSA/ECC
-Flask-Bcrypt
-PyJWT>=2.8.0
-marshmallow==3.21.1
-marshmallow-sqlalchemy==1.0.0
-pyotp
-qrcode
-Pillow
-requests>=2.20.0
-flask-cors
-Flask-SocketIO>=5.3.6
-eventlet>=0.33.0
-Flask-Limiter>=3.7.0
+httpx==0.27.0
+structlog==24.2.0
+python-multipart==0.0.9
+bcrypt==4.0.1
+pyotp==2.9.0

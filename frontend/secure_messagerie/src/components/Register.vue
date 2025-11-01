@@ -65,7 +65,7 @@
           <div class="input-field">
             <span class="input-field__icon"><i class="bi bi-person-fill"></i></span>
             <input
-              v-model="pseudo"
+              v-model="displayName"
               type="text"
               class="input-field__control"
               placeholder=" "
@@ -135,10 +135,9 @@
 
 <script setup>
 import { ref } from 'vue'
-import axios from 'axios'
 import { api } from '@/utils/api'
 
-const pseudo = ref('')
+const displayName = ref('')
 const email = ref('')
 const password = ref('')
 const error = ref('')
@@ -150,17 +149,25 @@ async function handleRegister() {
   success.value = ''
   loading.value = true
   try {
-    const res = await api.post(`/register`, {
-      pseudo: pseudo.value,
-      email: email.value,
+    const payload = {
+      email: email.value.trim(),
       password: password.value,
-    })
-    success.value = res.data.message || "Inscription réussie. Un e-mail de confirmation a été envoyé."
-    pseudo.value = ''
+      display_name: displayName.value.trim() || null,
+    }
+    const res = await api.post('/auth/register', payload)
+    success.value = `Inscription reussie pour ${res.data.email}. Vous pouvez maintenant vous connecter.`
+    displayName.value = ''
     email.value = ''
     password.value = ''
   } catch (err) {
-    error.value = err.response?.data?.error || 'Erreur inconnue. Veuillez réessayer.'
+    const detail = err.response?.data?.detail
+    if (typeof detail === 'string') {
+      error.value = detail
+    } else if (Array.isArray(detail)) {
+      error.value = detail.map((item) => item.msg || JSON.stringify(item)).join(', ')
+    } else {
+      error.value = 'Erreur inconnue. Veuillez reessayer.'
+    }
   } finally {
     loading.value = false
   }

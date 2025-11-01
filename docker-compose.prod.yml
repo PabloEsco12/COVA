@@ -13,7 +13,12 @@ services:
       retries: 6
       start_period: 10s
     labels:
-      - autoheal=true  # Autoheal peut redémarrer la DB si unhealthy
+      - autoheal=true  # Autoheal peut redemarrer la DB si unhealthy
+
+  redis:
+    image: redis:7-alpine
+    container_name: securechat_redis
+    restart: always
 
   backend:
     build:
@@ -24,19 +29,18 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
     env_file: .env.prod
     environment:
-      - FLASK_APP=app
-      - FLASK_ENV=production
-    # Expose en local uniquement (reverse-proxy Nginx système)
+      - API_DEBUG=0
+    # Expose en local uniquement (reverse-proxy Nginx systeme)
     ports:
-      - "127.0.0.1:5000:5000"
+      - "127.0.0.1:8000:8000"
     volumes:
-      - ./backend/app/migrations:/app/migrations
-      - ./backend/app/static/avatars:/app/app/static/avatars
-      - ./backend/app/static/uploads:/app/app/static/uploads
+      - ./backend/migrations:/app/migrations
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5000/api/health >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/api/health >/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -47,13 +51,13 @@ services:
   frontend:
     build:
       context: ./frontend/secure_messagerie
-      dockerfile: Dockerfile.prod   # ⚠️ utilise l'image Nginx prod, pas Vite dev
+      dockerfile: Dockerfile.prod   # utilise l'image Nginx prod, pas Vite dev
     container_name: securechat_frontend
     restart: always
     depends_on:
       backend:
         condition: service_healthy
-    # Servi en local, votre Nginx système reverse-proxy vers :8080
+    # Servi en local, votre Nginx systeme reverse-proxy vers :8080
     ports:
       - "127.0.0.1:8080:80"
     healthcheck:
@@ -71,7 +75,7 @@ services:
     restart: always
     environment:
       - BASE_PATH=/monitoring
-    # Exposé en local, reverse-proxy Nginx système vers /monitoring/
+    # Expose en local, reverse-proxy Nginx systeme vers /monitoring/
     ports:
       - "127.0.0.1:3001:3001"
     volumes:
@@ -91,3 +95,4 @@ services:
 
 volumes:
   db_data:
+

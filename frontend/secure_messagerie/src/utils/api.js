@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 // Normalize API base so it always ends with '/api' (no trailing slash after)
-const raw = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').toString().replace(/\/+$/, '')
+const raw = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api').toString().replace(/\/+$/, '')
 const apiBase = raw.endsWith('/api') ? raw : `${raw}/api`
 const backendBase = apiBase.replace(/\/api$/, '')
 
@@ -22,4 +22,3 @@ api.interceptors.request.use((config) => {
 })
 
 export { api, apiBase, backendBase }
-

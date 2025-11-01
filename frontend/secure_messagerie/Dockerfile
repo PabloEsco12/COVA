@@ -1,5 +1,5 @@
 # frontend/secure_messagerie/Dockerfile (LOCAL)
-FROM node:18-alpine
+FROM node:20-bookworm-slim
 
 WORKDIR /app
 

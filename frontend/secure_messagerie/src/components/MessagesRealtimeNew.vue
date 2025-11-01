@@ -1,2569 +1,530 @@
 <template>
-  <div class="messages-page">
-    <div class="messages-wrapper">
-      <div class="messages-layout">
-      <!-- Conversations list -->
-      <aside class="conv-list">
-        <div class="conv-list-header">
-          <div>
-            <h2 class="conv-title">Conversations</h2>
-            <p class="conv-subtitle">
-              {{ totalConversations }} discussion(s) sécurisée(s)
-              <span v-if="conversationFilterStats.unread">
-                • {{ conversationFilterStats.unread }} non lue(s)
-              </span>
-            </p>
-          </div>
-          <button type="button" class="conv-create-btn" @click="openConvModal">
-            <i class="bi bi-plus-lg"></i>
-          </button>
+  <div class="chat-page">
+    <aside class="chat-sidebar">
+      <header class="sidebar-header">
+        <div>
+          <h2>Conversations</h2>
+          <p class="sidebar-subtitle">Messages chiffrés en temps réel</p>
         </div>
-        <div class="conv-tools">
-          <div class="input-icon conv-search">
-            <i class="bi bi-search"></i>
-            <input
-              v-model.trim="conversationSearch"
-              type="text"
-              class="form-control"
-              placeholder="Rechercher une conversation"
-            />
-          </div>
-          <div class="conv-meta">
-            <span class="conv-meta-chip">
-              <i class="bi bi-funnel me-1"></i>{{ activeConversationFilter.label }}
-            </span>
-            <span class="conv-meta-chip">
-              <i class="bi bi-chat-text me-1"></i>{{ filteredConversations.length }} conversation(s)
-            </span>
-          </div>
-        </div>
-        <div class="conv-filters">
-          <button
-            v-for="filter in conversationFilters"
-            :key="filter.value"
-            type="button"
-            class="conv-filter-btn"
-            :class="{ active: conversationFilter === filter.value }"
-            :aria-pressed="conversationFilter === filter.value"
-            :title="filter.label"
-            @click="setConversationFilter(filter.value)"
-          >
-            <i class="bi conv-filter-icon" :class="filter.icon" aria-hidden="true"></i>
-            <span class="sr-only">{{ filter.label }}</span>
-            <span class="filter-count" aria-hidden="true">{{ conversationFilterStats[filter.value] ?? 0 }}</span>
-          </button>
-        </div>
-        <div class="conv-scroll">
-          <div v-if="conversationBuckets.length" class="conv-sections">
-            <div v-for="bucket in conversationBuckets" :key="bucket.key" class="conv-section">
-              <p v-if="bucket.title" class="conv-section-title">{{ bucket.title }}</p>
-              <ul class="list-group list-group-flush conv-list-scroll">
-                <li
-                  v-for="conv in bucket.items"
-                  :key="conv.id"
-                  class="list-group-item p-0 border-0 bg-transparent"
-                >
-                  <div
-                    class="conv-item"
-                    :class="{
-                      active: conv.id === selectedConvId,
-                      favorite: isFavorite(conv.id),
-                      unread: getUnreadCount(conv)
-                    }"
-                    @click="selectConversation(conv.id)"
-                  >
-                    <div class="conv-item-leading">
-                      <div class="avatar-wrap">
-                        <img v-if="conv.avatar_url" :src="conv.avatar_url" class="avatar-list" alt="avatar" />
-                        <div v-else class="avatar-list-placeholder" :class="{ group: conv.is_group }">
-                          {{ initials(conv.displayName || conv.titre) }}
-                        </div>
-                        <span v-if="conv.is_group" class="group-ind"><i class="bi bi-people-fill"></i></span>
-                      </div>
-                    </div>
-                    <div class="conv-item-main">
-                      <div class="conv-top-row">
-                        <div class="conv-name-block">
-                          <span class="conv-name text-truncate">{{ conv.displayName || conv.titre }}</span>
-                          <div class="conv-tags">
-                            <span v-if="conv.is_group" class="conv-tag">
-                              <i class="bi bi-people-fill me-1"></i>Groupe
-                            </span>
-                            <span v-if="isFavorite(conv.id)" class="conv-tag favorite">
-                              <i class="bi bi-star-fill me-1"></i>Favori
-                            </span>
-                          </div>
-                        </div>
-                        <div class="conv-meta">
-                          <span class="conv-time">{{ formatTime(conv.last?.ts) }}</span>
-                          <span v-if="getUnreadCount(conv)" class="badge-unread">{{ getUnreadCount(conv) }}</span>
-                        </div>
-                      </div>
-                      <div class="conv-bottom-row">
-                        <div class="conv-item-preview text-truncate">
-                          <span v-if="conv.last && conv.last.sentByMe" class="conv-preview-prefix">Vous:</span>
-                          <span>{{ conv.last ? conv.last.text : 'Aucun message' }}</span>
-                        </div>
-                        <button
-                          type="button"
-                          class="favorite-toggle"
-                          :class="{ active: isFavorite(conv.id) }"
-                          :aria-pressed="isFavorite(conv.id)"
-                          :title="isFavorite(conv.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'"
-                          @click.stop="toggleFavorite(conv.id)"
-                        >
-                          <i class="bi" :class="isFavorite(conv.id) ? 'bi-star-fill' : 'bi-star'"></i>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              </ul>
-            </div>
-          </div>
-          <div v-else class="conv-empty text-center text-muted py-4">
-            <i class="bi bi-search mb-2 d-block fs-4"></i>
-            <span>Aucune conversation trouvée</span>
-          </div>
-        </div>
-      </aside>
-
-      <!-- Chat area -->
-      <section class="chat-container">
-        <header class="chat-header">
-          <div class="chat-header-icon">
-            <i class="bi bi-chat-dots"></i>
-          </div>
-          <div class="chat-topic flex-grow-1">
-            <div class="chat-title-row">
-              <h3 class="chat-title">{{ currentConvTitle }}</h3>
-            </div>
-            <p v-if="!typingLabel" class="chat-subtitle">Discussions sécurisées sur COVA</p>
-            <p v-else class="chat-subtitle typing">{{ typingLabel }}</p>
-            <div class="chat-meta">
-              <span class="chat-meta-chip">
-                <i class="bi bi-chat-text me-1"></i>{{ displayMessages.length }} message(s)
-              </span>
-              <span v-if="selectedCallSessions.length" class="chat-meta-chip">
-                <i class="bi bi-camera-video me-1"></i>{{ selectedCallSessions.length }} appel(s)
-              </span>
-              <span v-if="lastMessageAt" class="chat-meta-chip">
-                <i class="bi bi-clock-history me-1"></i>Dernier message {{ formatDate(lastMessageAt) }}
-              </span>
-            </div>
-          </div>
-          <div class="chat-actions">
-            <button class="chat-action-btn" type="button" @click="refresh" title="Rafraîchir">
-              <i class="bi bi-arrow-clockwise"></i>
-            </button>
-            <button
-              class="chat-action-btn"
-              type="button"
-              :disabled="!selectedConvId || !!callActionPending"
-              @click="startCall('video')"
-              title="Lancer un appel vidéo"
-            >
-              <span v-if="callActionPending === 'video'" class="spinner-border spinner-border-sm"></span>
-              <i v-else class="bi bi-camera-video"></i>
-            </button>
-            <button
-              class="chat-action-btn"
-              type="button"
-              :disabled="!selectedConvId || !!callActionPending"
-              @click="startCall('audio')"
-              title="Lancer un appel audio"
-            >
-              <span v-if="callActionPending === 'audio'" class="spinner-border spinner-border-sm"></span>
-              <i v-else class="bi bi-telephone"></i>
-            </button>
-            <button
-              class="chat-action-btn"
-              type="button"
-              :title="showMessageSearch ? 'Fermer la recherche' : 'Rechercher dans la conversation'"
-              @click="toggleMessageSearch"
-            >
-              <i class="bi bi-search"></i>
-            </button>
-            <div class="dropdown">
-              <button
-                class="chat-action-btn dropdown-toggle"
-                type="button"
-                data-bs-toggle="dropdown"
-                aria-expanded="false"
-                title="Options"
-              >
-                <i class="bi bi-three-dots"></i>
-              </button>
-              <ul class="dropdown-menu dropdown-menu-end">
-                <li><a class="dropdown-item" href="#" @click.prevent="promptRename">Renommer</a></li>
-                <li><a class="dropdown-item" href="#" @click.prevent="leaveConversation">Quitter la conversation</a></li>
-                <li><hr class="dropdown-divider" /></li>
-                <li><a class="dropdown-item text-danger" href="#" @click.prevent="deleteConversation">Supprimer</a></li>
-              </ul>
-            </div>
-          </div>
-        </header>
-      <div v-if="latestCall" class="call-banner" :class="latestCall.call_type">
-        <div class="call-banner-info">
-          <div class="call-banner-icon">
-            <i class="bi" :class="callTypeIcon(latestCall.call_type)"></i>
-          </div>
-          <div>
-            <div class="call-banner-title">{{ callTypeLabel(latestCall.call_type) }}</div>
-            <div class="call-banner-meta">
-              Lancé par {{ callInitiatorLabel(latestCall) }} · {{ formatDate(latestCall.started_at) }}
-            </div>
-          </div>
-        </div>
-        <div class="call-banner-actions">
-          <button class="btn btn-primary btn-sm" type="button" @click="joinCall(latestCall)">
-            <i class="bi bi-box-arrow-in-right me-1"></i>Rejoindre
-          </button>
-          <button
-            v-if="latestCall && latestCall.isMine"
-            class="btn btn-outline-danger btn-sm ms-2"
-            type="button"
-            :disabled="endingCallId === latestCall.id"
-            @click="endCall(latestCall)"
-          >
-            <i class="bi bi-telephone-x me-1"></i>Terminer
-          </button>
-        </div>
-      </div>
-      <div v-if="showMessageSearch" class="chat-search">
-        <div class="input-group input-group-sm chat-search-bar">
-          <span class="input-group-text"><i class="bi bi-search"></i></span>
-          <input
-            v-model.trim="messageSearch"
-            type="text"
-            class="form-control"
-            placeholder="Rechercher dans la conversation"
-            autocomplete="off"
-          />
-          <button class="btn btn-outline-secondary" type="button" @click="messageSearch = ''" :disabled="!messageSearch">
-            <i class="bi bi-x"></i>
-          </button>
-        </div>
-        <div class="row g-2 align-items-center mt-2 chat-search-grid">
-          <div class="col-6 col-md-2">
-            <select class="form-select form-select-sm" v-model="messageSearchAuthor">
-              <option value="all">Tous</option>
-              <option value="me">Moi</option>
-              <option value="others">Autres</option>
-            </select>
-          </div>
-          <div class="col-6 col-md-2">
-            <input type="date" class="form-control form-control-sm" v-model="messageSearchFrom" />
-          </div>
-          <div class="col-6 col-md-2">
-            <input type="date" class="form-control form-control-sm" v-model="messageSearchTo" />
-          </div>
-          <div class="col-6 col-md-2 text-end">
-            <button class="btn btn-sm btn-outline-secondary" type="button" @click="clearMessageFilters">Réinitialiser</button>
-          </div>
-        </div>
-        <div v-if="messageSearch" class="search-result-count small text-muted mt-1">
-          {{ displayMessages.length }} résultat(s)
-        </div>
-      </div>
-
-      <div class="chat-messages" ref="messagesBox" @scroll="onScroll">
-        <div v-if="loading" class="chat-state">
-          <span class="spinner-border text-primary"></span>
-        </div>
-        <div v-else-if="messages.length === 0" class="chat-state chat-empty">
-          <i class="bi bi-inbox display-4"></i>
-          <div>Aucun message pour le moment</div>
-        </div>
-        <div v-else class="chat-history">
-          <div v-if="messageSearch && displayMessages.length === 0" class="chat-state chat-empty">Aucun résultat</div>
-          <div v-else class="messages-stack">
-            <div
-              v-for="item in messageTimeline"
-              :key="item.id"
-              class="timeline-entry"
-            >
-              <div
-                v-if="item.type === 'date'"
-                class="day-divider"
-              >
-                <span class="day-divider-label">{{ item.label }}</span>
-              </div>
-              <div
-                v-if="item.type !== 'date' && isRenderableMessage(item.message)"
-                class="msg-row"
-                :class="{ sent: item.message.sentByMe }"
-              >
-                <template v-if="!item.message.sentByMe && partnerAvatar">
-                  <img :src="partnerAvatar" class="avatar-xs me-2" alt="avatar" />
-                </template>
-                <div :class="['chat-bubble', item.message.sentByMe ? 'sent' : 'received']">
-                  <div class="bubble-header">
-                    <span class="name">{{ item.message.sentByMe ? pseudo : partnerName }}</span>
-                    <span class="time">{{ formatDate(item.message.ts_msg) }}</span>
-                  </div>
-                  <div class="bubble-body">
-                    <template v-if="editingId === item.message.id_msg">
-                      <input v-model="editContent" class="form-control form-control-sm mb-1" />
-                      <div class="text-end">
-                        <button class="btn btn-sm btn-success me-1" @click="confirmEdit">OK</button>
-                        <button class="btn btn-sm btn-secondary" @click="cancelEdit">Annuler</button>
-                      </div>
-                    </template>
-                    <template v-else>
-                      <div
-                        v-if="formattedMessageText(item.message)"
-                        class="message-text"
-                        v-html="formattedMessageText(item.message)"
-                      ></div>
-                      <div
-                        v-else-if="item.message.files && item.message.files.length"
-                        class="message-text placeholder text-muted"
-                      >
-                        {{ attachmentsLabel(item.message.files) }}
-                      </div>
-                    </template>
-                  </div>
-
-                  <div v-if="item.message.files && item.message.files.length" class="bubble-attachments mt-2">
-                    <div
-                      v-for="file in item.message.files"
-                      :key="file.id_file"
-                      class="attachment-item"
-                      :class="{ preview: isInlineImage(file) }"
-                    >
-                      <template v-if="isInlineImage(file)">
-                        <button
-                          type="button"
-                          class="attachment-thumb"
-                          :aria-label="`Télécharger ${file.filename}`"
-                          @click="downloadAttachment(file)"
-                        >
-                          <img
-                            v-if="attachmentPreviews[file.id_file]"
-                            :src="attachmentPreviews[file.id_file]"
-                            :alt="file.filename"
-                            @load="onAttachmentImageLoad"
-                          />
-                          <span v-else class="spinner-border spinner-border-sm text-primary"></span>
-                        </button>
-                        <div class="attachment-meta">
-                          <div class="attachment-name" v-html="highlightFilename(file.filename)"></div>
-                          <small class="text-muted">{{ formatSize(file.taille) }}</small>
-                        </div>
-                      </template>
-                      <template v-else>
-                        <i class="bi bi-paperclip me-2"></i>
-                        <button class="btn btn-link p-0 attachment-link" type="button" @click="downloadAttachment(file)">
-                          <span v-html="highlightFilename(file.filename)"></span>
-                        </button>
-                        <small class="text-muted ms-2">{{ formatSize(file.taille) }}</small>
-                      </template>
-                    </div>
-                  </div>
-
-                  <div class="reaction-strip mt-2">
-                    <button
-                      v-for="reaction in reactionSummary(item.message)"
-                      :key="reaction.emoji"
-                      class="reaction-chip"
-                      :class="{ mine: reaction.mine }"
-                      type="button"
-                      @click="toggleReaction(item.message.id_msg, reaction.emoji)"
-                    >
-                      <span class="emoji">{{ reaction.emoji }}</span>
-                      <span class="count">{{ reaction.count }}</span>
-                    </button>
-                    <div class="reaction-picker" v-if="reactionPickerFor === item.message.id_msg">
-                      <emoji-picker
-                        class="reaction-emoji-picker"
-                        skin-tone-emoji="👍"
-                        @emoji-click="event => onReactionEmoji(item.message.id_msg, event)"
-                      ></emoji-picker>
-                    </div>
-                    <button
-                      class="btn btn-light btn-sm add-reaction"
-                      type="button"
-                      @click="toggleReactionPicker(item.message.id_msg)"
-                    >
-                      <i class="bi bi-emoji-smile"></i>
-                    </button>
-                  </div>
-
-                  <div v-if="item.message.sentByMe" class="bubble-actions text-end">
-                    <button class="btn btn-action me-1" @click="startEdit(item.message)" title="Modifier">
-                      <i class="bi bi-pencil"></i>
-                    </button>
-                    <button class="btn btn-action danger" @click="deleteMessage(item.message.id_msg)" title="Supprimer">
-                      <i class="bi bi-trash"></i>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <button
-        v-if="showJumpToLatest"
-        type="button"
-        class="jump-to-latest"
-        @click="jumpToLatest"
-      >
-        <i class="bi bi-arrow-down-short"></i>
-        Derniers messages
-      </button>
-      <form @submit.prevent="sendMessage" class="chat-input">
-        <div class="composer-bar">
-          <div class="composer-tools">
-            <button
-              class="composer-icon"
-              type="button"
-              :disabled="loading || sendingMessage"
-              @click="triggerFilePicker"
-              aria-label="Joindre un fichier"
-            >
-              <i class="bi bi-paperclip"></i>
-            </button>
-            <input ref="fileInput" type="file" class="d-none" multiple @change="handleFiles" />
-            <button
-              class="composer-icon"
-              type="button"
-              :disabled="loading || sendingMessage"
-              @click="toggleEmojiPicker"
-              aria-label="Insérer un emoji"
-            >
-              <i class="bi bi-emoji-smile"></i>
-            </button>
-            <button
-              class="composer-icon"
-              type="button"
-              :disabled="loading || sendingMessage"
-              @click="toggleGifPicker"
-              aria-label="Ajouter un GIF"
-            >
-              <i class="bi bi-filetype-gif"></i>
-            </button>
-          </div>
-          <input
-            v-model="newMessage"
-            type="text"
-            class="composer-input"
-            placeholder="Écrire un message..."
-            :disabled="loading || sendingMessage"
-            @input="handleTyping"
-            autocomplete="off"
-            ref="messageInput"
-          />
-          <button class="composer-send" type="submit" :disabled="!canSend || loading || sendingMessage">
-            <span v-if="sendingMessage" class="spinner-border spinner-border-sm"></span>
-            <i v-else class="bi bi-send"></i>
-          </button>
-        </div>
-        <div v-if="pendingFiles.length" class="pending-files">
-          <div v-for="(file, index) in pendingFiles" :key="`${file.name}-${index}`" class="pending-file">
-            <div v-if="file.previewUrl" class="pending-thumb">
-              <img :src="file.previewUrl" :alt="file.name" />
-            </div>
-            <div class="pending-details">
-              <div class="pending-name text-truncate">{{ file.name }}</div>
-              <small class="text-muted">{{ formatSize(file.size) }}</small>
-            </div>
-            <button type="button" class="btn-close ms-2" aria-label="Retirer" @click="removePendingFile(index)"></button>
-          </div>
-        </div>
-        <div v-if="showEmojiPicker" class="emoji-popover shadow-sm">
-          <emoji-picker
-            class="composer-emoji-picker"
-            skin-tone-emoji="👍"
-            @emoji-click="onComposerEmojiSelect"
-          ></emoji-picker>
-        </div>
-        <div v-if="showGifPicker" class="gif-popover shadow-sm">
-          <div class="gif-search input-group input-group-sm mb-2">
-            <span class="input-group-text"><i class="bi bi-search"></i></span>
-            <input
-              v-model="gifSearchTerm"
-              type="text"
-              class="form-control"
-              placeholder="Rechercher un GIF"
-              autocomplete="off"
-            />
-            <button
-              class="btn btn-outline-secondary"
-              type="button"
-              :disabled="gifLoading"
-              @click="refreshGifResults"
-            >
-              <i class="bi bi-arrow-clockwise" :class="{ spinning: gifLoading }"></i>
-            </button>
-          </div>
-          <div v-if="gifError" class="gif-error alert alert-warning py-1 px-2 mb-2">{{ gifError }}</div>
-          <div v-if="gifLoading" class="gif-loading text-center py-2">
-            <span class="spinner-border spinner-border-sm text-primary"></span>
-          </div>
-          <div v-else>
-            <div v-if="gifResults.length" class="gif-grid">
-              <button
-                v-for="gif in gifResults"
-                :key="gif.id"
-                type="button"
-                class="gif-thumb"
-                @click="addGifToPending(gif)"
-              >
-                <img :src="gif.media_formats?.tinygif?.url || gif.media_formats?.gif?.url" alt="GIF" />
-              </button>
-            </div>
-            <div v-else class="text-muted small text-center py-2">Aucun GIF trouvé</div>
-          </div>
-        </div>
-      </form>
-    </section>
-  </div>
-
-  <!-- Modal nouvelle conversation (améliorée) -->
-  <div v-if="showConvModal" class="modal-backdrop-custom">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-      <div class="modal-content glass-modal p-0 overflow-hidden">
-        <div class="modal-header gradient-header text-white">
-          <div>
-            <h5 class="modal-title mb-0"><i class="bi bi-people me-2"></i>Nouvelle conversation</h5>
-            <small class="d-block opacity-75">Sélectionnez des contacts puis donnez un titre</small>
-          </div>
-          <button type="button" class="btn-close btn-close-white" aria-label="Fermer" @click="showConvModal = false"></button>
-        </div>
-        <div class="modal-body p-0">
-          <div class="row g-0">
-            <div class="col-md-5 border-end p-3">
-              <div class="sticky-top bg-white pb-2">
-                <div class="input-icon mb-2">
-                  <i class="bi bi-search"></i>
-                  <input
-                    ref="convSearchInput"
-                    v-model.trim="convSearch"
-                    type="text"
-                    class="form-control ps-5"
-                    placeholder="Rechercher un contact (nom ou e-mail)"
-                  />
-                </div>
-                <div class="text-muted small ms-1 mb-1">{{ filteredConvContacts.length }} contact(s)</div>
-              </div>
-              <div class="contact-list mt-1">
-                <div
-                  v-for="c in filteredConvContacts"
-                  :key="c.user_id"
-                  class="contact-item d-flex align-items-center justify-content-between"
-                  :class="{ selected: isSelected(c.user_id) }"
-                  @click="toggleSelect(c.user_id)"
-                >
-                  <div class="d-flex align-items-center">
-                    <span class="check-circle me-2" :class="{ checked: isSelected(c.user_id) }">
-                      <i class="bi" :class="isSelected(c.user_id) ? 'bi-check-lg' : 'bi-plus-lg'"></i>
-                    </span>
-                    <img v-if="c.avatar_url" :src="c.avatar_url" class="avatar-md me-2" alt="avatar" />
-                    <div v-else class="avatar-md-placeholder me-2">{{ initials(c.pseudo) }}</div>
-                    <div>
-                      <div class="fw-semibold">{{ c.pseudo }}</div>
-                      <div class="text-muted small">{{ c.email }}</div>
-                    </div>
-                  </div>
-                  <button
-                    class="btn btn-sm btn-soft"
-                    :class="isSelected(c.user_id) ? 'btn-soft-danger' : 'btn-soft-primary'"
-                    @click.stop="toggleSelect(c.user_id)"
-                  >
-                    {{ isSelected(c.user_id) ? 'Retirer' : 'Ajouter' }}
-                  </button>
-                </div>
-                <div v-if="filteredConvContacts.length === 0" class="text-muted small py-2">Aucun contact</div>
-              </div>
-            </div>
-            <div class="col-md-7 p-4">
-              <div class="mb-3">
-                <div class="step-label">Étape 1 • Participants</div>
-                <div class="selected-chips mt-3">
-                  <span v-for="uid in selectedUsers" :key="uid" class="chip">
-                    <template v-if="byId(uid)?.avatar_url">
-                      <img :src="byId(uid).avatar_url" class="chip-avatar-lg" alt="avatar" />
-                    </template>
-                    <template v-else>
-                      <span class="chip-avatar-lg chip-initials">{{ initials(byId(uid)?.pseudo) }}</span>
-                    </template>
-                    {{ byId(uid)?.pseudo || uid }}
-                    <i class="bi bi-x ms-1" role="button" aria-label="Retirer" @click="removeSelected(uid)"></i>
-                  </span>
-                  <div v-if="selectedUsers.length === 0" class="text-muted small">
-                    Sélectionnez au moins un contact à gauche
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div class="step-label">Étape 2 • Titre</div>
-                <input v-model="convTitle" type="text" class="form-control mt-2" placeholder="Titre de la conversation (obligatoire)" />
-                <small v-if="!convTitle && selectedUsers.length" class="text-muted">Suggestion : {{ titleSuggestion }}</small>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer sticky-footer d-flex align-items-center">
-          <div class="text-muted small me-auto">{{ selectedUsers.length }} participant(s) sélectionné(s)</div>
-          <button class="btn btn-secondary" @click="showConvModal = false">Annuler</button>
-          <button class="btn btn-create" @click="submitConversationCreation" :disabled="creatingConv || selectedUsers.length === 0 || !convTitle">
-            <span v-if="creatingConv" class="spinner-border spinner-border-sm me-1"></span>
-            <i v-else class="bi bi-chat-dots me-1"></i>
-            <span>Créer</span>
-          </button>
-      </div>
-    </div>
-  </div>
-</div>
-  <div v-if="actionModal.open" class="modal-backdrop-custom action-modal-backdrop">
-    <div class="action-modal-card">
-      <button
-        type="button"
-        class="btn-close action-modal-close"
-        aria-label="Fermer"
-        @click="closeActionModal"
-        :disabled="actionModal.loading"
-      ></button>
-      <div class="action-modal-header">
-        <div class="action-modal-icon" :class="actionModal.type">
-          <i class="bi" :class="actionModal.type === 'delete' ? 'bi-trash3-fill' : actionModal.type === 'leave' ? 'bi-box-arrow-right' : 'bi-pencil-square'"></i>
-        </div>
-        <h5 class="mb-0">{{ actionModal.title }}</h5>
-      </div>
-      <div class="action-modal-body">
-        <p class="action-modal-message">{{ actionModal.message }}</p>
-        <div v-if="actionModal.type === 'rename'" class="mb-3">
-          <label class="form-label fw-semibold">Nouveau titre</label>
-          <input
-            ref="actionModalInput"
-            v-model="actionModal.input"
-            type="text"
-            maxlength="100"
-            class="form-control"
-            placeholder="Titre de la conversation"
-            :disabled="actionModal.loading"
-          />
-        </div>
-        <p v-if="actionModal.error" class="text-danger small mb-0">{{ actionModal.error }}</p>
-      </div>
-      <div class="action-modal-footer">
-        <button class="btn btn-outline-secondary" type="button" :disabled="actionModal.loading" @click="closeActionModal">Annuler</button>
         <button
           type="button"
-          :class="['btn', 'btn-' + actionModal.confirmVariant]"
-          :disabled="actionModal.loading || (actionModal.type === 'rename' && !(actionModal.input || '').trim())"
-          @click="confirmActionModal"
+          class="icon-button"
+          :disabled="loadingConversations"
+          @click="loadConversations"
         >
-          <span v-if="actionModal.loading" class="spinner-border spinner-border-sm me-2"></span>
-          {{ actionModal.confirmLabel }}
+          <span class="icon" aria-hidden="true">⟳</span>
+          <span class="sr-only">Rafraîchir les conversations</span>
         </button>
+      </header>
+
+      <p v-if="globalError" class="error-banner">{{ globalError }}</p>
+
+      <div class="sidebar-content">
+        <p v-if="loadingConversations" class="placeholder">Chargement des conversations…</p>
+        <p v-else-if="sortedConversations.length === 0" class="placeholder">
+          Aucune conversation disponible.
+        </p>
+        <ul v-else class="conversation-list">
+          <li
+            v-for="conversation in sortedConversations"
+            :key="conversation.id"
+            :class="[
+              'conversation-item',
+              { active: conversation.id === selectedConversationId }
+            ]"
+            @click="selectConversation(conversation.id)"
+          >
+            <div class="conversation-main">
+              <h3 class="conversation-title">
+                {{ conversationDisplayName(conversation) }}
+              </h3>
+              <p class="conversation-preview">
+                {{ conversationPreview(conversation) }}
+              </p>
+            </div>
+            <div class="conversation-meta">
+              <time
+                v-if="conversation.updated_at"
+                class="conversation-time"
+                :datetime="conversation.updated_at"
+              >
+                {{ formatShortTimestamp(conversation.updated_at) }}
+              </time>
+              <span
+                v-if="getUnreadCount(conversation.id) > 0"
+                class="unread-count"
+              >
+                {{ getUnreadCount(conversation.id) }}
+              </span>
+            </div>
+          </li>
+        </ul>
       </div>
-    </div>
+    </aside>
+
+    <section class="chat-content">
+      <div v-if="selectedConversation" class="chat-container">
+        <header class="chat-header">
+          <div>
+            <h3>{{ conversationDisplayName(selectedConversation) }}</h3>
+            <p class="chat-subtitle">{{ conversationSubtitle(selectedConversation) }}</p>
+          </div>
+          <div class="chat-header-actions">
+            <p v-if="connectionError" class="error-inline">{{ connectionError }}</p>
+            <button
+              type="button"
+              class="link-button"
+              :disabled="loadingMessages"
+              @click="reloadMessages"
+            >
+              Actualiser
+            </button>
+          </div>
+        </header>
+
+        <div ref="messagesContainer" class="messages-scroll" @scroll="handleScroll">
+          <p v-if="loadingMessages" class="placeholder">Chargement des messages…</p>
+          <p v-else-if="messages.length === 0" class="placeholder">
+            Aucun message pour l'instant. Envoyez le premier !
+          </p>
+          <div
+            v-else
+            v-for="message in messages"
+            :key="message.id"
+            :class="['message-row', { mine: message.isMine }]"
+          >
+            <div class="message-bubble">
+              <div class="message-meta">
+                <span class="author">{{ messageAuthorLabel(message) }}</span>
+                <time class="timestamp" :datetime="message.created_at">
+                  {{ formatTimestamp(message.created_at) }}
+                </time>
+              </div>
+              <p class="message-content">{{ message.text }}</p>
+            </div>
+          </div>
+        </div>
+
+        <form class="composer" @submit.prevent="handleSend">
+          <textarea
+            v-model="newMessage"
+            rows="2"
+            :disabled="sendingMessage || !selectedConversationId"
+            placeholder="Écrivez votre message…"
+          ></textarea>
+          <div class="composer-actions">
+            <span v-if="sendError" class="error-inline">{{ sendError }}</span>
+            <button type="submit" :disabled="sendDisabled">
+              {{ sendingMessage ? 'Envoi…' : 'Envoyer' }}
+            </button>
+          </div>
+        </form>
+      </div>
+      <div v-else class="chat-placeholder">
+        <h3>Bienvenue</h3>
+        <p>Sélectionnez une conversation dans la liste pour commencer.</p>
+      </div>
+    </section>
   </div>
-</div>
-</div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, nextTick, watch, computed, onUnmounted } from 'vue'
-import axios from 'axios'
-import { api, backendBase } from '@/utils/api'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+
+import { backendBase } from '@/utils/api'
+import { ConversationSocket } from '@/services/socketService'
 import {
-  listContacts,
   listConversations,
-  getConversation,
-  getConversationMessages,
-  createConversationRoom,
-  updateConversationTitle,
-  leaveConversationRoom,
-  deleteConversationRoom,
-  getUnreadSummary,
+  listConversationMessages,
+  markConversationMessagesRead,
   sendConversationMessage,
-  toggleMessageReaction,
-  listConversationCalls,
-  createConversationCall,
 } from '@/services/messagingService'
-import LogoUrl from '@/assets/logo_COVA.png'
-import 'emoji-picker-element'
-// backendBase provided by central api util
-import { CovaSocket } from '@/services/socketService'
 
 const conversations = ref([])
-const selectedConvId = ref(null)
 const messages = ref([])
-const newMessage = ref('')
-const loading = ref(true)
+const selectedConversationId = ref(null)
+const loadingConversations = ref(false)
+const loadingMessages = ref(false)
 const sendingMessage = ref(false)
-const messagesBox = ref(null)
-const pseudo = localStorage.getItem('pseudo') || 'Moi'
-const userId = Number(localStorage.getItem('user_id') || 0)
-const editingId = ref(null)
-const editContent = ref('')
-const showConvModal = ref(false)
-const contacts = ref([])
-const selectedUsers = ref([])
-const convTitle = ref('')
-const creatingConv = ref(false)
-const currentConvTitle = ref('')
+const globalError = ref('')
+const sendError = ref('')
+const connectionError = ref('')
+const newMessage = ref('')
+const messagesContainer = ref(null)
+const stickToBottom = ref(true)
+
+const currentUserId = (localStorage.getItem('user_id') || '').toString()
+const normalizedCurrentUserId = normalizeId(currentUserId)
+
+const unreadCounts = reactive({})
 let socketClient = null
-let socketConnected = false
-const socketListeners = {
-  connect: () => handleSocketConnect(),
-  disconnect: () => handleSocketDisconnect(),
-  typing: payload => handleTypingEvent(payload),
-  message_created: payload => handleIncomingMessage(payload),
-  new_message: payload => handleIncomingMessage(payload),
-  reaction_updated: payload => {
-    if (!payload) return
-    applyReactionUpdate(payload.message_id, payload)
-  },
-  call_created: payload => handleCallCreated(payload),
-  call_ended: payload => handleCallEnded(payload),
-}
-let lastJoinedConv = null
-let markReadTimer = null
-let typingSendTimer = null
-let gifSearchTimer = null
-let gifController = null
-let conversationsRefreshTimer = null
-const callWindowWatchers = new Map()
-let typingClearTimer = null
-const actionModal = reactive({
-  open: false,
-  type: '',
-  title: '',
-  message: '',
-  input: '',
-  confirmLabel: 'Confirmer',
-  confirmVariant: 'primary',
-  loading: false,
-  error: '',
-})
-const actionModalInput = ref(null)
-const typingLabel = ref('')
-const isAtBottom = ref(true)
-const showJumpToLatest = ref(false)
-const unreadCounts = ref({})
-const conversationSearch = ref('')
-const conversationFilter = ref('all')
-const FAVORITES_STORAGE_KEY = 'favorite_conversations'
-const favoriteConversationIds = ref([])
-const conversationFilters = [
-  { value: 'all', label: 'Tout', icon: 'bi-chat-dots' },
-  { value: 'unread', label: 'Non lues', icon: 'bi-envelope-open' },
-  { value: 'favorites', label: 'Favoris', icon: 'bi-star' },
-  { value: 'groups', label: 'Groupes', icon: 'bi-people' },
-]
-const endingCallId = ref(null)
-const loadingPreviewIds = new Set()
-function favoriteKey(id) {
-  return String(id)
-}
 
-function isFavorite(id) {
-  const key = favoriteKey(id)
-  return favoriteConversationIds.value.includes(key)
-}
-
-function applyFavoriteStateToConversations() {
-  const set = new Set(favoriteConversationIds.value || [])
-  for (const conv of conversations.value || []) {
-    conv.isFavorite = set.has(favoriteKey(conv.id))
-  }
-}
-
-function loadFavorites() {
-  try {
-    const raw = localStorage.getItem(FAVORITES_STORAGE_KEY)
-    if (!raw) {
-      favoriteConversationIds.value = []
-      return
-    }
-    const parsed = JSON.parse(raw)
-    if (Array.isArray(parsed)) {
-      const unique = Array.from(new Set(parsed.map(value => favoriteKey(value))))
-      favoriteConversationIds.value = unique
-    } else if (parsed && typeof parsed === 'object') {
-      const keys = Object.keys(parsed).filter(key => parsed[key]).map(key => favoriteKey(key))
-      favoriteConversationIds.value = Array.from(new Set(keys))
-    } else {
-      favoriteConversationIds.value = []
-    }
-  } catch {
-    favoriteConversationIds.value = []
-  }
-  applyFavoriteStateToConversations()
-}
-
-function saveFavorites() {
-  try {
-    localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favoriteConversationIds.value))
-  } catch {}
-}
-
-function applyUnreadCountsToConversations() {
-  if (!Array.isArray(conversations.value)) return
-  for (const conv of conversations.value) {
-    const key = favoriteKey(conv.id)
-    conv.unread_count = Number(unreadCounts.value[key] || 0)
-  }
-}
-
-function saveUnreadToStorage(map = unreadCounts.value) {
-  try {
-    localStorage.setItem('unread_counts', JSON.stringify(map || {}))
-  } catch {}
-}
-
-function setUnreadCounts(map, options = {}) {
-  const { persist = true } = options
-  const normalized = {}
-  if (map && typeof map === 'object') {
-    for (const [rawKey, rawValue] of Object.entries(map)) {
-      const key = favoriteKey(rawKey)
-      const count = Math.max(0, Number(rawValue) || 0)
-      if (count > 0) normalized[key] = count
-    }
-  }
-  unreadCounts.value = normalized
-  applyUnreadCountsToConversations()
-  if (persist) saveUnreadToStorage(normalized)
-}
-
-function loadUnreadFromStorage() {
-  try {
-    const raw = JSON.parse(localStorage.getItem('unread_counts') || '{}') || {}
-    setUnreadCounts(raw, { persist: false })
-  } catch {
-    setUnreadCounts({}, { persist: false })
-  }
-}
-
-async function refreshUnreadFromServer() {
-  try {
-    const summary = await getUnreadSummary()
-    const map = summary?.by_conversation || {}
-    setUnreadCounts(map)
-  } catch {
-    loadUnreadFromStorage()
-  }
-}
-
-function incrementUnread(convId, delta = 1) {
-  if (!convId) return
-  const key = favoriteKey(convId)
-  const current = Number(unreadCounts.value[key] || 0)
-  const next = current + Number(delta || 0)
-  const map = { ...unreadCounts.value }
-  if (next > 0) map[key] = next
-  else delete map[key]
-  setUnreadCounts(map)
-}
-
-function clearUnread(convId) {
-  if (!convId) return
-  const key = favoriteKey(convId)
-  if (!unreadCounts.value[key]) {
-    const conv = conversations.value.find(c => c.id === convId)
-    if (conv) conv.unread_count = 0
-    return
-  }
-  const map = { ...unreadCounts.value }
-  delete map[key]
-  setUnreadCounts(map)
-}
-
-function broadcastActiveConversation(convId) {
-  if (typeof window === 'undefined') return
-  window.dispatchEvent(new CustomEvent('cova:active-conversation', { detail: { convId } }))
-}
-
-function scheduleConversationsRefresh(delay = 250) {
-  if (conversationsRefreshTimer) return
-  conversationsRefreshTimer = setTimeout(async () => {
-    conversationsRefreshTimer = null
-    try {
-      await loadConversations()
-    } catch {}
-  }, delay)
-}
-
-function typingDisplayName(convId, remoteId) {
-  if (!remoteId || remoteId === userId) return ''
-  const conv = conversations.value.find(c => c.id === convId)
-  const fromConv = conv?.participants?.find?.(p => p.id_user === remoteId)?.pseudo
-  if (fromConv) return fromConv
-  const contactsEntry = contactsMap.value || {}
-  const contactKey = String(remoteId)
-  const fromContacts = contactsEntry[contactKey]?.pseudo
-  if (fromContacts) return fromContacts
-  return ''
-}
-
-function handleTypingEvent(payload) {
-  if (!payload || payload.conv_id !== selectedConvId.value) return
-  if (payload.user_id === userId) return
-  if (typingClearTimer) {
-    clearTimeout(typingClearTimer)
-    typingClearTimer = null
-  }
-  if (payload.is_typing) {
-    const label = typingDisplayName(payload.conv_id, payload.user_id) || "Quelqu'un"
-    typingLabel.value = label + " est en train d\u00e9crire..."
-    typingClearTimer = setTimeout(() => {
-      typingLabel.value = ''
-      typingClearTimer = null
-    }, 2200)
-  } else {
-    typingLabel.value = ''
-  }
-}
-
-function openActionModal(options = {}) {
-  actionModal.open = true
-  actionModal.type = options.type || ''
-  actionModal.title = options.title || ''
-  actionModal.message = options.message || ''
-  actionModal.input = options.input ?? ''
-  actionModal.confirmLabel = options.confirmLabel || 'Confirmer'
-  actionModal.confirmVariant = options.confirmVariant || 'primary'
-  actionModal.loading = false
-  actionModal.error = ''
-  if (actionModal.type === 'rename') {
-    nextTick(() => {
-      try {
-        actionModalInput.value?.focus()
-        actionModalInput.value?.select?.()
-      } catch {}
-    })
-  }
-}
-
-function closeActionModal() {
-  if (actionModal.loading) return
-  actionModal.open = false
-  actionModal.type = ''
-  actionModal.input = ''
-  actionModal.error = ''
-}
-
-async function confirmActionModal() {
-  if (!actionModal.open || actionModal.loading) return
-  if (!selectedConvId.value) return
-  actionModal.error = ''
-  actionModal.loading = true
-  let success = false
-  try {
-    if (actionModal.type === 'rename') {
-      success = await performRenameFromModal()
-    } else if (actionModal.type === 'leave') {
-      success = await performLeaveConversation()
-    } else if (actionModal.type === 'delete') {
-      success = await performDeleteConversation()
-    } else {
-      success = true
-    }
-  } catch (error) {
-    console.error('Action modal error', error)
-    actionModal.error = "Une erreur s'est produite. Veuillez réessayer."
-  } finally {
-    actionModal.loading = false
-  }
-  if (success) closeActionModal()
-}
-
-async function performRenameFromModal() {
-  const newTitle = (actionModal.input || '').trim()
-  if (!newTitle) {
-    actionModal.error = 'Le titre ne peut pas être vide.'
-    return false
-  }
-  try {
-    await updateConversationTitle(selectedConvId.value, newTitle)
-    currentConvTitle.value = newTitle
-    await loadConversations()
-    return true
-  } catch (error) {
-    actionModal.error = "Impossible de renommer la conversation pour le moment."
-    return false
-  }
-}
-
-async function performLeaveConversation() {
-  const convId = selectedConvId.value
-  if (!convId) return false
-  try {
-    await leaveConversationRoom(convId)
-    removeFavorite(convId)
-    conversations.value = conversations.value.filter(c => c.id !== convId)
-    const map = { ...callSessionsMap.value }
-    delete map[convId]
-    callSessionsMap.value = map
-    selectedConvId.value = null
-    messages.value = []
-    if (conversations.value.length) await selectConversation(conversations.value[0].id)
-    return true
-  } catch (error) {
-    actionModal.error = "Impossible de quitter la conversation pour le moment."
-    return false
-  }
-}
-
-async function performDeleteConversation() {
-  const convId = selectedConvId.value
-  if (!convId) return false
-  try {
-    await deleteConversationRoom(convId)
-    removeFavorite(convId)
-    conversations.value = conversations.value.filter(c => c.id !== convId)
-    const map = { ...callSessionsMap.value }
-    delete map[convId]
-    callSessionsMap.value = map
-    selectedConvId.value = null
-    messages.value = []
-    if (conversations.value.length) await selectConversation(conversations.value[0].id)
-    return true
-  } catch (error) {
-    actionModal.error = "Impossible de supprimer la conversation pour le moment."
-    return false
-  }
-}
-
-function normalizeMessageText(raw) {
-  if (raw == null) return ''
-  const str = String(raw)
-  return str
-    // handle escaped newline sequences first
-    .replace(/\\+r\\+n/gi, '\n')
-    .replace(/\\+n/gi, '\n')
-    .replace(/\\+r/gi, '\n')
-    // handle actual carriage returns/new lines
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/\u00a0/g, ' ')
-}
-
-function attachmentsLabel(input) {
-  const count = Array.isArray(input) ? input.length : Number(input) || 0
-  if (!count) return ''
-  const plural = count > 1 ? 's' : ''
-  return `${count} pièce${plural} jointe${plural}`
-}
-
-function formattedMessageText(message) {
-  const normalized = normalizeMessageText(message?.contenu_chiffre ?? '')
-  if (!normalized) return ''
-
-  // Preserve intentional blank lines but drop trailing whitespace-only lines
-  const trimmedEnd = normalized.replace(/(\s*\n)*\s*$/, '')
-  if (!trimmedEnd.trim()) {
-    return ''
-  }
-
-  const escaped = trimmedEnd
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-
-  return escaped.replace(/\n/g, '<br>')
-}
-
-function isRenderableMessage(message) {
-  if (!message) return false
-  const hasText = !!formattedMessageText(message)
-  const hasFiles = Array.isArray(message.files) && message.files.length > 0
-  return hasText || hasFiles
-}
-
-function previewTextForMessage(message) {
-  if (!message) return ''
-  const compact = normalizeMessageText(message.contenu_chiffre || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-  if (compact) return compact
-  return attachmentsLabel(message.files)
-}
-
-function applyConversationPreview(conv, message) {
-  if (!conv || !message) return
-  const text = previewTextForMessage(message) || 'Message'
-  const ts = message.ts_msg || message.ts || null
-  const sender = message.sender_id ?? (message.sentByMe ? userId : null)
-  conv.last = {
-    text,
-    ts,
-    sentByMe: sender === userId || message.sentByMe === true,
-  }
-}
-
-function toggleFavorite(id) {
-  const key = favoriteKey(id)
-  const set = new Set(favoriteConversationIds.value || [])
-  if (set.has(key)) set.delete(key)
-  else set.add(key)
-  favoriteConversationIds.value = Array.from(set)
-  applyFavoriteStateToConversations()
-  saveFavorites()
-}
-
-function removeFavorite(id) {
-  const key = favoriteKey(id)
-  if (!favoriteConversationIds.value.includes(key)) return
-  favoriteConversationIds.value = favoriteConversationIds.value.filter(item => item !== key)
-  applyFavoriteStateToConversations()
-  saveFavorites()
-}
-
-function setConversationFilter(value) {
-  conversationFilter.value = value
-}
-
-function getUnreadCount(conv) {
-  if (!conv) return 0
-  const key = favoriteKey(conv.id)
-  const stored = Number(unreadCounts.value?.[key] || 0)
-  const fromConv = Number(conv.unread_count || 0)
-  return Math.max(stored, fromConv)
-}
-
-const filteredConversations = computed(() => {
-  const q = conversationSearch.value.trim().toLowerCase()
-  const filter = conversationFilter.value
-  let list = conversations.value || []
-  if (filter === 'unread') {
-    list = list.filter(conv => getUnreadCount(conv) > 0)
-  } else if (filter === 'favorites') {
-    list = list.filter(conv => isFavorite(conv.id))
-  } else if (filter === 'groups') {
-    list = list.filter(conv => conv.is_group)
-  }
-  if (q) {
-    list = list.filter(conv => {
-      const name = (conv.displayName || conv.titre || '').toLowerCase()
-      const preview = (conv.last?.text || '').toLowerCase()
-      return name.includes(q) || preview.includes(q)
-    })
-  }
-  return list
-    .slice()
-    .sort((a, b) => {
-      const aFav = isFavorite(a.id) ? 1 : 0
-      const bFav = isFavorite(b.id) ? 1 : 0
-      if (aFav !== bFav) return bFav - aFav
-      const aUnread = getUnreadCount(a) > 0 ? 1 : 0
-      const bUnread = getUnreadCount(b) > 0 ? 1 : 0
-      if (aUnread !== bUnread) return bUnread - aUnread
-      const aTime = a.last?.ts ? new Date(a.last.ts).getTime() : 0
-      const bTime = b.last?.ts ? new Date(b.last.ts).getTime() : 0
-      if (aTime !== bTime) return bTime - aTime
-      const aName = (a.displayName || a.titre || '').toLowerCase()
-      const bName = (b.displayName || b.titre || '').toLowerCase()
-      return aName.localeCompare(bName)
-    })
-})
-
-const conversationFilterStats = computed(() => {
-  const list = conversations.value || []
-  const stats = { all: list.length, unread: 0, favorites: 0, groups: 0 }
-  for (const conv of list) {
-    if (getUnreadCount(conv) > 0) stats.unread += 1
-    if (isFavorite(conv.id)) stats.favorites += 1
-    if (conv.is_group) stats.groups += 1
-  }
-  return stats
-})
-
-const unreadSummary = computed(() => {
-  const map = {}
-  let total = 0
-  for (const conv of conversations.value || []) {
-    const count = getUnreadCount(conv)
-    if (count > 0) {
-      map[String(conv.id)] = count
-    }
-    total += count
-  }
-  return { total, byConversation: map }
-})
-
-const totalConversations = computed(() => conversations.value.length)
-const conversationBuckets = computed(() => {
-  const list = filteredConversations.value || []
-  if (!list.length) return []
-  if (conversationFilter.value !== 'all') {
-    return [{ key: 'default', title: null, items: list }]
-  }
-  const favorites = list.filter(conv => isFavorite(conv.id))
-  const others = list.filter(conv => !isFavorite(conv.id))
-  const buckets = []
-  if (favorites.length) buckets.push({ key: 'favorites', title: 'Favoris', items: favorites })
-  if (others.length) buckets.push({ key: 'others', title: favorites.length ? 'Autres conversations' : null, items: others })
-  return buckets
-})
-const activeConversationFilter = computed(
-  () => conversationFilters.find(filter => filter.value === conversationFilter.value) || conversationFilters[0]
-)
-const fileInput = ref(null)
-const messageInput = ref(null)
-const pendingFiles = ref([])
-const showEmojiPicker = ref(false)
-const showGifPicker = ref(false)
-const showMessageSearch = ref(false)
-const messageSearch = ref('')
-const messageSearchAuthor = ref('all') // all | me | others
-const messageSearchFrom = ref('') // yyyy-mm-dd
-const messageSearchTo = ref('') // yyyy-mm-dd
-const reactionPickerFor = ref(null)
-const gifSearchTerm = ref('')
-const gifResults = ref([])
-const gifLoading = ref(false)
-const gifError = ref('')
-const attachmentPreviews = ref({})
-// Tenor API key can be configured via Vite env (VITE_TENOR_API_KEY). If absent, we fallback to v1 endpoint.
-const TENOR_API_KEY = (import.meta?.env?.VITE_TENOR_API_KEY || '').trim()
-const TENOR_CLIENT_KEY = 'cova_messaging_ui'
-const GIF_PAGE_LIMIT = 24
-
-const canSend = computed(() => newMessage.value.trim().length > 0 || pendingFiles.value.length > 0)
-
-const callSessionsMap = ref({})
-const callActionPending = ref('')
-const selectedCallSessions = computed(() => {
-  const convId = selectedConvId.value
-  if (!convId) return []
-  return callSessionsMap.value[convId] || []
-})
-const activeCallSessions = computed(() => {
-  return (selectedCallSessions.value || []).filter(session => !session?.ended_at)
-})
-const latestCall = computed(() => {
-  const list = activeCallSessions.value || []
-  if (!list.length) return null
-  const sorted = list.slice().sort((a, b) => new Date(b.started_at || 0) - new Date(a.started_at || 0))
-  return sorted[0] || null
-})
-
-const lastMessageAt = computed(() => {
-  const list = messages.value || []
-  const lastMessageTs = list.length ? list[list.length - 1]?.ts_msg : null
-  const callTs = latestCall.value?.started_at || null
-  if (lastMessageTs && callTs) {
-    return new Date(callTs) > new Date(lastMessageTs) ? callTs : lastMessageTs
-  }
-  return callTs || lastMessageTs || null
-})
-
-const displayMessages = computed(() => {
-  let list = messages.value || []
-  // Remove empty system/placeholder messages
-  list = list.filter(isRenderableMessage)
-  // Author filter
-  if (messageSearchAuthor.value === 'me') list = list.filter(m => m.sender_id === userId)
-  else if (messageSearchAuthor.value === 'others') list = list.filter(m => m.sender_id !== userId)
-  // Date filters
-  if (messageSearchFrom.value) {
-    const from = new Date(messageSearchFrom.value)
-    from.setHours(0, 0, 0, 0)
-    list = list.filter(m => m.ts_msg && new Date(m.ts_msg) >= from)
-  }
-  if (messageSearchTo.value) {
-    const to = new Date(messageSearchTo.value)
-    to.setHours(23, 59, 59, 999)
-    list = list.filter(m => m.ts_msg && new Date(m.ts_msg) <= to)
-  }
-  // Text search
-  const q = (messageSearch.value || '').toLowerCase().trim()
-  if (!q) return list
-  const tokens = q.split(/\s+/).filter(Boolean)
-  return list.filter(m => {
-    const text = (m.contenu_chiffre || '').toLowerCase()
-    const inFiles = (m.files || []).some(f => (f.filename || '').toLowerCase().includes(q))
-    const tokenMatch = tokens.every(t => text.includes(t))
-    return tokenMatch || inFiles
+const sortedConversations = computed(() => {
+  const items = [...conversations.value]
+  return items.sort((a, b) => {
+    const at = a.updated_at ? new Date(a.updated_at).getTime() : 0
+    const bt = b.updated_at ? new Date(b.updated_at).getTime() : 0
+    return bt - at
   })
 })
 
-const messageTimeline = computed(() => {
-  const items = []
-  let lastKey = null
-  for (const msg of displayMessages.value || []) {
-    const hasText = !!formattedMessageText(msg)
-    const hasFiles = Array.isArray(msg?.files) && msg.files.length > 0
-    if (!hasText && !hasFiles) {
-      continue
-    }
-    const key = buildDayKey(msg?.ts_msg)
-    if (key !== lastKey) {
-      items.push({ type: 'date', id: `day-${key}`, label: formatDayHeading(msg?.ts_msg) })
-      lastKey = key
-    }
-    items.push({ type: 'message', id: `msg-${msg.id_msg}`, message: msg })
-  }
-  return items
-})
-function clearMessageFilters() {
-  messageSearch.value = ''
-  messageSearchAuthor.value = 'all'
-  messageSearchFrom.value = ''
-  messageSearchTo.value = ''
-}
+const selectedConversation = computed(() =>
+  conversations.value.find(conv => conv.id === selectedConversationId.value) || null,
+)
 
-function escapeHtml(str) {
-  return (str || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
+const sendDisabled = computed(
+  () =>
+    sendingMessage.value ||
+    !selectedConversationId.value ||
+    !newMessage.value ||
+    newMessage.value.trim().length === 0,
+)
 
-function buildHighlightRegex(q) {
-  const tokens = (q || '').toLowerCase().trim().split(/\s+/).filter(Boolean)
-  if (!tokens.length) return null
-  const escaped = tokens.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-  return new RegExp('(' + escaped.join('|') + ')', 'gi')
-}
-
-function highlightMatches(text) {
-  const q = (messageSearch.value || '').trim()
-  if (!q) return escapeHtml(text || '')
-  const rx = buildHighlightRegex(q)
-  if (!rx) return escapeHtml(text || '')
-  return escapeHtml(text || '').replace(rx, '<mark class="hl">$1</mark>')
-}
-
-function highlightMessageText(text) {
-  return highlightMatches(text)
-}
-
-function highlightFilename(name) {
-  return highlightMatches(name)
-}
-
-function toggleMessageSearch() {
-  showMessageSearch.value = !showMessageSearch.value
-  if (!showMessageSearch.value) messageSearch.value = ''
-}
-
-const titleSuggestion = computed(() => {
-  const names = selectedUsers.value.map(u => byId(u)?.pseudo || '').filter(Boolean)
-  if (names.length <= 2) return names.join(', ')
-  return names.slice(0, 2).join(', ') + ' (+' + (names.length - 2) + ')'
-})
-
-const contactsMap = computed(() => {
-  const map = {}
-  for (const c of contacts.value || []) map[c.user_id] = c
-  return map
-})
-
-const convSearch = ref('')
-const convSearchInput = ref(null)
-const filteredConvContacts = computed(() => {
-  const q = (convSearch.value || '').toLowerCase()
-  if (!q) return contacts.value
-  return (contacts.value || []).filter(c => (c.pseudo || '').toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q))
-})
-function byId(uid) {
-  return (contacts.value || []).find(c => c.user_id === uid)
-}
-function isSelected(uid) {
-  return selectedUsers.value.includes(uid)
-}
-function toggleSelect(uid) {
-  const idx = selectedUsers.value.indexOf(uid)
-  if (idx >= 0) selectedUsers.value.splice(idx, 1)
-  else selectedUsers.value.push(uid)
-  if (!convTitle.value) convTitle.value = derivedTitle()
-}
-function removeSelected(uid) {
-  const idx = selectedUsers.value.indexOf(uid)
-  if (idx >= 0) selectedUsers.value.splice(idx, 1)
-  if (!convTitle.value) convTitle.value = derivedTitle()
-}
-function initials(name) {
-  const n = (name || '').trim()
-  if (!n) return 'C'
-  const parts = n.split(/\s+/)
-  const s = (parts[0]?.[0] || '') + (parts[1]?.[0] || '')
-  return (s || n[0]).toUpperCase()
-}
-function derivedTitle() {
-  const names = selectedUsers.value.map(u => byId(u)?.pseudo || '').filter(Boolean)
-  if (names.length === 1) return names[0]
-  if (names.length === 2) return names.join(', ')
-  if (names.length > 2) return `${names[0]}, ${names[1]} (+${names.length - 2})`
-  return ''
-}
-watch(gifSearchTerm, value => {
-  if (!showGifPicker.value) return
-  if (gifSearchTimer) {
-    clearTimeout(gifSearchTimer)
-    gifSearchTimer = null
-  }
-  gifSearchTimer = setTimeout(() => {
-    loadGifResults(value)
-  }, 350)
-})
-watch(showEmojiPicker, open => {
-  if (open) {
-    showGifPicker.value = false
-    reactionPickerFor.value = null
-  }
-})
-watch(showGifPicker, open => {
-  if (open) {
-    showEmojiPicker.value = false
-    reactionPickerFor.value = null
-    if (!gifResults.value.length) refreshGifResults()
-  } else {
-    if (gifSearchTimer) {
-      clearTimeout(gifSearchTimer)
-      gifSearchTimer = null
-    }
-    if (gifController) {
-      gifController.abort()
-      gifController = null
-    }
-    gifSearchTerm.value = ''
-    gifError.value = ''
-  }
-})
-watch(showConvModal, async open => {
-  if (open) {
-    await nextTick()
-    try {
-      convSearchInput.value?.focus()
-    } catch {}
-  }
-})
 watch(
-  () => actionModal.input,
-  () => {
-    if (actionModal.type === 'rename' && actionModal.error) actionModal.error = ''
+  () => messages.value.length,
+  async (current, previous) => {
+    if (current === 0 || current === previous) return
+    await nextTick()
+    if (stickToBottom.value) {
+      scrollToBottom()
+    }
   },
 )
-watch(selectedUsers, () => {
-  if (!convTitle.value) convTitle.value = derivedTitle()
+
+watch(newMessage, () => {
+  if (sendError.value) sendError.value = ''
 })
-async function ensureSocket() {
-  if (socketClient && socketConnected) return socketClient
-  if (!socketClient) {
-    socketClient = new CovaSocket({
-      baseUrl: backendBase,
-      tokenProvider: () => localStorage.getItem('access_token') || '',
-    })
-  }
-  try {
-    await socketClient.connect()
-    socketConnected = true
-    registerSocketHandlers()
-  } catch (error) {
-    console.error('Unable to connect to realtime service', error)
-    socketConnected = false
-  }
-  return socketConnected ? socketClient : null
-}
-function registerSocketHandlers() {
-  if (!socketClient) return
-  socketClient.on('typing', socketListeners.typing)
-  socketClient.on('message_created', socketListeners.message_created)
-  socketClient.on('new_message', socketListeners.new_message)
-  socketClient.on('reaction_updated', socketListeners.reaction_updated)
-  socketClient.on('call_created', socketListeners.call_created)
-  socketClient.on('call_ended', socketListeners.call_ended)
-  socketClient.on('connect', socketListeners.connect)
-  socketClient.on('disconnect', socketListeners.disconnect)
+
+function normalizeId(value) {
+  if (value == null) return ''
+  return String(value).toLowerCase()
 }
 
-function unregisterSocketHandlers() {
-  if (!socketClient) return
-  socketClient.off('typing', socketListeners.typing)
-  socketClient.off('message_created', socketListeners.message_created)
-  socketClient.off('new_message', socketListeners.new_message)
-  socketClient.off('reaction_updated', socketListeners.reaction_updated)
-  socketClient.off('call_created', socketListeners.call_created)
-  socketClient.off('call_ended', socketListeners.call_ended)
-  socketClient.off('connect', socketListeners.connect)
-  socketClient.off('disconnect', socketListeners.disconnect)
+function getUnreadCount(conversationId) {
+  const key = String(conversationId)
+  return unreadCounts[key] || 0
 }
 
-function handleSocketConnect() {
-  socketConnected = true
-  if (lastJoinedConv) socketClient?.joinConversation(lastJoinedConv)
+function setUnreadCount(conversationId, count) {
+  const key = String(conversationId)
+  if (count <= 0) delete unreadCounts[key]
+  else unreadCounts[key] = count
 }
 
-function handleSocketDisconnect() {
-  socketConnected = false
+function incrementUnread(conversationId) {
+  const key = String(conversationId)
+  unreadCounts[key] = (unreadCounts[key] || 0) + 1
 }
 
-async function joinRoom(convId) {
-  const instance = await ensureSocket()
-  if (!instance) return
-  if (lastJoinedConv && lastJoinedConv !== convId) {
-    instance.leaveConversation(lastJoinedConv)
-  }
-  instance.joinConversation(convId)
-  lastJoinedConv = convId
+function extractMessageText(content) {
+  if (!content) return ''
+  if (typeof content === 'string') return content
+  if (typeof content.text === 'string' && content.text.trim()) return content.text.trim()
+  if (typeof content.message === 'string' && content.message.trim()) return content.message.trim()
+  return ''
 }
 
-function handleTyping() {
-  ensureSocket().then(instance => {
-    if (!instance || !selectedConvId.value) return
-    instance.typing(selectedConvId.value, true)
-  })
-  if (typingSendTimer) clearTimeout(typingSendTimer)
-  typingSendTimer = setTimeout(() => {
-    if (!selectedConvId.value || !socketClient || !socketConnected) return
-    socketClient.typing(selectedConvId.value, false)
-  }, 1200)
-}
+function enrichMessage(raw) {
+  const reads = Array.isArray(raw.reads)
+    ? raw.reads.map(receipt => ({
+        message_id: receipt.message_id,
+        user_id: receipt.user_id,
+        user: receipt.user || null,
+        read_at: receipt.read_at,
+      }))
+    : []
 
-function scheduleMarkRead() {
-  if (markReadTimer) clearTimeout(markReadTimer)
-  markReadTimer = setTimeout(() => {
-    markRead()
-  }, 300)
-}
-
-function markRead() {
-  if (!selectedConvId.value) return
-  const ids = messages.value.filter(m => !m.sentByMe).map(m => m.id_msg)
-  if (!ids.length) return
-  ensureSocket().then(instance => {
-    if (!instance) return
-    instance.markRead(selectedConvId.value, ids)
-  })
-}
-
-function onScroll() {
-  const el = messagesBox.value
-  if (!el) return
-  const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 48
-  isAtBottom.value = nearBottom
-  if (nearBottom) {
-    showJumpToLatest.value = false
-    scheduleMarkRead()
-  } else {
-    showJumpToLatest.value = (messages.value?.length || 0) > 0
+  return {
+    id: raw.id,
+    conversation_id: raw.conversation_id,
+    author_id: raw.author_id,
+    author: raw.author || null,
+    content_json: raw.content_json || {},
+    created_at: raw.created_at,
+    updated_at: raw.updated_at,
+    state: raw.state,
+    reads,
+    text: extractMessageText(raw.content_json),
+    isMine: normalizeId(raw.author_id) === normalizedCurrentUserId,
   }
 }
 
-function scrollToBottom(options = {}) {
-  const el = messagesBox.value
-  if (!el) return
-  const top = el.scrollHeight
-  const behavior = options.behavior || 'auto'
-  if (typeof el.scrollTo === 'function') el.scrollTo({ top, behavior })
-  else el.scrollTop = top
-  isAtBottom.value = true
-  showJumpToLatest.value = false
+function conversationDisplayName(conversation) {
+  if (!conversation) return ''
+  if (conversation.title) return conversation.title
+  const members = Array.isArray(conversation.members) ? conversation.members : []
+  const others = members
+    .filter(member => normalizeId(member.user_id) !== normalizedCurrentUserId)
+    .map(member => member.user?.display_name || member.user?.email || 'Contact')
+  if (others.length === 1) return others[0]
+  if (others.length > 1) return others.join(', ')
+  return conversation.topic || 'Conversation'
 }
 
-function onAttachmentImageLoad() {
-  // When an attachment image finishes loading, ensure the latest messages stay visible
-  scrollToBottom()
+function conversationSubtitle(conversation) {
+  const members = Array.isArray(conversation.members) ? conversation.members.length : 0
+  if (members <= 1) return 'Conversation privée'
+  return `${members} participants`
 }
 
-function jumpToLatest() {
-  scrollToBottom({ behavior: 'smooth' })
+function conversationPreview(conversation) {
+  if (!conversation) return ''
+  if (conversation.lastMessagePreview) return conversation.lastMessagePreview
+  if (conversation.topic) return conversation.topic
+  return 'Conversation'
 }
 
-function requestNotificationPermission() {
-  if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission().catch(() => {})
-  }
+function messageAuthorLabel(message) {
+  if (message.isMine) return 'Vous'
+  return message.author?.display_name || message.author?.email || 'Participant'
 }
 
-function showNotification(title, body) {
-  if (!('Notification' in window)) return
-  if (Notification.permission !== 'granted') return
-  const n = new Notification(title || 'Nouveau message', { body: body || '', icon: LogoUrl })
-  n.onclick = () => window.focus()
-  setTimeout(() => n.close(), 4000)
+function formatTimestamp(iso) {
+  if (!iso) return ''
+  const date = new Date(iso)
+  return date.toLocaleString('fr-BE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
 }
 
-function buildDayKey(ts) {
-  if (!ts) return 'unknown'
-  const date = new Date(ts)
-  if (Number.isNaN(date.getTime())) return 'unknown'
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+function formatShortTimestamp(iso) {
+  if (!iso) return ''
+  const date = new Date(iso)
+  return date.toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit' })
 }
 
-function formatDayHeading(ts) {
-  if (!ts) return 'Date inconnue'
-  const date = new Date(ts)
-  if (Number.isNaN(date.getTime())) return 'Date inconnue'
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const day = new Date(date)
-  day.setHours(0, 0, 0, 0)
-  const diffDays = Math.round((today - day) / 86400000)
-  if (diffDays === 0) return "Aujourd'hui"
-  if (diffDays === 1) return 'Hier'
-  if (diffDays === -1) return 'Demain'
-  return date.toLocaleDateString('fr-BE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })
+function scrollToBottom() {
+  const container = messagesContainer.value
+  if (!container) return
+  container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
 }
-function formatDate(ts) {
-  if (!ts) return ''
-  const d = new Date(ts)
-  return d.toLocaleString('fr-BE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
+
+function handleScroll() {
+  const container = messagesContainer.value
+  if (!container) return
+  const threshold = 48
+  stickToBottom.value =
+    container.scrollTop + container.clientHeight >= container.scrollHeight - threshold
 }
 
 async function loadConversations() {
-    try {
-      const data = await listConversations()
-      conversations.value = (data || []).map(c => ({ ...c }))
-      for (const conv of conversations.value) {
-        if (conv && conv.last && typeof conv.last.text === 'string') {
-          const preview = previewTextForMessage({
-            contenu_chiffre: conv.last.text,
-            files: conv.last.files || [],
-            ts_msg: conv.last.ts || conv.last.ts_msg,
-            sender_id: conv.last.sender_id,
-            sentByMe: conv.last.sentByMe,
-          })
-          conv.last.text = preview || conv.last.text || 'Message'
-        }
-      }
-      await enrichConversations()
-      applyFavoriteStateToConversations()
-      applyUnreadCountsToConversations()
-      if (!selectedConvId.value && conversations.value.length) {
-        await selectConversation(conversations.value[0].id)
-      }
-  } catch (e) {
-    conversations.value = []
+  loadingConversations.value = true
+  try {
+    const data = await listConversations()
+    conversations.value = (data || []).map(conv => ({
+      ...conv,
+      lastMessagePreview: conv.lastMessagePreview || '',
+    }))
+    globalError.value = ''
+    if (!selectedConversationId.value && conversations.value.length > 0) {
+      await selectConversation(conversations.value[0].id)
+    }
+  } catch (error) {
+    console.error('Unable to load conversations', error)
+    globalError.value = "Impossible de charger les conversations."
+  } finally {
+    loadingConversations.value = false
   }
 }
 
-async function enrichConversations() {
-  for (const conv of conversations.value) {
-    try {
-      const details = await getConversation(conv.id)
-      const parts = details?.participants || []
-      conv.participants = parts
-      if (!conv.is_group) {
-        const other = parts.find(p => p.id_user !== userId)
-        conv.displayName = other?.pseudo || conv.titre
-        conv.other_user_id = other?.id_user
-        const contactEntry = contactsMap.value || {}
-        const contactKey = conv.other_user_id != null ? String(conv.other_user_id) : ''
-        conv.avatar_url = contactKey ? (contactEntry[contactKey]?.avatar_url || null) : null
-      } else {
-        conv.displayName = conv.titre
-        conv.avatar_url = null
-      }
-    } catch {}
-    try {
-      const messagesData = await getConversationMessages(conv.id)
-      const arr = messagesData || []
-      const last = arr[arr.length - 1]
-      if (last) {
-        const normalizedLast = {
-          ...last,
-          sender_id: last.sender_id ?? null,
-          contenu_chiffre: normalizeMessageText(last.contenu_chiffre),
-          files: last.files || [],
-        }
-        applyConversationPreview(conv, normalizedLast)
-      }
-    } catch {}
-  }
+async function selectConversation(conversationId) {
+  if (!conversationId || selectedConversationId.value === conversationId) return
+  selectedConversationId.value = conversationId
+  await Promise.all([loadMessages(conversationId), connectRealtime(conversationId)])
 }
 
-async function loadMessages() {
-  if (!selectedConvId.value) {
-    messages.value = []
+async function reloadMessages() {
+  if (!selectedConversationId.value) return
+  await loadMessages(selectedConversationId.value, { scroll: false })
+}
+
+function updateConversationMetadata(conversationId, message) {
+  const index = conversations.value.findIndex(conv => conv.id === conversationId)
+  if (index === -1) {
+    // Conversation might be new, refresh the list
+    loadConversations()
     return
   }
-  loading.value = true
-  try {
-      const data = await getConversationMessages(selectedConvId.value)
-      messages.value = (data || []).map(m => ({
-        ...m,
-        sentByMe: m.sender_id === userId,
-        sender_id: m.sender_id ?? null,
-        contenu_chiffre: normalizeMessageText(m.contenu_chiffre),
-        files: m.files || [],
-        reactions: m.reactions || [],
-        reaction_summary: m.reaction_summary || [],
-      }))
-      const latest = messages.value[messages.value.length - 1]
-      if (latest) {
-        const convEntry = conversations.value.find(c => c.id === selectedConvId.value)
-        if (convEntry) applyConversationPreview(convEntry, latest)
-      }
-      await nextTick()
-      scrollToBottom({ behavior: 'auto' })
-    scheduleMarkRead()
-  } catch (e) {
-    messages.value = []
-  } finally {
-    loading.value = false
+  const current = conversations.value[index]
+  conversations.value[index] = {
+    ...current,
+    updated_at: message.created_at || message.updated_at || current.updated_at,
+    lastMessagePreview: message.text || current.lastMessagePreview,
   }
 }
 
-function refresh() {
-  loadMessages()
-}
-
-function normalizeCall(session) {
-  if (!session || typeof session !== 'object') return null
-  const initiator = session.initiator || null
-  return {
-    ...session,
-    initiator,
-    initiator_pseudo: session.initiator_pseudo || initiator?.pseudo || '',
-    isMine: session.initiator_id === userId,
-  }
-}
-
-function setCallSessions(convId, sessions) {
-  if (!convId) return
-  const safeList = (sessions || []).slice().sort((a, b) => new Date(a.started_at || 0) - new Date(b.started_at || 0))
-  callSessionsMap.value = { ...callSessionsMap.value, [convId]: safeList }
-}
-
-function upsertCallSession(call) {
-  if (!call || !call.conv_id) return
-  const existing = (callSessionsMap.value[call.conv_id] || []).slice()
-  const idx = existing.findIndex(item => item.id === call.id)
-  if (idx >= 0) existing[idx] = call
-  else existing.push(call)
-  setCallSessions(call.conv_id, existing)
-}
-
-async function loadCallSessions(convId = selectedConvId.value) {
-  if (!convId) return
-  try {
-    const data = await listConversationCalls(convId)
-    const normalized = (data || []).map(normalizeCall).filter(Boolean)
-    setCallSessions(convId, normalized)
-    if (normalized.length) {
-      updateConversationPreviewWithCall(normalized[normalized.length - 1])
-    }
-  } catch (error) {
-    setCallSessions(convId, [])
-  }
-}
-
-function callTypeLabel(type) {
-  return type === 'audio' ? 'Appel audio' : 'Appel vidéo'
-}
-
-function callTypeIcon(type) {
-  return type === 'audio' ? 'bi-telephone-fill' : 'bi-camera-video-fill'
-}
-
-function callInitiatorLabel(call) {
-  if (!call) return ''
-  if (call.isMine) return 'vous'
-  return call.initiator_pseudo || call.initiator?.pseudo || 'un membre'
-}
-
-function updateConversationPreviewWithCall(call) {
-  if (!call) return
-  const conv = conversations.value.find(c => c.id === call.conv_id)
-  if (!conv) return
-  const callTs = call.ended_at || call.started_at || null
-  const currentTs = conv.last?.ts || null
-  if (callTs && currentTs && new Date(currentTs) > new Date(callTs)) return
-  const suffix = call.ended_at ? 'terminé' : 'démarré'
-  conv.last = {
-    text: `${callTypeLabel(call.call_type)} ${suffix}`,
-    ts: callTs,
-    sentByMe: call.isMine,
-  }
-}
-
-function handleCallCreated(payload) {
-  const call = normalizeCall(payload)
-  if (!call || !call.conv_id) return
-  upsertCallSession(call)
-  updateConversationPreviewWithCall(call)
-  if (call.conv_id === selectedConvId.value && !call.isMine && document.hidden) {
-    showNotification(callTypeLabel(call.call_type), `Lancé par ${callInitiatorLabel(call)}`)
-  }
-}
-
-function handleCallEnded(payload) {
-  const call = normalizeCall(payload)
-  if (!call || !call.conv_id) return
-  stopCallWatcher(call.id)
-  upsertCallSession(call)
-  updateConversationPreviewWithCall(call)
-}
-
-async function startCall(callType) {
-  if (!selectedConvId.value || callActionPending.value) return
-  callActionPending.value = callType
-  try {
-    const created = await createConversationCall(selectedConvId.value, { type: callType })
-    const call = normalizeCall(created)
-    handleCallCreated(call)
-    joinCall(call)
-  } catch (error) {
-    console.error('Unable to start call', error)
-    alert("Impossible de démarrer l'appel pour le moment.")
-  } finally {
-    callActionPending.value = ''
-  }
-}
-
-function joinCall(call) {
-  if (!call || !call.join_url) return
-  try {
-    const win = window.open(call.join_url, '_blank', 'noopener')
-    if (win) watchCallWindow(call, win)
-  } catch {}
-}
-
-function stopCallWatcher(callId) {
-  if (!callId) return
-  const timer = callWindowWatchers.get(callId)
-  if (timer) {
-    clearInterval(timer)
-    callWindowWatchers.delete(callId)
-  }
-}
-
-function watchCallWindow(call, win) {
-  if (!call || !win || !call.isMine || !call.id) return
-  stopCallWatcher(call.id)
-  const timer = setInterval(() => {
-    if (win.closed) {
-      clearInterval(timer)
-      callWindowWatchers.delete(call.id)
-      endCall(call)
-    }
-  }, 1500)
-  callWindowWatchers.set(call.id, timer)
-}
-
-async function endCall(call) {
-  if (!call || call.ended_at || !call.conv_id || !call.id) return
-  if (endingCallId.value === call.id) return
-  endingCallId.value = call.id
-  stopCallWatcher(call.id)
-  try {
-    const res = await api.post(
-      `/conversations/${call.conv_id}/calls/${call.id}/end`,
+function upsertMessage(message) {
+  const existingIndex = messages.value.findIndex(item => item.id === message.id)
+  if (existingIndex === -1) {
+    messages.value = [...messages.value, message].sort(
+      (a, b) => new Date(a.created_at) - new Date(b.created_at),
     )
-    handleCallEnded(res.data)
-  } catch (error) {
-    console.error('Unable to end call', error)
-  } finally {
-    if (endingCallId.value === call.id) endingCallId.value = null
+  } else {
+    messages.value.splice(existingIndex, 1, message)
   }
 }
 
-async function selectConversation(id) {
-  if (selectedConvId.value !== id) {
-    selectedConvId.value = id
-  }
-  const conv = conversations.value.find(c => c.id === id)
-  currentConvTitle.value = conv ? conv.displayName || conv.titre : 'Messagerie'
-  clearUnread(id)
-  await joinRoom(id)
-  broadcastActiveConversation(id)
-}
-
-const partnerName = computed(() => {
-  const conv = conversations.value.find(c => c.id === selectedConvId.value)
-  if (!conv) return 'Utilisateur'
-  if (conv.is_group) return 'Membre'
-  return conv.displayName || 'Utilisateur'
-})
-const partnerAvatar = computed(() => {
-  const conv = conversations.value.find(c => c.id === selectedConvId.value)
-  if (!conv || conv.is_group) return ''
-  return conv.avatar_url || ''
-})
-
-function formatTime(ts) {
-  if (!ts) return ''
-  const d = new Date(ts)
-  const now = new Date()
-  const sameDay = d.toDateString() === now.toDateString()
-  return sameDay
-    ? d.toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })
-    : d.toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit' })
-}
-
-function promptRename() {
-  if (!selectedConvId.value) return
-  const convName = currentConvTitle.value || 'Conversation'
-  openActionModal({
-    type: 'rename',
-    title: 'Renommer la conversation',
-    message: `Choisissez un nouveau titre pour '${convName}'.`,
-    input: convName,
-    confirmLabel: 'Renommer',
-    confirmVariant: 'primary',
-  })
-}
-
-function leaveConversation() {
-  if (!selectedConvId.value) return
-  const conv = conversations.value.find(c => c.id === selectedConvId.value)
-  const convName = conv?.displayName || conv?.titre || 'cette conversation'
-  openActionModal({
-    type: 'leave',
-    title: 'Quitter la conversation',
-    message: `Vous êtes sur le point de quitter '${convName}'. Vous ne recevrez plus de nouveaux messages et devrez être réinvité pour revenir.`,
-    confirmLabel: 'Quitter',
-    confirmVariant: 'danger',
-  })
-}
-
-function deleteConversation() {
-  if (!selectedConvId.value) return
-  const conv = conversations.value.find(c => c.id === selectedConvId.value)
-  const convName = conv?.displayName || conv?.titre || 'cette conversation'
-  openActionModal({
-    type: 'delete',
-    title: 'Supprimer la conversation',
-    message: `Cette action supprimera définitivement '${convName}', y compris tous les messages associés. Voulez-vous continuer ?`,
-    confirmLabel: 'Supprimer',
-    confirmVariant: 'danger',
-  })
-}
-
-function triggerFilePicker() {
-  fileInput.value?.click()
-}
-
-function withPreviewForPending(file) {
-  if (file && file.type && file.type.startsWith('image/')) {
-    try {
-      file.previewUrl = URL.createObjectURL(file)
-    } catch {}
-  }
-  return file
-}
-
-function revokePendingPreview(file) {
-  if (file && file.previewUrl) {
-    URL.revokeObjectURL(file.previewUrl)
-    delete file.previewUrl
-  }
-}
-
-function handleFiles(event) {
-  const files = Array.from(event.target?.files || []).map(withPreviewForPending)
-  if (!files.length) return
-  pendingFiles.value = pendingFiles.value.concat(files)
-  if (fileInput.value) fileInput.value.value = ''
-}
-
-function removePendingFile(index) {
-  const removed = pendingFiles.value.splice(index, 1)
-  removed.forEach(revokePendingPreview)
-}
-
-function resetPendingFiles() {
-  pendingFiles.value.forEach(revokePendingPreview)
-  pendingFiles.value = []
-  if (fileInput.value) fileInput.value.value = ''
-}
-
-function toggleEmojiPicker() {
-  showEmojiPicker.value = !showEmojiPicker.value
-  if (showEmojiPicker.value) {
-    showGifPicker.value = false
-    reactionPickerFor.value = null
-    focusMessageInput()
-  }
-}
-
-function toggleGifPicker() {
-  showGifPicker.value = !showGifPicker.value
-  if (showGifPicker.value) {
-    showEmojiPicker.value = false
-    reactionPickerFor.value = null
-    refreshGifResults()
-    focusMessageInput()
-  }
-}
-
-function focusMessageInput() {
-  nextTick(() => {
-    messageInput.value?.focus()
-  })
-}
-
-function onComposerEmojiSelect(event) {
-  const emoji = extractEmoji(event)
-  if (!emoji) return
-  newMessage.value += emoji
-  showEmojiPicker.value = false
-  focusMessageInput()
-}
-
-function onReactionEmoji(msgId, event) {
-  const emoji = extractEmoji(event)
-  if (!emoji) return
-  selectReaction(msgId, emoji)
-}
-
-function extractEmoji(event) {
-  return (
-    event?.detail?.unicode ||
-    event?.detail?.emoji?.unicode ||
-    event?.detail?.native ||
-    event?.detail?.char ||
-    ''
-  )
-}
-
-async function refreshGifResults() {
-  return loadGifResults(gifSearchTerm.value)
-}
-
-async function loadGifResults(query = '') {
-  const search = (query || '').trim()
-  if (gifController) {
-    gifController.abort()
-    gifController = null
-  }
-  const controller = new AbortController()
-  gifController = controller
-  gifLoading.value = true
-  gifError.value = ''
+async function loadMessages(conversationId, options = { scroll: true }) {
+  if (!conversationId) return
+  loadingMessages.value = true
   try {
-    if (!TENOR_API_KEY) {
-      // No v2 key configured: fallback to legacy v1
-      const legacy = await fetchTenorV1(search, controller.signal)
-      gifResults.value = legacy
-      return
+    const data = await listConversationMessages(conversationId)
+    messages.value = (data || []).map(enrichMessage)
+    const last = messages.value[messages.value.length - 1]
+    if (last) {
+      updateConversationMetadata(conversationId, last)
     }
-    const endpoint = search ? 'search' : 'featured'
-    const params = new URLSearchParams({
-      key: TENOR_API_KEY,
-      client_key: TENOR_CLIENT_KEY,
-      limit: String(GIF_PAGE_LIMIT),
-      media_filter: 'minimal',
-    })
-    if (search) params.set('q', search)
-    const response = await fetch(`https://tenor.googleapis.com/v2/${endpoint}?${params.toString()}`, {
-      signal: controller.signal,
-    })
-    if (!response.ok) {
-      // Try legacy API when v2 fails (e.g., invalid key)
-      const legacy = await fetchTenorV1(search, controller.signal)
-      gifResults.value = legacy
-      return
-    }
-    const data = await response.json()
-    gifResults.value = data.results || []
-  } catch (error) {
-    if (error.name === 'AbortError') return
-    console.error('GIF search failed', error)
-    try {
-      const legacy = await fetchTenorV1(search)
-      gifResults.value = legacy
-      gifError.value = ''
-    } catch (e2) {
-      gifError.value = "Impossible de charger les GIFs pour le moment."
-    }
-  } finally {
-    if (gifController === controller) {
-      gifLoading.value = false
-      gifController = null
-    }
-  }
-}
-
-async function fetchTenorV1(search, signal) {
-  const endpoint = (search ? 'search' : 'trending')
-  const params = new URLSearchParams({
-    key: (import.meta?.env?.VITE_TENOR_V1_KEY || 'LIVDSRZULELA'),
-    limit: String(GIF_PAGE_LIMIT),
-    media_filter: 'minimal',
-  })
-  if (search) params.set('q', search)
-  const res = await fetch(`https://g.tenor.com/v1/${endpoint}?${params.toString()}`, { signal })
-  if (!res.ok) throw new Error(`Legacy Tenor HTTP ${res.status}`)
-  const data = await res.json()
-  return normalizeTenorV1Results(data)
-}
-
-function normalizeTenorV1Results(data) {
-  const results = data?.results || []
-  return results.map(item => {
-    const media = Array.isArray(item.media) && item.media.length ? item.media[0] : {}
-    const media_formats = {}
-    for (const key of ['gif', 'mediumgif', 'nanogif', 'tinygif', 'mp4']) {
-      if (media[key]?.url) media_formats[key] = { url: media[key].url }
-    }
-    return { id: item.id, media_formats }
-  })
-}
-
-function gifMediaUrl(gif) {
-  if (!gif || !gif.media_formats) return ''
-  const order = ['gif', 'mediumgif', 'nanogif', 'tinygif', 'loopedmp4']
-  for (const key of order) {
-    const candidate = gif.media_formats[key]
-    if (candidate?.url) return candidate.url
-  }
-  return ''
-}
-
-async function addGifToPending(gif) {
-  const url = gifMediaUrl(gif)
-  if (!url) {
-    gifError.value = 'GIF indisponible.'
-    return
-  }
-  try {
-    const response = await fetch(url)
-    if (!response.ok) throw new Error('download failed')
-    const blob = await response.blob()
-    const extension = (blob.type && blob.type.split('/')[1]) || 'gif'
-    const filename = `gif-${gif?.id || Date.now()}.${extension}`
-    const file = new File([blob], filename, { type: blob.type || 'image/gif' })
-    withPreviewForPending(file)
-    pendingFiles.value = pendingFiles.value.concat(file)
-    showGifPicker.value = false
-    gifError.value = ''
-    focusMessageInput()
-  } catch (error) {
-    console.error('Unable to attach GIF', error)
-    gifError.value = "Impossible d'ajouter ce GIF."
-  }
-}
-
-function formatSize(bytes) {
-  if (bytes === 0) return '0 o'
-  if (!bytes) return ''
-  const units = ['o', 'Ko', 'Mo', 'Go']
-  let size = bytes
-  let idx = 0
-  while (size >= 1024 && idx < units.length - 1) {
-    size /= 1024
-    idx += 1
-  }
-  return `${size % 1 === 0 ? size : size.toFixed(1)} ${units[idx]}`
-}
-
-async function sendMessage() {
-  if (!selectedConvId.value || sendingMessage.value) return
-  if (!canSend.value) return
-  const content = newMessage.value
-  const attachments = pendingFiles.value.slice()
-  const formData = new FormData()
-  formData.append('contenu_chiffre', content)
-  attachments.forEach(file => formData.append('files', file))
-  sendingMessage.value = true
-  newMessage.value = ''
-  showEmojiPicker.value = false
-  showGifPicker.value = false
-  try {
-      const res = await sendConversationMessage(selectedConvId.value, formData)
-      const created = {
-        ...res,
-        sentByMe: true,
-        files: res.files || [],
-        reactions: res.reactions || [],
-        reaction_summary: res.reaction_summary || [],
-      }
-      created.sender_id = created.sender_id ?? userId
-      created.contenu_chiffre = normalizeMessageText(created.contenu_chiffre)
-      messages.value.push(created)
-      const convEntry = conversations.value.find(c => c.id === selectedConvId.value)
-      if (convEntry) applyConversationPreview(convEntry, created)
-      resetPendingFiles()
+    if (options.scroll !== false) {
       await nextTick()
       scrollToBottom()
-  } catch (e) {
-    newMessage.value = content
-    pendingFiles.value = attachments
+    }
+    await markCurrentConversationRead()
+    connectionError.value = ''
+  } catch (error) {
+    console.error('Unable to load messages', error)
+    connectionError.value = "Échec du chargement des messages."
+    messages.value = []
+  } finally {
+    loadingMessages.value = false
+  }
+}
+
+async function handleSend() {
+  if (sendDisabled.value) return
+  const conversationId = selectedConversationId.value
+  const text = newMessage.value.trim()
+  if (!conversationId || !text) return
+
+  sendingMessage.value = true
+  sendError.value = ''
+  try {
+    const payload = { content_json: { text } }
+    const saved = await sendConversationMessage(conversationId, payload)
+    const message = enrichMessage(saved)
+    upsertMessage(message)
+    updateConversationMetadata(conversationId, message)
+    newMessage.value = ''
+    await nextTick()
+    scrollToBottom()
+  } catch (error) {
+    console.error('Unable to send message', error)
+    sendError.value = "L'envoi du message a échoué."
   } finally {
     sendingMessage.value = false
   }
 }
 
-function startEdit(msg) {
-  editingId.value = msg.id_msg
-  editContent.value = msg.contenu_chiffre
-}
+async function markCurrentConversationRead() {
+  const conversationId = selectedConversationId.value
+  if (!conversationId) return
+  const unreadMessages = messages.value.filter(message => {
+    if (message.isMine) return false
+    return !message.reads?.some(receipt => normalizeId(receipt.user_id) === normalizedCurrentUserId)
+  })
 
-async function confirmEdit() {
-  if (!editingId.value) return
-  try {
-    await api.put(
-      `/conversations/${selectedConvId.value}/messages/${editingId.value}`,
-      { contenu_chiffre: editContent.value },
-    )
-    editingId.value = null
-    editContent.value = ''
-    await loadMessages()
-  } catch {}
-}
-
-function cancelEdit() {
-  editingId.value = null
-}
-
-async function deleteMessage(id) {
-  if (!confirm('Supprimer ce message ?')) return
-  try {
-    await api.delete(
-      `/conversations/${selectedConvId.value}/messages/${id}`,
-    )
-    await loadMessages()
-  } catch {}
-}
-
-async function loadContacts() {
-  try {
-    const data = await listContacts('accepted')
-    contacts.value = data?.contacts || data || []
-  } catch {
-    contacts.value = []
-  }
-}
-
-function openConvModal() {
-  selectedUsers.value = []
-  convTitle.value = ''
-  convSearch.value = ''
-  loadContacts()
-  showConvModal.value = true
-}
-
-async function submitConversationCreation() {
-  if (!convTitle.value) return
-  creatingConv.value = true
-  try {
-    const payload = {
-      titre: convTitle.value,
-      participants: selectedUsers.value,
-      is_group: selectedUsers.value.length > 1,
-    }
-    const created = await createConversationRoom(payload)
-    showConvModal.value = false
-    creatingConv.value = false
-    await loadConversations()
-    if (created && created.id) {
-      await selectConversation(created.id)
-      await loadMessages()
-    }
-  } catch (e) {
-    creatingConv.value = false
-  }
-}
-
-function reactionSummary(msg) {
-  if (msg.reaction_summary && msg.reaction_summary.length) {
-    return msg.reaction_summary
-  }
-  return summariseReactions(msg.reactions || [])
-}
-
-function summariseReactions(reactions) {
-  const map = new Map()
-  for (const reaction of reactions || []) {
-    const entry = map.get(reaction.emoji) || { emoji: reaction.emoji, count: 0, mine: false }
-    entry.count += 1
-    if (reaction.is_mine) entry.mine = true
-    map.set(reaction.emoji, entry)
-  }
-  return Array.from(map.values())
-}
-
-function toggleReactionPicker(msgId) {
-  reactionPickerFor.value = reactionPickerFor.value === msgId ? null : msgId
-  if (reactionPickerFor.value) {
-    showEmojiPicker.value = false
-    showGifPicker.value = false
-  }
-}
-
-function selectReaction(msgId, emoji) {
-  toggleReaction(msgId, emoji)
-  reactionPickerFor.value = null
-}
-
-async function toggleReaction(msgId, emoji) {
-  try {
-    const res = await toggleMessageReaction(msgId, emoji)
-    applyReactionUpdate(msgId, res)
-  } catch {}
-}
-
-function applyReactionUpdate(messageId, payload) {
-  if (!payload) return
-  const target = messages.value.find(m => m.id_msg === messageId)
-  if (!target) return
-  target.reactions = payload.reactions || []
-  target.reaction_summary = payload.reaction_summary || summariseReactions(target.reactions)
-}
-
-function attachmentEndpoint(file) {
-  const fallback = `/api/messages/files/${file?.id_file}`
-  const raw = file?.url || fallback
-  const withInline = raw.includes('?') ? `${raw}&inline=1` : `${raw}?inline=1`
-  return withInline.startsWith('http') ? withInline : `${backendBase}${withInline}`
-}
-
-function isInlineImage(file) {
-  const mime = (file?.mime || '').toLowerCase()
-  if (mime.startsWith('image/')) return true
-  const name = (file?.filename || '').toLowerCase()
-  return /\.(png|jpe?g|gif|webp|bmp)$/i.test(name)
-}
-
-const _previewRetryCount = new Map()
-async function ensureAttachmentPreview(file) {
-  const key = file?.id_file
-  if (!key) return
-  const cacheKey = String(key)
-  if (attachmentPreviews.value[cacheKey] || loadingPreviewIds.has(cacheKey)) return
-  if (!isInlineImage(file)) return
-  loadingPreviewIds.add(cacheKey)
-  try {
-    const response = await api.get(attachmentEndpoint(file), { responseType: 'blob' })
-    const blobUrl = window.URL.createObjectURL(response.data)
-    attachmentPreviews.value = { ...attachmentPreviews.value, [cacheKey]: blobUrl }
-  } catch (error) {
-    // Retry once after a short delay in case the file is not yet available
-    const tries = _previewRetryCount.get(cacheKey) || 0
-    if (tries < 1) {
-      _previewRetryCount.set(cacheKey, tries + 1)
-      setTimeout(() => ensureAttachmentPreview(file), 800)
-    } else {
-      console.error('Unable to load preview', error)
-    }
-  } finally {
-    loadingPreviewIds.delete(cacheKey)
-  }
-}
-
-async function downloadAttachment(file) {
-  try {
-    const response = await axios.get(attachmentEndpoint(file), {
-      responseType: 'blob',
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-    })
-    const blobUrl = window.URL.createObjectURL(response.data)
-    const link = document.createElement('a')
-    link.href = blobUrl
-    link.download = file.filename || `piece-jointe-${file.id_file}`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(blobUrl)
-  } catch {}
-}
-
-watch(
-  messages,
-  list => {
-    const active = new Set()
-    for (const msg of list || []) {
-      for (const file of msg.files || []) {
-        if (!file || !file.id_file) continue
-        const key = String(file.id_file)
-        active.add(key)
-        if (isInlineImage(file)) ensureAttachmentPreview(file)
-      }
-    }
-    const cache = { ...attachmentPreviews.value }
-    let changed = false
-    for (const key of Object.keys(cache)) {
-      if (!active.has(key)) {
-        window.URL.revokeObjectURL(cache[key])
-        delete cache[key]
-        changed = true
-      }
-    }
-    if (changed) {
-      attachmentPreviews.value = { ...cache }
-    }
-  },
-  { deep: true, immediate: true },
-)
-
-function handleIncomingMessage(payload) {
-  if (!payload) return
-  const convId = Number(payload.conv_id ?? payload.convId ?? payload.conv?.id ?? payload.id_conv ?? payload.conv_id ?? 0)
-  const normalized = {
-    ...payload,
-    conv_id: convId,
-    files: payload.files || [],
-    reactions: payload.reactions || [],
-    reaction_summary: payload.reaction_summary || [],
-    sender_id: payload.sender_id ?? null,
-    contenu_chiffre: normalizeMessageText(payload.contenu_chiffre),
-    sentByMe: payload.sender_id === userId,
-  }
-  const already = messages.value.some(m => Number(m.id_msg) === Number(normalized.id_msg))
-  if (already) {
-    applyReactionUpdate(normalized.id_msg, {
-      reactions: normalized.reactions,
-      reaction_summary: normalized.reaction_summary,
-    })
+  if (unreadMessages.length === 0) {
+    setUnreadCount(conversationId, 0)
     return
   }
-  const convEntry = conversations.value.find(c => Number(c.id) === convId)
-  if (convEntry) {
-    applyConversationPreview(convEntry, normalized)
-  } else {
-    scheduleConversationsRefresh(50)
+
+  try {
+    const identifiers = unreadMessages.map(message => message.id)
+    await markConversationMessagesRead(conversationId, identifiers)
+    setUnreadCount(conversationId, 0)
+  } catch (error) {
+    console.error('Unable to mark messages as read', error)
   }
-  if (convId === Number(selectedConvId.value)) {
-    if (loading.value) loading.value = false
-    messages.value.push(normalized)
-    nextTick().then(() => {
-      scrollToBottom()
-      if (!normalized.sentByMe) scheduleMarkRead()
+}
+
+async function connectRealtime(conversationId) {
+  if (!conversationId) return
+  if (!socketClient) {
+    socketClient = new ConversationSocket({
+      baseUrl: backendBase,
+      tokenProvider: () => localStorage.getItem('access_token') || '',
     })
-    if (!normalized.sentByMe && !document.hasFocus()) {
-      const text = normalized.contenu_chiffre.trim()
-    const fallback = attachmentsLabel(normalized.files) || 'Nouveau message'
-      showNotification('Nouveau message', text || fallback)
-    }
-  } else if (normalized.sender_id !== userId) {
-    incrementUnread(convId)
-  } else if (convEntry) {
-    clearUnread(convId)
+    socketClient.on('message', handleRealtimeMessage)
+    socketClient.on('read', handleRealtimeRead)
+    socketClient.on('close', () => {
+      connectionError.value = 'Connexion temps réel interrompue.'
+    })
+    socketClient.on('error', error => {
+      console.error('Realtime error', error)
+      connectionError.value = 'Erreur de connexion temps réel.'
+    })
+    socketClient.on('ack', () => {
+      connectionError.value = ''
+    })
+  }
+
+  try {
+    await socketClient.connect(conversationId)
+  } catch (error) {
+    console.error('Unable to connect realtime', error)
+    connectionError.value = 'Impossible de se connecter au flux temps réel.'
   }
 }
 
-const visibilityHandler = () => {
-  if (!document.hidden) scheduleMarkRead()
+function handleRealtimeMessage(payload) {
+  if (!payload || payload.type !== 'message.created') return
+  const conversationId = payload.conversation_id
+  const raw = payload.message
+  if (!conversationId || !raw) return
+  const message = enrichMessage(raw)
+  updateConversationMetadata(conversationId, message)
+
+  if (conversationId === selectedConversationId.value) {
+    upsertMessage(message)
+    if (!message.isMine) markCurrentConversationRead()
+  } else if (!message.isMine) {
+    incrementUnread(conversationId)
+  }
 }
 
-watch(
-  unreadSummary,
-  summary => {
-    if (typeof window === 'undefined') return
-    window.dispatchEvent(new CustomEvent('cova:unread', { detail: summary }))
-  },
-  { deep: true, immediate: true },
-)
+function handleRealtimeRead(payload) {
+  if (!payload || payload.type !== 'message.read') return
+  const { conversation_id: conversationId, message_ids: messageIds, user_id: userId, published_at: publishedAt } =
+    payload
+  if (!conversationId || !Array.isArray(messageIds) || !userId) return
+  if (conversationId !== selectedConversationId.value) {
+    if (normalizeId(userId) === normalizedCurrentUserId) {
+      setUnreadCount(conversationId, 0)
+    }
+    return
+  }
+
+  for (const identifier of messageIds) {
+    const entry = messages.value.find(message => message.id === identifier)
+    if (!entry) continue
+    if (!entry.reads) entry.reads = []
+    const already = entry.reads.some(receipt => normalizeId(receipt.user_id) === normalizeId(userId))
+    if (!already) {
+      entry.reads.push({
+        message_id: entry.id,
+        user_id: userId,
+        read_at: publishedAt || new Date().toISOString(),
+        user: null,
+      })
+    }
+  }
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    markCurrentConversationRead()
+  }
+}
 
 onMounted(async () => {
-  requestNotificationPermission()
-  loadUnreadFromStorage()
-  loadFavorites()
-  await loadContacts()
   await loadConversations()
-  await refreshUnreadFromServer()
-  if (selectedConvId.value) await selectConversation(selectedConvId.value)
-  await loadMessages()
-  await nextTick()
-  scrollToBottom({ behavior: 'auto' })
-  await loadCallSessions()
-  await ensureSocket()
-  if (selectedConvId.value) await joinRoom(selectedConvId.value)
-  document.addEventListener('visibilitychange', visibilityHandler)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
-watch(selectedConvId, async val => {
-  closeActionModal()
-  if (!val) {
-    broadcastActiveConversation(null)
-    return
-  }
-  isAtBottom.value = true
-  showJumpToLatest.value = false
-  await selectConversation(val)
-  await loadMessages()
-  await loadCallSessions(val)
-  resetPendingFiles()
-  showEmojiPicker.value = false
-  showGifPicker.value = false
-  reactionPickerFor.value = null
-  typingLabel.value = ''
-})
-
-watch(
-  () => messages.value.length,
-  (curr, prev) => {
-    if (curr <= prev) return
-    nextTick().then(() => {
-      const lastMessage = messages.value[messages.value.length - 1]
-      if (isAtBottom.value || lastMessage?.sentByMe) {
-        scrollToBottom({ behavior: prev === 0 ? 'auto' : 'smooth' })
-      } else {
-        showJumpToLatest.value = true
-      }
-    })
-  },
-)
-
-onUnmounted(() => {
-  if (gifSearchTimer) {
-    clearTimeout(gifSearchTimer)
-    gifSearchTimer = null
-  }
-  if (gifController) {
-    gifController.abort()
-    gifController = null
-  }
-  pendingFiles.value.forEach(revokePendingPreview)
-  pendingFiles.value = []
-  const cache = attachmentPreviews.value || {}
-  for (const url of Object.values(cache)) {
-    try {
-      window.URL.revokeObjectURL(url)
-    } catch {}
-  }
-  for (const timer of callWindowWatchers.values()) {
-    clearInterval(timer)
-  }
-  callWindowWatchers.clear()
-  if (typingClearTimer) {
-    clearTimeout(typingClearTimer)
-    typingClearTimer = null
-  }
-  unregisterSocketHandlers()
+onBeforeUnmount(async () => {
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   if (socketClient) {
-    if (lastJoinedConv) {
-      socketClient.leaveConversation(lastJoinedConv)
-    }
-    socketClient.disconnect()
+    await socketClient.disconnect()
   }
   socketClient = null
-  socketConnected = false
-  lastJoinedConv = null
-  if (conversationsRefreshTimer) {
-    clearTimeout(conversationsRefreshTimer)
-    conversationsRefreshTimer = null
-  }
-  actionModal.open = false
-  actionModal.loading = false
-  actionModal.error = ''
-  document.removeEventListener('visibilitychange', visibilityHandler)
-  broadcastActiveConversation(null)
 })
 </script>
 
 <style scoped src="../styles/components/MessagesRealtimeNew.css"></style>
-
-
-
-
-
-
-
-
-
-
-
-
-
-

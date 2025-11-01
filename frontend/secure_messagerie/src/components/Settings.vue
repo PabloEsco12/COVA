@@ -1,7 +1,7 @@
 <!-- src/components/Settings.vue (revamped) -->
 <template>
   <div class="p-4">
-    <h2 class="mb-4"><i class="bi bi-gear"></i> Paramètres</h2>
+    <h2 class="mb-4"><i class="bi bi-gear"></i> Parametres</h2>
 
     <div class="row g-4">
       <div class="col-lg-6">
@@ -76,7 +76,8 @@
           <h4 class="mb-3">Notifications</h4>
           <div class="form-check form-switch mb-2">
             <input class="form-check-input" type="checkbox" id="notifLogin" v-model="notifLogin" @change="saveSecurity" />
-            <label for="notifLogin" class="form-check-label">Recevoir un e‑mail lors d'une connexion</label>
+            <label for="notifLogin" class="form-check-label">Alerter par e-mail lors de chaque nouvelle connexion</label>
+            <div class="form-text text-muted ms-5">Recevez un recapitulatif detaille des que nous detectons une nouvelle connexion a votre espace COVA.</div>
           </div>
           <div class="form-check form-switch mb-2">
             <input class="form-check-input" type="checkbox" id="notifBrowser" v-model="notifBrowser" @change="toggleBrowserNotifications" />
@@ -257,7 +258,7 @@ async function changePassword() {
 async function saveSecurity() {
   try {
     await api.put(`/me/security`, { notification_login: notifLogin.value })
-    secMsg.value = 'Paramètres de sécurité enregistrés'
+    secMsg.value = 'Preferences de securite enregistrees'
     setTimeout(() => secMsg.value = '', 1500)
   } catch {}
 }

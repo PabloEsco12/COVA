@@ -1,8 +1,9 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 ENV TZ=Europe/Brussels \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       tzdata libpq-dev gcc libssl-dev libffi-dev netcat-openbsd curl \
@@ -12,13 +13,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 COPY requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt gunicorn
+RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
-COPY wait-for-it.sh /wait-for-it.sh
-RUN chmod +x /wait-for-it.sh
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY . /app
+RUN chmod +x /app/wait-for-it.sh /app/entrypoint.sh
 
-EXPOSE 5000
-ENTRYPOINT ["/entrypoint.sh"]
+EXPOSE 8000
+ENTRYPOINT ["/app/entrypoint.sh"]

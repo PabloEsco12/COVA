@@ -1,23 +1,30 @@
 #!/bin/sh
-set -e
+set -euo pipefail
 
-export FLASK_APP=${FLASK_APP:-app}
+APP_DIR=${APP_DIR:-/app}
+DB_HOST=${DB_HOST:-db}
+DB_PORT=${DB_PORT:-5432}
+ALEMBIC_CONFIG=${ALEMBIC_CONFIG:-${APP_DIR}/alembic.ini}
+PORT=${PORT:-8000}
 
-# 0) Attendre que Postgres soit prêt
-/wait-for-it.sh db:5432 --timeout=60 --strict -- echo "✅ Postgres est prêt !"
+cd "${APP_DIR}"
 
-# 1) Appliquer les migrations (si elles existent déjà dans le repo)
-if [ -d "/app/migrations" ]; then
-  echo "⬆️  Upgrade BDD (Alembic)…"
-  flask db upgrade || echo "⚠️ Aucun upgrade appliqué"
+if [ -x "${APP_DIR}/wait-for-it.sh" ]; then
+  "${APP_DIR}/wait-for-it.sh" "${DB_HOST}:${DB_PORT}" --timeout=60 --strict -- echo "[ok] Postgres is ready"
 else
-  echo "⚠️ Pas de dossier migrations/ → skip flask db upgrade"
+  echo "[warn] wait-for-it.sh not found, continuing without database health check."
 fi
 
-# 2) Lancer Gunicorn (au lieu du serveur Flask intégré)
-echo "🚀  Lancement API Flask avec Gunicorn…"
-exec gunicorn "app:create_app()" \
-    -b 0.0.0.0:5000 \
-    --workers ${WORKERS:-4} \
-    --threads ${THREADS:-2} \
-    --timeout ${TIMEOUT:-120}
+if [ -f "${ALEMBIC_CONFIG}" ]; then
+  echo "[migrate] Running Alembic upgrade"
+  if ! alembic -c "${ALEMBIC_CONFIG}" upgrade head; then
+    echo "[warn] Alembic upgrade failed. Resetting revision pointer to base and retrying..."
+    alembic -c "${ALEMBIC_CONFIG}" stamp base
+    alembic -c "${ALEMBIC_CONFIG}" upgrade head
+  fi
+else
+  echo "[warn] Alembic config ${ALEMBIC_CONFIG} not found, skipping migrations."
+fi
+
+echo "[start] Starting FastAPI with Uvicorn on port ${PORT}"
+exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT}"

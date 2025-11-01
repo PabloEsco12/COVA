@@ -106,8 +106,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
-import { api, backendBase } from '@/utils/api'
+import { api } from '@/utils/api'
 import { useRouter } from 'vue-router'
 
 const email = ref('')
@@ -128,41 +127,29 @@ async function handleLogin() {
   error.value = ''
   loading.value = true
   try {
-    const res = await api.post(`/login`, {
-      email: email.value,
+    const payload = new URLSearchParams({
+      username: email.value,
       password: password.value,
     })
+    const res = await api.post('/auth/token', payload, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    })
     localStorage.setItem('access_token', res.data.access_token)
-    localStorage.setItem('refresh_token', res.data.refresh_token)
-    localStorage.setItem('pseudo', res.data.user?.pseudo || '')
-    localStorage.setItem('user_id', res.data.user?.id || '')
-    localStorage.setItem('user_email', res.data.user?.email || '')
 
     try {
-      const profile = await api.get(`/me`)
-      if (profile.data.avatar) {
-        localStorage.setItem(
-          'avatar_url',
-          `${backendBase}/static/avatars/${profile.data.avatar}`
-        )
-      } else {
-        localStorage.removeItem('avatar_url')
-      }
+      const profile = await api.get('/auth/me')
+      localStorage.setItem('user_id', profile.data.id || '')
+      localStorage.setItem('user_email', profile.data.email || '')
+      localStorage.setItem('pseudo', profile.data.display_name || '')
+      localStorage.removeItem('avatar_url')
     } catch (e) {
       // ignore profile fetch errors
     }
     router.push('/dashboard')
   } catch (err) {
-    if (err.response?.data?.require_totp) {
-      sessionStorage.setItem('pending_totp', JSON.stringify({
-        email: email.value,
-        password: password.value,
-      }))
-      loading.value = false
-      router.push('/login/totp')
-      return
-    } else if (err.response?.data?.error) {
-      error.value = err.response.data.error
+    const detail = err.response?.data?.detail
+    if (typeof detail === 'string') {
+      error.value = detail
     } else {
       error.value = 'Erreur inconnue, reessayez.'
     }
