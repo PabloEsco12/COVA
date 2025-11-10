@@ -1,60 +1,90 @@
-"""
-backend/app/config.py
-Centralise la configuration Flask + extensions (base, JWT, SQLAlchemy, upload, etc.).
-"""
+"""Application settings for the FastAPI v2 backend."""
 
-import os
-from dataclasses import dataclass, asdict
+from __future__ import annotations
 
+from functools import lru_cache
+from typing import List
 
-# --- CONSTANTES DE BASE ---
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-_DEFAULT_UPLOAD_DIR = os.path.join(_BASE_DIR, "static", "uploads")
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-# --- FONCTION D’UTILITAIRE POUR LIRE LES VARIABLES D’ENVIRONNEMENT ---
-def _get_env(name: str, default: str | None = None) -> str:
-    """
-    Récupère une variable d’environnement et déclenche une erreur si elle est obligatoire.
-    """
-    val = os.getenv(name, default)
-    if val is None:
-        raise RuntimeError(f"Variable d'environnement manquante : {name}")
-    return val
+class Settings(BaseSettings):
+    """Typed configuration sourced from environment variables."""
+
+    model_config = SettingsConfigDict(
+        env_file=(".env", ".env.local", ".env.dev", ".env.prod"),
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+    )
+
+    PROJECT_NAME: str = "Secure Messaging API v2"
+    API_V1_PREFIX: str = "/api"
+
+    # Database
+    DATABASE_URL: str = Field(..., description="SQLAlchemy connection string")
+
+    # JWT / Security
+    JWT_SECRET_KEY: str = Field(..., min_length=32)
+    JWT_ALGORITHM: str = Field(default="HS256")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60)
+    REFRESH_TOKEN_EXPIRE_MINUTES: int = Field(default=60 * 24 * 30)
+
+    # SMTP / Notifications (optional)
+    SMTP_HOST: str | None = None
+    SMTP_PORT: int = 465
+    SMTP_USERNAME: str | None = None
+    SMTP_PASSWORD: str | None = None
+    SMTP_FROM_EMAIL: str | None = None
+    SMTP_FROM_NAME: str = "COVA Notifications"
+    SMTP_USE_TLS: bool = False
+    SMTP_USE_SSL: bool = False
+
+    PUBLIC_BASE_URL: str = "http://localhost:8000"
+    FRONTEND_ORIGIN: str = "http://localhost:5176"
+
+    MEDIA_ROOT: str = "static"
+    AVATAR_MAX_BYTES: int = 2_000_000
+    AVATAR_MAX_SIZE: int = 512
+
+    # Object storage (attachments)
+    STORAGE_ENDPOINT: str | None = None
+    STORAGE_ACCESS_KEY: str | None = None
+    STORAGE_SECRET_KEY: str | None = None
+    STORAGE_REGION: str | None = None
+    STORAGE_BUCKET: str | None = None
+    STORAGE_USE_SSL: bool = True
+    STORAGE_FORCE_PATH_STYLE: bool = False
+
+    ATTACHMENT_MAX_BYTES: int = 25_000_000
+    ATTACHMENT_ALLOWED_MIME: List[str] = Field(
+        default_factory=lambda: [
+            "application/pdf",
+            "image/png",
+            "image/jpeg",
+            "image/gif",
+            "text/plain",
+            "application/zip",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ]
+    )
+    ATTACHMENT_DOWNLOAD_TTL_SECONDS: int = 300
+    ATTACHMENT_UPLOAD_TOKEN_TTL_MINUTES: int = 60
+
+    ANTIVIRUS_HOST: str | None = None
+    ANTIVIRUS_PORT: int = 3310
+
+    # CORS / Frontend
+    BACKEND_CORS_ORIGINS: List[str] = Field(default_factory=list)
+
+    # Redis (pour temps réel ultérieur)
+    REDIS_URL: str | None = None
 
 
-# --- CONFIGURATION PRINCIPALE ---
-@dataclass(slots=True)
-class Config:
-    """Configuration principale de l’application Flask."""
-
-    # --- Flask ---
-    SECRET_KEY: str = _get_env("SECRET_KEY")
-    FLASK_ENV: str = os.getenv("FLASK_ENV", "production")
-
-    # --- JWT ---
-    JWT_SECRET_KEY: str = _get_env("JWT_SECRET_KEY")
-
-    # --- Base de données ---
-    SQLALCHEMY_DATABASE_URI: str = _get_env("DATABASE_URL")
-    SQLALCHEMY_TRACK_MODIFICATIONS: bool = False
-
-    # --- Frontend (important pour les liens de confirmation par email) ---
-    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
-
-    # --- Services externes (ex: visioconférence) ---
-    CALL_BASE_URL: str = os.getenv("CALL_BASE_URL", "https://meet.jit.si")
-
-    # --- Gestion des fichiers ---
-    UPLOAD_FOLDER: str = os.getenv("UPLOAD_FOLDER", _DEFAULT_UPLOAD_DIR)
+@lru_cache()
+def get_settings() -> Settings:
+    return Settings()  # type: ignore[arg-type]
 
 
-# --- CHARGEMENT DE LA CONFIGURATION ---
-def load_config(app) -> None:
-    """
-    Injecte la configuration dans l’instance Flask.
-    Valide les variables d’environnement à la construction.
-    """
-    cfg = Config()
-    for key, value in asdict(cfg).items():
-        app.config[key] = value
+settings = get_settings()

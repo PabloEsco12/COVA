@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   db:
     image: postgres:14
@@ -25,18 +27,24 @@ services:
       db:
         condition: service_healthy
     env_file: .env.prod
-    environment:
-      - FLASK_APP=app
-      - FLASK_ENV=production
-    # Expose en local uniquement (reverse-proxy Nginx système)
-    ports:
-      - "127.0.0.1:5000:5000"
+    # en prod on n'a plus besoin des variables Flask
     volumes:
-      - ./backend/app/migrations:/app/migrations
-      - ./backend/app/static/avatars:/app/app/static/avatars
-      - ./backend/app/static/uploads:/app/app/static/uploads
+      # migrations en lecture/écriture
+      - ./backend/migrations:/app/migrations
+      # média / fichiers statiques générés par FastAPI (selon ton settings.MEDIA_ROOT)
+      - ./backend/media:/app/media
+    # on écoute en local, le Nginx de la machine fera le reverse-proxy vers 8000
+    ports:
+      - "127.0.0.1:8000:8000"
+    entrypoint: >
+      sh -c "
+        /wait-for-it.sh db:5432 --timeout=60 --strict &&
+        alembic -c /app/alembic.ini upgrade head &&
+        gunicorn 'app.main:app' -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --workers=4 --threads=2 --timeout=120
+      "
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5000/api/health >/dev/null || exit 1"]
+      # on teste le /healthz que tu as dans app.main
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/healthz >/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -53,27 +61,40 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
     env_file: .env.prod
     volumes:
       - ./backend:/app
     entrypoint: >
       sh -c "
         /wait-for-it.sh db:5432 --timeout=60 --strict &&
-        python -m app_v2.workers.notification_worker
+        python -m app.workers.notification_worker
       "
+    labels:
+      - autoheal=true
+
+  # si tu veux garder Redis aussi en prod :
+  redis:
+    image: redis:7-alpine
+    container_name: securechat_redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    restart: always
     labels:
       - autoheal=true
 
   frontend:
     build:
       context: ./frontend/secure_messagerie
-      dockerfile: Dockerfile.prod   # ⚠️ utilise l'image Nginx prod, pas Vite dev
+      dockerfile: Dockerfile.prod   # image nginx qui sert le build
     container_name: securechat_frontend
     restart: always
     depends_on:
       backend:
         condition: service_healthy
-    # Servi en local, votre Nginx système reverse-proxy vers :8080
+    # Nginx de ta machine reverse-proxy vers 8080
     ports:
       - "127.0.0.1:8080:80"
     healthcheck:
@@ -91,18 +112,20 @@ services:
     restart: always
     environment:
       - BASE_PATH=/monitoring
-    # Exposé en local, reverse-proxy Nginx système vers /monitoring/
     ports:
       - "127.0.0.1:3001:3001"
     volumes:
       - /srv/uptime-kuma:/app/data
+    labels:
+      - autoheal=true
 
   autoheal:
     image: willfarrell/autoheal:latest
     container_name: autoheal
     restart: always
     environment:
-      - AUTOHEAL_CONTAINER_LABEL=only  # Ne soigne que les conteneurs avec label autoheal=true
+      # on veut qu'il soigne les conteneurs ayant le label autoheal=true
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
       - AUTOHEAL_INTERVAL=20
       - CURL_TIMEOUT=10
       - DOCKER_SOCK=/var/run/docker.sock
@@ -111,3 +134,4 @@ services:
 
 volumes:
   db_data:
+  redis_data:

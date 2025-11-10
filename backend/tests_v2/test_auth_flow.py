@@ -8,8 +8,8 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app_v2.main import app
-from backend.app_v2.db.session import get_session
+from backend.app.main import app
+from backend.app.db.session import get_session
 
 pytestmark = pytest.mark.asyncio
 

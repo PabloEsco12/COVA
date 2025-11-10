@@ -51,7 +51,6 @@ services:
   backend:
     build:
       context: ./backend
-    
       dockerfile: Dockerfile
     container_name: securechat_backend
     depends_on:
@@ -75,7 +74,7 @@ services:
         /wait-for-it.sh db:5432 --timeout=60 --strict &&
         /wait-for-it.sh redis:6379 --timeout=60 --strict &&
         python -m alembic -c /app/alembic.ini upgrade head &&
-        uvicorn app_v2.main:app --host 0.0.0.0 --port 8000 ${UVICORN_RELOAD:+--reload}
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 ${UVICORN_RELOAD:+--reload}
       "
     restart: unless-stopped
 
