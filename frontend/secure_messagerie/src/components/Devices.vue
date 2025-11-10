@@ -321,7 +321,7 @@
 
 <script setup>
 import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import Spinner from './Spinner.vue'
+import Spinner from './confirm/Spinner.vue'
 import { api } from '../utils/api'
 
 const devices = ref([])

@@ -3,7 +3,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Login from '../components/Login.vue'
 import LoginTotp from '../components/LoginTotp.vue'
-import Register from '../components/Register.vue'
+import RegisterView from '../views/RegisterView.vue'
 import Dashboard from '../components/Dashboard.vue'
 import DashboardHome from '../components/DashboardHomeEnhanced.vue'
 import Messages from '../components/MessagesRealtimeNew.vue'
@@ -13,7 +13,7 @@ import Invitations from '../components/Invitations.vue'
 import Profile from '../components/Profile.vue'
 import ResetPassword from '../components/ResetPassword.vue'
 import NewPassword from '../components/NewPassword.vue'
-import ConfirmEmail from '../components/ConfirmEmail.vue'
+import ConfirmEmailView from '@/views/ConfirmEmailView.vue'
 import Devices from '../components/Devices.vue'
 import Settings from '../components/Settings.vue'
 // Ajoute ici Devices, Settings, etc si tu les crées
@@ -21,11 +21,11 @@ import Settings from '../components/Settings.vue'
 const routes = [
   { path: '/', redirect: '/login' },
   { path: '/login', component: Login },
-  { path: '/register', component: Register },
+  { path: '/register', component: RegisterView },
   { path: '/login/totp', component: LoginTotp },
   { path: '/reset-password', component: ResetPassword },
   { path: '/new-password', component: NewPassword },
-  { path: '/confirm-email/:token', component: ConfirmEmail },
+  { path: '/confirm/:token', component: ConfirmEmailView },
   {
     path: '/dashboard',
     component: Dashboard,

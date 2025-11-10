@@ -1,241 +1,6 @@
-<template>
-  <div class="auth-page signup-page">
-    <div class="auth-orb orb-primary"></div>
-    <div class="auth-orb orb-secondary"></div>
+@import "animate.css";
 
-    <div class="auth-grid">
-      <section class="auth-illustration">
-        <div class="auth-illustration__overlay"></div>
-        <div class="auth-illustration__content">
-          <div class="auth-badge">
-            <i class="bi bi-stars me-2"></i>
-            Onboarding maîtrisé
-          </div>
-          <h1>
-            Lancez votre espace collaboratif
-            <span class="brand-text">COVA</span>
-          </h1>
-          <p>
-            Déployez en toute simplicité un environnement souverain pour vos équipes.
-            Nous accompagnons chaque organisation vers un démarrage sécurisé et fluide.
-          </p>
-          <ul class="auth-feature-list">
-            <li>
-              <span class="feature-icon"><i class="bi bi-person-badge-fill"></i></span>
-              Validation des identités et contrôle des accès à la volée.
-            </li>
-            <li>
-              <span class="feature-icon"><i class="bi bi-diagram-3-fill"></i></span>
-              Espaces partagés, canaux projets et archivage automatique.
-            </li>
-            <li>
-              <span class="feature-icon"><i class="bi bi-headset"></i></span>
-              Experts COVA dédiés pour configurer vos règles de sécurité.
-            </li>
-          </ul>
-          <div class="auth-metrics">
-            <div>
-              <strong>&lt; 5 min</strong>
-              <span>pour activer votre équipe</span>
-            </div>
-            <div>
-              <strong>99,9%</strong>
-              <span>disponibilité garantie</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="auth-card">
-        <div class="auth-card__brand">
-          <img src="@/assets/logo_COVA.png" alt="Logo COVA" class="auth-card__logo" />
-          <div>
-            <p class="auth-card__subtitle">Premiers pas sur la plateforme</p>
-            <h2 class="auth-card__title">Créez votre accès sécurisé</h2>
-          </div>
-        </div>
-
-        <p class="auth-card__intro">
-          Renseignez vos informations professionnelles pour générer vos identifiants
-          chiffrés. Vous recevrez un e-mail de confirmation afin d'activer votre
-          compte.
-        </p>
-
-        <form @submit.prevent="handleRegister" class="auth-form">
-          <div class="input-field">
-            <span class="input-field__icon"><i class="bi bi-person-fill"></i></span>
-            <input
-              v-model="pseudo"
-              type="text"
-              class="input-field__control"
-              placeholder=" "
-              required
-              autocomplete="nickname"
-            >
-            <label class="input-field__label">Nom d'affichage</label>
-          </div>
-
-          <div class="input-field">
-            <span class="input-field__icon"><i class="bi bi-envelope-fill"></i></span>
-            <input
-              v-model="email"
-              type="email"
-              class="input-field__control"
-              placeholder=" "
-              required
-              autocomplete="email"
-            >
-            <label class="input-field__label">Adresse e-mail professionnelle</label>
-          </div>
-
-          <div class="input-field">
-            <span class="input-field__icon"><i class="bi bi-lock-fill"></i></span>
-            <input
-              v-model="password"
-              type="password"
-              class="input-field__control"
-              placeholder=" "
-              required
-              minlength="8"
-              autocomplete="new-password"
-            >
-            <label class="input-field__label">Mot de passe</label>
-            <small class="input-field__hint">8 caractères minimum, combinez lettres, chiffres et symboles.</small>
-          </div>
-
-          <div class="auth-legal">
-            En créant un compte, vous acceptez la charte de sécurité et de confidentialité COVA.
-          </div>
-
-          <button type="submit" class="btn-auth" :disabled="loading">
-            <span v-if="loading" class="spinner-border spinner-border-sm"></span>
-            <span v-else>Créer mon compte</span>
-          </button>
-        </form>
-
-        <div v-if="error" class="alert alert-danger text-center animate__animated animate__shakeX mt-3">
-          {{ error }}
-        </div>
-
-        <div
-          v-if="success"
-          class="auth-success animate__animated animate__fadeInUp mt-3"
-        >
-          <div class="auth-success__icon">
-            <i class="bi bi-check2-circle"></i>
-          </div>
-          <div class="auth-success__body">
-            <p class="auth-success__title">{{ success }}</p>
-            <p v-if="successSubtitle" class="auth-success__subtitle">{{ successSubtitle }}</p>
-            <div v-if="requiresConfirmation && lastRegisteredEmail" class="resend-confirm">
-              <p class="resend-confirm__text">
-                Vous n'avez rien reçu ? Vérifiez vos spams ou renvoyez l'e-mail en un clic.
-              </p>
-              <button
-                type="button"
-                class="btn-resend-confirm"
-                :disabled="resendLoading"
-                @click="handleResend"
-              >
-                <span v-if="resendLoading" class="spinner-border spinner-border-sm"></span>
-                <span v-else>Renvoyer l'e-mail de confirmation</span>
-              </button>
-              <p v-if="resendSuccessMessage" class="resend-confirm__success">{{ resendSuccessMessage }}</p>
-              <p v-if="resendError" class="resend-confirm__error">{{ resendError }}</p>
-            </div>
-          </div>
-        </div>
-
-        <p class="auth-card__footer">
-          Déjà inscrit ?
-          <router-link to="/login">Revenir à la connexion</router-link>
-        </p>
-      </section>
-    </div>
-  </div>
-</template>
-
-<script setup>
-import { ref } from 'vue'
-import { registerAccount, resendConfirmationEmail } from '@/services/auth'
-
-const pseudo = ref('')
-const email = ref('')
-const password = ref('')
-const error = ref('')
-const success = ref('')
-const successSubtitle = ref('')
-const loading = ref(false)
-const lastRegisteredEmail = ref('')
-const resendLoading = ref(false)
-const resendSuccessMessage = ref('')
-const resendError = ref('')
-const requiresConfirmation = ref(false)
-
-async function handleRegister() {
-  error.value = ''
-  success.value = ''
-  successSubtitle.value = ''
-  loading.value = true
-  try {
-    const submittedEmail = email.value
-    const res = await registerAccount({
-      email: email.value,
-      password: password.value,
-      displayName: pseudo.value,
-    })
-    const confirmationRequired = Boolean(res.confirmation_url)
-    success.value = 'Inscription finalisée avec succès !'
-    if (confirmationRequired) {
-      successSubtitle.value =
-        `Nous venons d'envoyer un e-mail d'activation à ${submittedEmail}. ` +
-        'Ouvrez-le puis cliquez sur « Confirmer mon adresse e-mail » dans les 30 prochaines minutes.'
-    } else {
-      successSubtitle.value = 'Vous pouvez désormais vous connecter immédiatement à votre espace sécurisé COVA.'
-    }
-    requiresConfirmation.value = Boolean(res.confirmation_url)
-    lastRegisteredEmail.value = requiresConfirmation.value ? submittedEmail : ''
-    resendSuccessMessage.value = ''
-    resendError.value = ''
-    pseudo.value = ''
-    email.value = ''
-    password.value = ''
-  } catch (err) {
-    const detail = err.response?.data?.detail || err.response?.data?.error
-    error.value = detail || err.message || 'Erreur inconnue. Veuillez réessayer.'
-    lastRegisteredEmail.value = ''
-    resendSuccessMessage.value = ''
-    resendError.value = ''
-    requiresConfirmation.value = false
-    successSubtitle.value = ''
-  } finally {
-    loading.value = false
-  }
-}
-
-async function handleResend() {
-  if (!requiresConfirmation.value || !lastRegisteredEmail.value) {
-    resendError.value = 'Aucune inscription en attente de confirmation.'
-    return
-  }
-  resendLoading.value = true
-  resendSuccessMessage.value = ''
-  resendError.value = ''
-  try {
-    await resendConfirmationEmail(lastRegisteredEmail.value)
-    resendSuccessMessage.value = 'Nous avons renvoyé un e-mail de confirmation. Pensez à vérifier vos spams.'
-  } catch (err) {
-    const detail = err.response?.data?.detail || err.response?.data?.error || err.message
-    resendError.value = detail || "Impossible d'envoyer le message pour le moment."
-  } finally {
-    resendLoading.value = false
-  }
-}
-</script>
-
-<style scoped>
-@import 'animate.css';
-
+/* conteneur de la page d'auth */
 .auth-page {
   min-height: 100vh;
   display: flex;
@@ -245,11 +10,12 @@ async function handleResend() {
   padding: 3.5rem 1.5rem;
   position: relative;
   overflow: hidden;
-  font-family: 'Inter', 'Segoe UI', sans-serif;
+  font-family: "Inter", "Segoe UI", sans-serif;
 }
 
+/* variante inscription */
 .signup-page::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   background: radial-gradient(circle at 20% 20%, rgba(25, 89, 194, 0.14), transparent 45%),
@@ -259,6 +25,7 @@ async function handleResend() {
   z-index: 1;
 }
 
+/* bulles décoratives */
 .auth-orb {
   position: absolute;
   border-radius: 50%;
@@ -283,6 +50,7 @@ async function handleResend() {
   background: radial-gradient(circle, rgba(90, 211, 245, 0.32) 0%, rgba(90, 211, 245, 0) 70%);
 }
 
+/* grille 2 colonnes illustration + formulaire */
 .auth-grid {
   position: relative;
   z-index: 2;
@@ -293,6 +61,7 @@ async function handleResend() {
   align-items: stretch;
 }
 
+/* bloc illustration */
 .auth-illustration {
   position: relative;
   border-radius: 36px;
@@ -396,6 +165,7 @@ async function handleResend() {
   color: rgba(255, 255, 255, 0.8);
 }
 
+/* carte de droite (formulaire) */
 .auth-card {
   background: rgba(255, 255, 255, 0.94);
   border-radius: 36px;
@@ -655,6 +425,7 @@ async function handleResend() {
   font-weight: 600;
 }
 
+/* responsive */
 @media (max-width: 1080px) {
   .auth-grid {
     gap: 2rem;
@@ -717,4 +488,3 @@ async function handleResend() {
     gap: 1.5rem;
   }
 }
-</style>
