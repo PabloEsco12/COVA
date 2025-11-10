@@ -1,4157 +1,5235 @@
-<template>
-  <div class="messages-page">
-    <div class="messages-wrapper">
-      <div class="messages-layout">
-      <!-- Conversations list -->
-      <aside class="conv-list">
-        <div class="conv-list-header">
+﻿<template>
+
+  <div class="msg-shell">
+    <transition-group name="msg-toast" tag="div" class="msg-toast-stack">
+      <article
+        v-for="toast in messageToasts"
+        :key="toast.id"
+        class="msg-toast"
+        @click="openToastConversation(toast)"
+      >
+        <div class="msg-toast__content">
+          <p class="msg-toast__title">{{ toast.title }}</p>
+          <p class="msg-toast__body">{{ toast.body }}</p>
+          <small>{{ formatTime(toast.createdAt) }}</small>
+        </div>
+        <button
+          type="button"
+          class="msg-toast__close"
+          @click.stop="dismissToast(toast.id)"
+          aria-label="Fermer la notification"
+        >
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </article>
+    </transition-group>
+
+    
+
+    <div class="msg-layout">
+
+      <aside class="msg-nav">
+
+        <header class="msg-nav__header">
+
           <div>
-            <h2 class="conv-title">Conversations</h2>
-            <p class="conv-subtitle">
-              {{ totalConversations }} discussion(s) sécurisée(s)
-              <span v-if="conversationFilterStats.unread">
-                • {{ conversationFilterStats.unread }} non lue(s)
+
+            <p class="msg-nav__eyebrow">Chats</p>
+
+            <h2>{{ conversationSummary }}</h2>
+
+          </div>
+
+          <button class="msg-nav__action" type="button" @click="goToNewConversation" :disabled="loadingConversations" aria-label="Nouvelle conversation">
+
+            <i class="bi bi-pencil-square" aria-hidden="true"></i>
+
+          </button>
+
+        </header>
+
+        <label class="msg-search">
+
+          <i class="bi bi-search"></i>
+
+          <input
+
+            v-model.trim="conversationSearch"
+
+            type="search"
+
+            class="form-control form-control-sm"
+
+            placeholder="Rechercher"
+
+          />
+
+        </label>
+
+        <div class="msg-filters compact">
+
+          <button
+
+            v-for="filter in conversationFilters"
+
+            :key="filter.value"
+
+            type="button"
+
+            class="msg-filter"
+
+            :class="{ active: conversationFilter === filter.value }"
+
+            @click="conversationFilter = filter.value"
+
+          >
+
+            {{ filter.label }}
+
+          </button>
+
+        </div>
+
+        <p v-if="conversationError" class="msg-alert">{{ conversationError }}</p>
+
+        <ul class="msg-nav__list">
+
+          <li v-for="conversation in sortedConversations" :key="conversation.id">
+
+            <button
+
+              type="button"
+
+              class="msg-nav__item"
+
+              :class="{ active: conversation.id === selectedConversationId }"
+
+              @click="selectConversation(conversation.id)"
+
+            >
+
+              <span class="msg-avatar">
+
+                <img v-if="conversation.avatarUrl" :src="conversation.avatarUrl" alt="" @error="onAvatarFailure(conversation.id)" />
+
+                <span v-else>{{ conversation.initials }}</span>
+
+              </span>
+
+              <span class="msg-item__body">
+
+                <span class="msg-item__title">{{ conversation.displayName }}</span>
+
+                <span class="msg-item__preview">{{ conversation.lastPreview || 'Aucun message' }}</span>
+
+              </span>
+
+              <span class="msg-item__meta">
+
+                <time>{{ formatListTime(conversation.lastActivity) }}</time>
+
+                <span v-if="conversation.unreadCount" class="msg-badge">{{ conversation.unreadCount }}</span>
+
+              </span>
+
+            </button>
+
+          </li>
+
+          <li v-if="!loadingConversations && !sortedConversations.length" class="msg-empty-row">
+
+            <span>Aucune conversation</span>
+
+          </li>
+
+          <li v-if="loadingConversations" class="msg-empty-row">
+
+            <span>Chargement.</span>
+
+          </li>
+
+        </ul>
+
+      </aside>
+
+<section class="msg-main">
+
+            <div v-if="!selectedConversation" class="msg-empty">
+        <h3>Messagerie sécurisée</h3>
+        <p>Choisissez une conversation ou créez-en une nouvelle avec vos contacts vérifiés.</p>
+        <button class="btn btn-primary" type="button" @click="goToNewConversation">Nouvelle conversation</button>
+      </div>
+<template v-else>
+
+        <header class="msg-main__header">
+
+          <div class="msg-main__identity">
+
+            <span class="msg-main__avatar">
+
+              <img v-if="selectedConversation.avatarUrl" :src="selectedConversation.avatarUrl" alt="" />
+
+              <span v-else>{{ selectedConversation.initials }}</span>
+
+            </span>
+
+            <div>
+
+              <h3>{{ selectedConversation.displayName }}</h3>
+
+              <p class="msg-main__meta">{{ headerParticipants }}</p>
+
+            </div>
+
+          </div>
+
+          <div class="msg-main__actions">
+
+            <span class="msg-status__pill" :class="connectionStatusClass">{{ connectionStatusLabel }}</span>
+
+            <button type="button" class="msg-main__icon" aria-label="Appel audio"><i class="bi bi-telephone"></i></button>
+
+            <button type="button" class="msg-main__icon" aria-label="Appel vidéo"><i class="bi bi-camera-video"></i></button>
+
+            <button type="button" class="msg-main__icon" aria-label="Informations" @click="openConversationPanel">
+              <i class="bi bi-info-circle"></i>
+            </button>
+          </div>
+
+        </header>
+        <p v-if="messageError" class="msg-alert">{{ messageError }}</p>
+        <div v-if="showSearchPanel" class="msg-search-panel">
+          <form class="msg-search-panel__form" @submit.prevent="performMessageSearch">
+            <input
+              v-model.trim="messageSearch.query"
+              type="search"
+              class="form-control"
+              placeholder="Rechercher dans cette conversation"
+            />
+            <button class="btn btn-secondary btn-sm" type="submit" :disabled="messageSearch.loading">
+              <span v-if="messageSearch.loading" class="spinner-border spinner-border-sm me-2"></span>
+              Rechercher
+            </button>
+            <button type="button" class="btn btn-link btn-sm" @click="closeSearchPanel">Fermer</button>
+          </form>
+          <p v-if="messageSearch.error" class="msg-alert">{{ messageSearch.error }}</p>
+          <ul class="msg-search-results">
+            <li
+              v-for="result in messageSearch.results"
+              :key="result.id"
+              class="msg-search-results__item"
+            >
+              <div>
+                <p class="msg-search__author">{{ result.displayName }}</p>
+                <p class="msg-search__excerpt">{{ messagePreviewText(result) }}</p>
+                <small class="text-muted">{{ formatAbsolute(result.createdAt) }}</small>
+              </div>
+              <button type="button" class="btn btn-link p-0" @click="jumpToSearchResult(result)">Afficher</button>
+            </li>
+            <li v-if="!messageSearch.loading && !messageSearch.results.length && messageSearch.query" class="text-muted small">
+              Aucun message trouvé.
+            </li>
+          </ul>
+        </div>
+        <div class="msg-body">
+          <section v-if="pinnedMessages.length" class="msg-pinned card">
+
+            <header class="msg-pinned__header">
+
+              <i class="bi bi-bookmark-star-fill" aria-hidden="true"></i>
+
+              <div>
+
+                <strong>{{ pinnedMessages.length }} message{{ pinnedMessages.length > 1 ? 's' : '' }} épinglé{{ pinnedMessages.length > 1 ? 's' : '' }}</strong>
+
+                <p class="mb-0 small text-muted">Gardez les consignes critiques à portée de main.</p>
+
+              </div>
+
+            </header>
+
+            <ul class="msg-pinned__list">
+
+              <li v-for="pin in pinnedMessages" :key="`pin-${pin.id}`">
+
+                <button type="button" @click="scrollToMessage(pin.id)">
+
+                  <span class="msg-pinned__time">{{ formatTime(pin.createdAt) }}</span>
+
+                  <span class="msg-pinned__preview">{{ pin.preview }}</span>
+
+                </button>
+
+              </li>
+
+            </ul>
+
+          </section>
+
+          <div ref="messageScroller" class="msg-thread" @scroll="onThreadScroll">
+            <div v-if="loadingOlderMessages" class="msg-thread__loader">
+              <span class="spinner-border spinner-border-sm me-2"></span>
+              Chargement des messages précédents…
+            </div>
+            <article
+              v-for="message in messages"
+              :key="message.id"
+
+              :id="`message-${message.id}`"
+
+              class="msg-bubble"
+
+              :class="{ me: message.sentByMe, system: message.isSystem, pinned: message.pinned, pending: message.localOnly }"
+
+            >
+
+              <header class="msg-bubble__meta">
+                <div class="msg-bubble__identity">
+                  <span>{{ message.displayName }}</span>
+                  <span v-if="message.pinned" class="msg-pill">
+                    <i class="bi bi-bookmark-fill" aria-hidden="true"></i>
+                    épinglé
+                  </span>
+                  <span
+                    v-if="messageSecurityLabel(message)"
+                    class="msg-security-icon"
+                    :title="messageSecurityTooltip(message)"
+                  >
+                    <i class="bi bi-shield-lock-fill" aria-hidden="true"></i>
+                  </span>
+                  <span v-if="message.editedAt && !message.deleted" class="msg-bubble__badge">Modifié</span>
+                </div>
+                <div class="msg-bubble__meta-aside">
+                  <div class="msg-bubble__timestamps">
+                    <span v-if="messageStatusLabel(message)" class="msg-state" :class="messageStatusClass(message)">{{ messageStatusLabel(message) }}</span>
+                    <time :title="formatAbsolute(message.createdAt)">{{ formatTime(message.createdAt) }}</time>
+                  </div>
+                  <div
+                    v-if="!message.deleted && !message.isSystem"
+                    class="msg-bubble__toolbar"
+                    @click.stop
+                  >
+                <button
+                  type="button"
+                  class="icon-btn subtle"
+                  :aria-expanded="reactionPickerFor === message.id"
+                  :aria-label="`Réagir au message de ${message.displayName}`"
+                  @click.stop="toggleReactionPicker(message.id)"
+                >
+                  <i class="bi bi-emoji-smile"></i>
+                </button>
+                <button
+                  type="button"
+                  class="icon-btn subtle"
+                  :aria-expanded="messageMenuOpen === message.id"
+                  :aria-label="`Afficher les actions pour le message de ${message.displayName}`"
+                  @click.stop="toggleMessageMenu(message.id)"
+                >
+                  <i class="bi bi-three-dots"></i>
+                </button>
+                <div
+                  v-if="reactionPickerFor === message.id"
+                  class="msg-popover msg-popover--reactions"
+                  role="menu"
+                  aria-label="Choisir une réaction"
+                >
+                  <button
+                    v-for="emoji in reactionPalette"
+                    :key="`${message.id}-picker-${emoji}`"
+                    type="button"
+                    class="msg-popover__item"
+                    @click="handleReactionSelection(message, emoji)"
+                    :disabled="isReactionPending(message.id, emoji)"
+                  >
+                    {{ emoji }}
+                  </button>
+                </div>
+                <div
+                  v-if="messageMenuOpen === message.id"
+                  class="msg-popover msg-popover--menu"
+                  role="menu"
+                  aria-label="Actions du message"
+                >
+                  <button type="button" class="msg-menu__item" @click="copyMessage(message); closeTransientMenus()">
+                    <i class="bi bi-clipboard"></i>
+                    Copier
+                  </button>
+                  <button type="button" class="msg-menu__item" @click="startReply(message); closeTransientMenus()">
+                    <i class="bi bi-reply"></i>
+                    Répondre
+                  </button>
+                  <button type="button" class="msg-menu__item" @click="startForward(message); closeTransientMenus()">
+                    <i class="bi bi-share"></i>
+                    Transférer
+                  </button>
+                  <button
+                    type="button"
+                    class="msg-menu__item"
+                    :disabled="isPinning(message.id)"
+                    @click="handlePinToggle(message)"
+                  >
+                    <i :class="message.pinned ? 'bi bi-bookmark-fill' : 'bi bi-bookmark'"></i>
+                    {{ message.pinned ? 'Retirer des favoris' : 'Épingler' }}
+                  </button>
+                  <button
+                    v-if="message.sentByMe"
+                    type="button"
+                    class="msg-menu__item"
+                    @click="startEdit(message); closeTransientMenus()"
+                  >
+                    <i class="bi bi-pencil-square"></i>
+                    Modifier
+                  </button>
+                  <button
+                    v-if="message.sentByMe || isConversationOwner"
+                    type="button"
+                    class="msg-menu__item text-danger"
+                    @click="confirmDeleteMessage(message); closeTransientMenus()"
+                  >
+                    <i class="bi bi-trash"></i>
+                    Supprimer
+                  </button>
+                </div>
+                </div>
+                </div>
+              </header>
+
+              <div v-if="message.replyTo" class="msg-reference msg-reference--reply">
+
+                <p class="msg-reference__author">{{ message.replyTo.authorDisplayName || "Participant" }}</p>
+
+                <p class="msg-reference__excerpt">
+
+                  <span v-if="message.replyTo.deleted" class="text-muted">Message supprimé</span>
+
+                  <span v-else>{{ message.replyTo.excerpt }}</span>
+
+                </p>
+
+              </div>
+
+              <div v-if="message.forwardFrom" class="msg-reference msg-reference--forward">
+
+                <p class="msg-reference__author">Transfert de {{ message.forwardFrom.authorDisplayName || "Participant" }}</p>
+
+                <p class="msg-reference__excerpt">
+
+                  <span v-if="message.forwardFrom.deleted" class="text-muted">Message supprimé</span>
+
+                  <span v-else>{{ message.forwardFrom.excerpt }}</span>
+
+                </p>
+
+              </div>
+
+              <div v-if="message.deleted" class="msg-bubble__deleted">Message supprimé</div>
+
+              <template v-else>
+<pre class="msg-bubble__body">{{ message.content }}</pre>
+
+                <div v-if="message.attachments?.length" class="msg-attachments">
+
+                  <article
+
+                    v-for="attachment in message.attachments"
+
+                    :key="attachment.id"
+
+                    class="msg-attachment"
+
+                  >
+
+                    <div>
+
+                      <strong>{{ attachment.fileName || 'Pièce jointe' }}</strong>
+
+                      <p class="small mb-0 text-muted">
+
+                        {{ attachment.mimeType || 'Fichier' }} · {{ formatFileSize(attachment.sizeBytes) }}
+
+                      </p>
+
+                    </div>
+
+                    <button
+
+                      type="button"
+
+                      class="btn btn-link p-0"
+
+                      :disabled="!attachment.downloadUrl"
+
+                      @click="downloadAttachment(attachment)"
+
+                    >
+
+                      Télécharger
+
+                    </button>
+
+                  </article>
+
+                </div>
+
+                <div v-if="message.reactions && message.reactions.length" class="msg-reactions">
+
+                  <button
+
+                    v-for="reaction in message.reactions"
+
+                    :key="`${message.id}-${reaction.emoji}`"
+
+                    type="button"
+
+                    class="msg-reaction"
+
+                    :class="{ active: reaction.reacted }"
+
+                    @click="toggleReaction(message, reaction.emoji)"
+
+                    :disabled="isReactionPending(message.id, reaction.emoji)"
+
+                  >
+
+                    <span>{{ reaction.emoji }}</span>
+
+                    <span>{{ reaction.count }}</span>
+
+                  </button>
+
+                </div>
+                <p v-if="messageStatusDetail(message)" class="msg-bubble__note">
+                  <i class="bi bi-clock-history" aria-hidden="true"></i>
+                  <span>{{ messageStatusDetail(message) }}</span>
+                </p>
+
+</template>
+<span v-if="copiedMessageId === message.id" class="msg-bubble__copied">Copié</span>
+
+            </article>
+
+            <div v-if="loadingMessages" class="msg-thread__loading">Chargement…</div>
+
+          </div>
+
+        </div>
+
+        <form class="msg-composer" @submit.prevent="sendMessage">
+          <div class="msg-composer__pickers">
+            <div v-if="showPicker" class="msg-picker" role="menu" aria-label="Choisir un contenu">
+              <div class="msg-picker__header">
+                <div class="msg-picker__tabs">
+                  <button type="button" :class="{ active: pickerMode === 'emoji' }" @click="setPickerMode('emoji')">Emoji</button>
+                  <button type="button" :class="{ active: pickerMode === 'gif' }" @click="setPickerMode('gif')">GIF</button>
+                </div>
+                <input
+                  v-if="pickerMode === 'emoji'"
+                  v-model.trim="emojiSearch"
+                  type="search"
+                  class="msg-picker__search"
+                  placeholder="Rechercher un emoji"
+                />
+                <input
+                  v-else-if="gifSearchAvailable"
+                  v-model.trim="gifSearch"
+                  type="search"
+                  class="msg-picker__search"
+                  placeholder="Rechercher un GIF"
+                />
+                <p v-else class="msg-picker__hint">Bibliothèque locale de GIFs prête à l'emploi.</p>
+              </div>
+              <div class="msg-picker__body" v-if="pickerMode === 'emoji'">
+                <div
+                  v-for="section in filteredEmojiSections"
+                  :key="section.id"
+                  class="msg-picker__section"
+                >
+                  <p class="msg-picker__section-title">{{ section.label }}</p>
+                  <div class="msg-picker__grid">
+                    <button
+                      type="button"
+                      v-for="emoji in section.items"
+                      :key="`${section.id}-${emoji}`"
+                      @click="addEmoji(emoji)"
+                    >
+                      {{ emoji }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="msg-picker__body msg-picker__body--gifs" v-else>
+                <button type="button" v-for="gif in displayedGifs" :key="gif.url" @click="insertGif(gif)">
+                  <img :src="gif.preview || gif.url" :alt="gif.label" />
+                  <span>{{ gif.label }}</span>
+                </button>
+                <p v-if="gifError && gifSearchAvailable && !loadingGifs" class="msg-picker__error">{{ gifError }}</p>
+                <div v-if="loadingGifs" class="msg-picker__loading">
+                  <span class="spinner-border spinner-border-sm me-2"></span>
+                  Chargementâ€¦
+                </div>
+              </div>
+            </div>
+          </div>
+          <input ref="attachmentInput" class="visually-hidden" type="file" multiple @change="onAttachmentChange" />
+          <textarea
+            v-model="messageInput"
+            class="form-control"
+            rows="2"
+            placeholder="Écrire un message sécurisé."
+            :disabled="sending"
+            @keydown.enter.exact.prevent="sendMessage"
+            @input="limitDraft"
+          ></textarea>
+          <div v-if="pendingAttachments.length && !isEditingMessage" class="msg-composer__attachments">
+            <article v-for="attachment in pendingAttachments" :key="attachment.id" class="msg-composer__attachment">
+              <div>
+                <strong>{{ attachment.name }}</strong>
+                <p class="small mb-0 text-muted">
+                  {{ formatFileSize(attachment.size) }}
+                  <span v-if="attachment.status === 'uploading'"> Â· {{ attachment.progress || 0 }}%</span>
+                  <span v-if="attachment.status === 'error'" class="text-danger"> Â· {{ attachment.error }}</span>
+                </p>
+              </div>
+              <div class="msg-composer__attachment-actions">
+                <span v-if="attachment.status === 'uploading'" class="msg-panel__pill">Envoiâ€¦</span>
+                <span v-else-if="attachment.status === 'ready'" class="msg-panel__pill ok">Prête</span>
+                <button type="button" class="btn btn-link p-0" @click="removeAttachment(attachment.id)">Retirer</button>
+              </div>
+            </article>
+          </div>
+          <p v-if="attachmentError" class="msg-alert mb-2">{{ attachmentError }}</p>
+          <div v-if="hasComposerContext" class="msg-composer__context">
+            <div>
+              <template v-if="isEditingMessage">
+                <strong>Modification du message</strong>
+              </template>
+              <template v-else-if="composerState.replyTo">
+                <strong>Réponse à {{ composerState.replyTo.displayName || composerState.replyTo.authorDisplayName || 'Participant' }}</strong>
+                <p class="small mb-0 text-muted">
+                  {{ messagePreviewText(composerState.replyTo) }}
+                </p>
+              </template>
+              <template v-else-if="composerState.forwardFrom">
+                <strong>Transfert</strong>
+                <p class="small mb-0 text-muted">
+                  {{ messagePreviewText(composerState.forwardFrom) }}
+                </p>
+              </template>
+            </div>
+            <button type="button" class="btn btn-link p-0" @click="cancelComposerContext">Annuler</button>
+          </div>
+          <div class="msg-composer__footer">
+            <div class="msg-composer__left">
+              <div class="msg-composer__actions">
+                <button
+                  type="button"
+                  class="msg-icon-btn"
+                  @click="triggerAttachmentPicker"
+                  :disabled="hasAttachmentInProgress || isEditingMessage"
+                  aria-label="Ajouter une pièce jointe"
+                >
+                  <i class="bi bi-paperclip"></i>
+                </button>
+                <button type="button" class="msg-icon-btn primary" @click="togglePicker" aria-label="Emoji et GIF">
+                  <i class="bi bi-emoji-smile"></i>
+                </button>
+              </div>
+              <small>{{ messageInput.length }}/2000</small>
+            </div>
+            <button class="btn btn-primary" type="submit" :disabled="!canSend || sending">
+
+              <span v-if="sending" class="spinner-border spinner-border-sm me-2"></span>
+
+              Envoyer
+
+            </button>
+
+          </div>
+
+        </form>
+
+      </template>
+
+    </section>
+  </div>
+  <div v-if="showConversationPanel && selectedConversation" class="msg-panel">
+    <div class="msg-panel__header">
+      <div>
+        <p class="msg-panel__eyebrow">Conversation</p>
+        <h4>{{ selectedConversation.displayName }}</h4>
+        <p class="msg-panel__subtitle" v-if="selectedConversation.topic">{{ selectedConversation.topic }}</p>
+      </div>
+      <button type="button" class="msg-panel__close" @click="closeConversationPanel" aria-label="Fermer le panneau">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+    <form class="msg-panel__section" @submit.prevent="saveConversationSettings">
+      <div class="mb-3">
+        <label class="form-label">Titre</label>
+        <input v-model.trim="conversationForm.title" type="text" class="form-control" placeholder="Nom interne de la conversation" maxlength="160" />
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Sujet</label>
+        <textarea v-model.trim="conversationForm.topic" class="form-control" rows="2" placeholder="Contexte ou consignes"></textarea>
+      </div>
+      <label class="form-check form-switch mb-3">
+        <input v-model="conversationForm.archived" class="form-check-input" type="checkbox" />
+        <span class="form-check-label">Conversation archivée</span>
+      </label>
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary flex-grow-1" type="submit" :disabled="savingConversation">
+          <span v-if="savingConversation" class="spinner-border spinner-border-sm me-2"></span>
+          Enregistrer
+        </button>
+        <button class="btn btn-outline-secondary" type="button" @click="closeConversationPanel">Fermer</button>
+      </div>
+    </form>
+    <p v-if="conversationInfoError" class="msg-alert">{{ conversationInfoError }}</p>
+    <button
+      class="btn btn-outline-danger w-100 mb-3"
+      type="button"
+      @click="leaveCurrentConversation"
+      :disabled="leavingConversation"
+    >
+      <span v-if="leavingConversation" class="spinner-border spinner-border-sm me-2"></span>
+      Quitter la conversation
+    </button>
+    <section v-if="canManageConversation" class="msg-panel__section">
+      <div class="msg-panel__section-header">
+        <h5>Invitations</h5>
+        <span v-if="loadingInvites" class="msg-panel__pill">Chargement</span>
+      </div>
+      <form class="msg-panel__invite-form" @submit.prevent="submitInvite">
+        <input
+          v-model.trim="inviteForm.email"
+          type="email"
+          class="form-control"
+          placeholder="Adresse e-mail professionnelle"
+          required
+        />
+        <div class="msg-panel__invite-row">
+          <select v-model="inviteForm.role" class="form-select">
+            <option v-for="role in conversationRoles" :key="role.value" :value="role.value">
+              {{ role.label }}
+            </option>
+          </select>
+          <input
+            v-model.number="inviteForm.expiresInHours"
+            type="number"
+            class="form-control"
+            min="1"
+            max="336"
+            placeholder="Durée (h)"
+          />
+        </div>
+        <button class="btn btn-secondary w-100" type="submit" :disabled="inviteBusy">
+          <span v-if="inviteBusy" class="spinner-border spinner-border-sm me-2"></span>
+          Générer une invitation
+        </button>
+      </form>
+      <ul class="msg-panel__list">
+        <li v-for="invite in invites" :key="invite.id" class="msg-panel__list-item">
+          <div>
+            <strong>{{ invite.email }}</strong>
+            <p class="small mb-0 text-muted">
+              {{ roleLabel(invite.role) }}
+              <span v-if="formatInviteStatus(invite)"> Â· {{ formatInviteStatus(invite) }}</span>
+            </p>
+          </div>
+          <button
+            class="btn btn-link text-danger p-0"
+            type="button"
+            @click="revokeInvite(invite.id)"
+            :disabled="inviteRevokeBusy[invite.id]"
+          >
+            Révoquer
+          </button>
+        </li>
+        <li v-if="!invites.length && !loadingInvites" class="text-muted small">Aucune invitation active.</li>
+      </ul>
+    </section>
+    <section v-if="selectedConversation.members?.length" class="msg-panel__section">
+      <div class="msg-panel__section-header">
+        <h5>Membres</h5>
+        <span class="msg-panel__pill">{{ selectedConversation.members.length }}</span>
+      </div>
+      <ul class="msg-panel__list">
+        <li v-for="member in selectedConversation.members" :key="member.id" class="msg-panel__member">
+          <div>
+            <strong>{{ member.displayName || member.email }}</strong>
+            <p class="small mb-0 text-muted">
+              {{ roleLabel(member.role) }}
+              <span v-if="member.state !== 'active'"> Â· {{ member.state }}</span>
+              <span v-if="member.mutedUntil" class="msg-panel__pill muted">
+                Sourdine {{ formatAbsolute(member.mutedUntil) }}
               </span>
             </p>
           </div>
-          <button type="button" class="conv-create-btn" @click="openConvModal">
-            <i class="bi bi-plus-lg"></i>
-          </button>
-        </div>
-        <div class="conv-tools">
-          <div class="input-icon conv-search">
-            <i class="bi bi-search"></i>
-            <input
-              v-model.trim="conversationSearch"
-              type="text"
-              class="form-control"
-              placeholder="Rechercher une conversation"
-            />
-          </div>
-          <div class="conv-meta">
-            <span class="conv-meta-chip">
-              <i class="bi bi-funnel me-1"></i>{{ activeConversationFilter.label }}
-            </span>
-            <span class="conv-meta-chip">
-              <i class="bi bi-chat-text me-1"></i>{{ filteredConversations.length }} conversation(s)
-            </span>
-          </div>
-        </div>
-        <div class="conv-filters">
-          <button
-            v-for="filter in conversationFilters"
-            :key="filter.value"
-            type="button"
-            class="conv-filter-btn"
-            :class="{ active: conversationFilter === filter.value }"
-            :aria-pressed="conversationFilter === filter.value"
-            :title="filter.label"
-            @click="setConversationFilter(filter.value)"
-          >
-            <i class="bi conv-filter-icon" :class="filter.icon" aria-hidden="true"></i>
-            <span class="sr-only">{{ filter.label }}</span>
-            <span class="filter-count" aria-hidden="true">{{ conversationFilterStats[filter.value] ?? 0 }}</span>
-          </button>
-        </div>
-        <div class="conv-scroll">
-          <div v-if="conversationBuckets.length" class="conv-sections">
-            <div v-for="bucket in conversationBuckets" :key="bucket.key" class="conv-section">
-              <p v-if="bucket.title" class="conv-section-title">{{ bucket.title }}</p>
-              <ul class="list-group list-group-flush conv-list-scroll">
-                <li
-                  v-for="conv in bucket.items"
-                  :key="conv.id"
-                  class="list-group-item p-0 border-0 bg-transparent"
-                >
-                  <div
-                    class="conv-item"
-                    :class="{
-                      active: conv.id === selectedConvId,
-                      favorite: isFavorite(conv.id),
-                      unread: getUnreadCount(conv)
-                    }"
-                    @click="selectConversation(conv.id)"
-                  >
-                    <div class="conv-item-leading">
-                      <div class="avatar-wrap">
-                        <img v-if="conv.avatar_url" :src="conv.avatar_url" class="avatar-list" alt="avatar" />
-                        <div v-else class="avatar-list-placeholder" :class="{ group: conv.is_group }">
-                          {{ initials(conv.displayName || conv.titre) }}
-                        </div>
-                        <span v-if="conv.is_group" class="group-ind"><i class="bi bi-people-fill"></i></span>
-                      </div>
-                    </div>
-                    <div class="conv-item-main">
-                      <div class="conv-top-row">
-                        <div class="conv-name-block">
-                          <span class="conv-name text-truncate">{{ conv.displayName || conv.titre }}</span>
-                          <div class="conv-tags">
-                            <span v-if="conv.is_group" class="conv-tag">
-                              <i class="bi bi-people-fill me-1"></i>Groupe
-                            </span>
-                            <span v-if="isFavorite(conv.id)" class="conv-tag favorite">
-                              <i class="bi bi-star-fill me-1"></i>Favori
-                            </span>
-                          </div>
-                        </div>
-                        <div class="conv-meta">
-                          <span class="conv-time">{{ formatTime(conv.last?.ts) }}</span>
-                          <span v-if="getUnreadCount(conv)" class="badge-unread">{{ getUnreadCount(conv) }}</span>
-                        </div>
-                      </div>
-                      <div class="conv-bottom-row">
-                        <div class="conv-item-preview text-truncate">
-                          <span v-if="conv.last && conv.last.sentByMe" class="conv-preview-prefix">Vous:</span>
-                          <span>{{ conv.last ? conv.last.text : 'Aucun message' }}</span>
-                        </div>
-                        <button
-                          type="button"
-                          class="favorite-toggle"
-                          :class="{ active: isFavorite(conv.id) }"
-                          :aria-pressed="isFavorite(conv.id)"
-                          :title="isFavorite(conv.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'"
-                          @click.stop="toggleFavorite(conv.id)"
-                        >
-                          <i class="bi" :class="isFavorite(conv.id) ? 'bi-star-fill' : 'bi-star'"></i>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              </ul>
-            </div>
-          </div>
-          <div v-else class="conv-empty text-center text-muted py-4">
-            <i class="bi bi-search mb-2 d-block fs-4"></i>
-            <span>Aucune conversation trouvée</span>
-          </div>
-        </div>
-      </aside>
-
-      <!-- Chat area -->
-      <section class="chat-container">
-        <header class="chat-header">
-          <div class="chat-header-icon">
-            <i class="bi bi-chat-dots"></i>
-          </div>
-          <div class="chat-topic flex-grow-1">
-            <div class="chat-title-row">
-              <h3 class="chat-title">{{ currentConvTitle }}</h3>
-            </div>
-            <p v-if="!typingLabel" class="chat-subtitle">Discussions sécurisées sur COVA</p>
-            <p v-else class="chat-subtitle typing">{{ typingLabel }}</p>
-            <div class="chat-meta">
-              <span class="chat-meta-chip">
-                <i class="bi bi-chat-text me-1"></i>{{ displayMessages.length }} message(s)
-              </span>
-              <span v-if="selectedCallSessions.length" class="chat-meta-chip">
-                <i class="bi bi-camera-video me-1"></i>{{ selectedCallSessions.length }} appel(s)
-              </span>
-              <span v-if="lastMessageAt" class="chat-meta-chip">
-                <i class="bi bi-clock-history me-1"></i>Dernier message {{ formatDate(lastMessageAt) }}
-              </span>
-            </div>
-          </div>
-          <div class="chat-actions">
-            <button class="chat-action-btn" type="button" @click="refresh" title="Rafraîchir">
-              <i class="bi bi-arrow-clockwise"></i>
-            </button>
-            <button
-              class="chat-action-btn"
-              type="button"
-              :disabled="!selectedConvId || !!callActionPending"
-              @click="startCall('video')"
-              title="Lancer un appel vidéo"
+          <div v-if="canManageConversation && member.id !== (currentUserId || '')" class="msg-panel__member-actions">
+            <select
+              class="form-select form-select-sm"
+              :value="member.role"
+              @change="updateMemberRole(member, $event.target.value)"
+              :disabled="memberBusy[member.id]"
             >
-              <span v-if="callActionPending === 'video'" class="spinner-border spinner-border-sm"></span>
-              <i v-else class="bi bi-camera-video"></i>
-            </button>
-            <button
-              class="chat-action-btn"
-              type="button"
-              :disabled="!selectedConvId || !!callActionPending"
-              @click="startCall('audio')"
-              title="Lancer un appel audio"
-            >
-              <span v-if="callActionPending === 'audio'" class="spinner-border spinner-border-sm"></span>
-              <i v-else class="bi bi-telephone"></i>
-            </button>
-            <button
-              class="chat-action-btn"
-              type="button"
-              :title="showMessageSearch ? 'Fermer la recherche' : 'Rechercher dans la conversation'"
-              @click="toggleMessageSearch"
-            >
-              <i class="bi bi-search"></i>
-            </button>
-            <div class="dropdown">
-              <button
-                class="chat-action-btn dropdown-toggle"
-                type="button"
-                data-bs-toggle="dropdown"
-                aria-expanded="false"
-                title="Options"
-              >
-                <i class="bi bi-three-dots"></i>
-              </button>
-              <ul class="dropdown-menu dropdown-menu-end">
-                <li><a class="dropdown-item" href="#" @click.prevent="promptRename">Renommer</a></li>
-                <li><a class="dropdown-item" href="#" @click.prevent="leaveConversation">Quitter la conversation</a></li>
-                <li><hr class="dropdown-divider" /></li>
-                <li><a class="dropdown-item text-danger" href="#" @click.prevent="deleteConversation">Supprimer</a></li>
-              </ul>
-            </div>
-          </div>
-        </header>
-      <div v-if="latestCall" class="call-banner" :class="latestCall.call_type">
-        <div class="call-banner-info">
-          <div class="call-banner-icon">
-            <i class="bi" :class="callTypeIcon(latestCall.call_type)"></i>
-          </div>
-          <div>
-            <div class="call-banner-title">{{ callTypeLabel(latestCall.call_type) }}</div>
-            <div class="call-banner-meta">
-              Lancé par {{ callInitiatorLabel(latestCall) }} · {{ formatDate(latestCall.started_at) }}
-            </div>
-          </div>
-        </div>
-        <div class="call-banner-actions">
-          <button class="btn btn-primary btn-sm" type="button" @click="joinCall(latestCall)">
-            <i class="bi bi-box-arrow-in-right me-1"></i>Rejoindre
-          </button>
-          <button
-            v-if="latestCall && latestCall.isMine"
-            class="btn btn-outline-danger btn-sm ms-2"
-            type="button"
-            :disabled="endingCallId === latestCall.id"
-            @click="endCall(latestCall)"
-          >
-            <i class="bi bi-telephone-x me-1"></i>Terminer
-          </button>
-        </div>
-      </div>
-      <div v-if="showMessageSearch" class="chat-search">
-        <div class="input-group input-group-sm chat-search-bar">
-          <span class="input-group-text"><i class="bi bi-search"></i></span>
-          <input
-            v-model.trim="messageSearch"
-            type="text"
-            class="form-control"
-            placeholder="Rechercher dans la conversation"
-            autocomplete="off"
-          />
-          <button class="btn btn-outline-secondary" type="button" @click="messageSearch = ''" :disabled="!messageSearch">
-            <i class="bi bi-x"></i>
-          </button>
-        </div>
-        <div class="row g-2 align-items-center mt-2 chat-search-grid">
-          <div class="col-6 col-md-2">
-            <select class="form-select form-select-sm" v-model="messageSearchAuthor">
-              <option value="all">Tous</option>
-              <option value="me">Moi</option>
-              <option value="others">Autres</option>
+              <option v-for="role in conversationRoles" :key="`${member.id}-${role.value}`" :value="role.value">
+                {{ role.label }}
+              </option>
             </select>
-          </div>
-          <div class="col-6 col-md-2">
-            <input type="date" class="form-control form-control-sm" v-model="messageSearchFrom" />
-          </div>
-          <div class="col-6 col-md-2">
-            <input type="date" class="form-control form-control-sm" v-model="messageSearchTo" />
-          </div>
-          <div class="col-6 col-md-2 text-end">
-            <button class="btn btn-sm btn-outline-secondary" type="button" @click="clearMessageFilters">Réinitialiser</button>
-          </div>
-        </div>
-        <div v-if="messageSearch" class="search-result-count small text-muted mt-1">
-          {{ displayMessages.length }} résultat(s)
-        </div>
-      </div>
-
-      <div class="chat-messages" ref="messagesBox" @scroll="onScroll">
-        <div v-if="loading" class="chat-state">
-          <span class="spinner-border text-primary"></span>
-        </div>
-        <div v-else-if="messages.length === 0" class="chat-state chat-empty">
-          <i class="bi bi-inbox display-4"></i>
-          <div>Aucun message pour le moment</div>
-        </div>
-        <div v-else class="chat-history">
-          <div v-if="messageSearch && displayMessages.length === 0" class="chat-state chat-empty">Aucun résultat</div>
-          <div v-else class="messages-stack">
-            <div
-              v-for="item in messageTimeline"
-              :key="item.id"
-              class="timeline-entry"
-            >
-              <div
-                v-if="item.type === 'date'"
-                class="day-divider"
-              >
-                <span class="day-divider-label">{{ item.label }}</span>
-              </div>
-              <div
-                v-if="item.type !== 'date' && isRenderableMessage(item.message)"
-                class="msg-row"
-                :class="{ sent: item.message.sentByMe }"
-              >
-                <template v-if="!item.message.sentByMe && partnerAvatar">
-                  <img :src="partnerAvatar" class="avatar-xs me-2" alt="avatar" />
-                </template>
-                <div :class="['chat-bubble', item.message.sentByMe ? 'sent' : 'received']">
-                  <div class="bubble-header">
-                    <span class="name">{{ item.message.sentByMe ? pseudo : partnerName }}</span>
-                    <span class="time">{{ formatDate(item.message.ts_msg) }}</span>
-                  </div>
-                  <div class="bubble-body">
-                    <template v-if="editingId === item.message.id_msg">
-                      <input v-model="editContent" class="form-control form-control-sm mb-1" />
-                      <div class="text-end">
-                        <button class="btn btn-sm btn-success me-1" @click="confirmEdit">OK</button>
-                        <button class="btn btn-sm btn-secondary" @click="cancelEdit">Annuler</button>
-                      </div>
-                    </template>
-                    <template v-else>
-                      <div
-                        v-if="formattedMessageText(item.message)"
-                        class="message-text"
-                        v-html="formattedMessageText(item.message)"
-                      ></div>
-                      <div
-                        v-else-if="item.message.files && item.message.files.length"
-                        class="message-text placeholder text-muted"
-                      >
-                        {{ attachmentsLabel(item.message.files) }}
-                      </div>
-                    </template>
-                  </div>
-
-                  <div v-if="item.message.files && item.message.files.length" class="bubble-attachments mt-2">
-                    <div
-                      v-for="file in item.message.files"
-                      :key="file.id_file"
-                      class="attachment-item"
-                      :class="{ preview: isInlineImage(file) }"
-                    >
-                      <template v-if="isInlineImage(file)">
-                        <button
-                          type="button"
-                          class="attachment-thumb"
-                          :aria-label="`Télécharger ${file.filename}`"
-                          @click="downloadAttachment(file)"
-                        >
-                          <img
-                            v-if="attachmentPreviews[file.id_file]"
-                            :src="attachmentPreviews[file.id_file]"
-                            :alt="file.filename"
-                            @load="onAttachmentImageLoad"
-                          />
-                          <span v-else class="spinner-border spinner-border-sm text-primary"></span>
-                        </button>
-                        <div class="attachment-meta">
-                          <div class="attachment-name" v-html="highlightFilename(file.filename)"></div>
-                          <small class="text-muted">{{ formatSize(file.taille) }}</small>
-                        </div>
-                      </template>
-                      <template v-else>
-                        <i class="bi bi-paperclip me-2"></i>
-                        <button class="btn btn-link p-0 attachment-link" type="button" @click="downloadAttachment(file)">
-                          <span v-html="highlightFilename(file.filename)"></span>
-                        </button>
-                        <small class="text-muted ms-2">{{ formatSize(file.taille) }}</small>
-                      </template>
-                    </div>
-                  </div>
-
-                  <div class="reaction-strip mt-2">
-                    <button
-                      v-for="reaction in reactionSummary(item.message)"
-                      :key="reaction.emoji"
-                      class="reaction-chip"
-                      :class="{ mine: reaction.mine }"
-                      type="button"
-                      @click="toggleReaction(item.message.id_msg, reaction.emoji)"
-                    >
-                      <span class="emoji">{{ reaction.emoji }}</span>
-                      <span class="count">{{ reaction.count }}</span>
-                    </button>
-                    <div class="reaction-picker" v-if="reactionPickerFor === item.message.id_msg">
-                      <emoji-picker
-                        class="reaction-emoji-picker"
-                        skin-tone-emoji="👍"
-                        @emoji-click="event => onReactionEmoji(item.message.id_msg, event)"
-                      ></emoji-picker>
-                    </div>
-                    <button
-                      class="btn btn-light btn-sm add-reaction"
-                      type="button"
-                      @click="toggleReactionPicker(item.message.id_msg)"
-                    >
-                      <i class="bi bi-emoji-smile"></i>
-                    </button>
-                  </div>
-
-                  <div v-if="item.message.sentByMe" class="bubble-actions text-end">
-                    <button class="btn btn-action me-1" @click="startEdit(item.message)" title="Modifier">
-                      <i class="bi bi-pencil"></i>
-                    </button>
-                    <button class="btn btn-action danger" @click="deleteMessage(item.message.id_msg)" title="Supprimer">
-                      <i class="bi bi-trash"></i>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <button
-        v-if="showJumpToLatest"
-        type="button"
-        class="jump-to-latest"
-        @click="jumpToLatest"
-      >
-        <i class="bi bi-arrow-down-short"></i>
-        Derniers messages
-      </button>
-      <form @submit.prevent="sendMessage" class="chat-input">
-        <div class="composer-bar">
-          <div class="composer-tools">
             <button
-              class="composer-icon"
               type="button"
-              :disabled="loading || sendingMessage"
-              @click="triggerFilePicker"
-              aria-label="Joindre un fichier"
+              class="btn btn-link p-0"
+              @click="member.mutedUntil ? unmuteMember(member) : muteMember(member)"
+              :disabled="memberBusy[member.id]"
             >
-              <i class="bi bi-paperclip"></i>
-            </button>
-            <input ref="fileInput" type="file" class="d-none" multiple @change="handleFiles" />
-            <button
-              class="composer-icon"
-              type="button"
-              :disabled="loading || sendingMessage"
-              @click="toggleEmojiPicker"
-              aria-label="Insérer un emoji"
-            >
-              <i class="bi bi-emoji-smile"></i>
+              {{ member.mutedUntil ? 'Réactiver' : 'Sourdine 1h' }}
             </button>
             <button
-              class="composer-icon"
               type="button"
-              :disabled="loading || sendingMessage"
-              @click="toggleGifPicker"
-              aria-label="Ajouter un GIF"
+              class="btn btn-link text-danger p-0"
+              @click="removeMember(member)"
+              :disabled="memberBusy[member.id]"
             >
-              <i class="bi bi-filetype-gif"></i>
+              Retirer
             </button>
           </div>
-          <input
-            v-model="newMessage"
-            type="text"
-            class="composer-input"
-            placeholder="Écrire un message..."
-            :disabled="loading || sendingMessage"
-            @input="handleTyping"
-            autocomplete="off"
-            ref="messageInput"
-          />
-          <button class="composer-send" type="submit" :disabled="!canSend || loading || sendingMessage">
-            <span v-if="sendingMessage" class="spinner-border spinner-border-sm"></span>
-            <i v-else class="bi bi-send"></i>
-          </button>
-        </div>
-        <div v-if="pendingFiles.length" class="pending-files">
-          <div v-for="(file, index) in pendingFiles" :key="`${file.name}-${index}`" class="pending-file">
-            <div v-if="file.previewUrl" class="pending-thumb">
-              <img :src="file.previewUrl" :alt="file.name" />
-            </div>
-            <div class="pending-details">
-              <div class="pending-name text-truncate">{{ file.name }}</div>
-              <small class="text-muted">{{ formatSize(file.size) }}</small>
-            </div>
-            <button type="button" class="btn-close ms-2" aria-label="Retirer" @click="removePendingFile(index)"></button>
-          </div>
-        </div>
-        <div v-if="showEmojiPicker" class="emoji-popover shadow-sm">
-          <emoji-picker
-            class="composer-emoji-picker"
-            skin-tone-emoji="👍"
-            @emoji-click="onComposerEmojiSelect"
-          ></emoji-picker>
-        </div>
-        <div v-if="showGifPicker" class="gif-popover shadow-sm">
-          <div class="gif-search input-group input-group-sm mb-2">
-            <span class="input-group-text"><i class="bi bi-search"></i></span>
-            <input
-              v-model="gifSearchTerm"
-              type="text"
-              class="form-control"
-              placeholder="Rechercher un GIF"
-              autocomplete="off"
-            />
-            <button
-              class="btn btn-outline-secondary"
-              type="button"
-              :disabled="gifLoading"
-              @click="refreshGifResults"
-            >
-              <i class="bi bi-arrow-clockwise" :class="{ spinning: gifLoading }"></i>
-            </button>
-          </div>
-          <div v-if="gifError" class="gif-error alert alert-warning py-1 px-2 mb-2">{{ gifError }}</div>
-          <div v-if="gifLoading" class="gif-loading text-center py-2">
-            <span class="spinner-border spinner-border-sm text-primary"></span>
-          </div>
-          <div v-else>
-            <div v-if="gifResults.length" class="gif-grid">
-              <button
-                v-for="gif in gifResults"
-                :key="gif.id"
-                type="button"
-                class="gif-thumb"
-                @click="addGifToPending(gif)"
-              >
-                <img :src="gif.media_formats?.tinygif?.url || gif.media_formats?.gif?.url" alt="GIF" />
-              </button>
-            </div>
-            <div v-else class="text-muted small text-center py-2">Aucun GIF trouvé</div>
-          </div>
-        </div>
-      </form>
+        </li>
+      </ul>
     </section>
   </div>
-
-  <!-- Modal nouvelle conversation (améliorée) -->
-  <div v-if="showConvModal" class="modal-backdrop-custom">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-      <div class="modal-content glass-modal p-0 overflow-hidden">
-        <div class="modal-header gradient-header text-white">
-          <div>
-            <h5 class="modal-title mb-0"><i class="bi bi-people me-2"></i>Nouvelle conversation</h5>
-            <small class="d-block opacity-75">Sélectionnez des contacts puis donnez un titre</small>
-          </div>
-          <button type="button" class="btn-close btn-close-white" aria-label="Fermer" @click="showConvModal = false"></button>
-        </div>
-        <div class="modal-body p-0">
-          <div class="row g-0">
-            <div class="col-md-5 border-end p-3">
-              <div class="sticky-top bg-white pb-2">
-                <div class="input-icon mb-2">
-                  <i class="bi bi-search"></i>
-                  <input
-                    ref="convSearchInput"
-                    v-model.trim="convSearch"
-                    type="text"
-                    class="form-control ps-5"
-                    placeholder="Rechercher un contact (nom ou e-mail)"
-                  />
-                </div>
-                <div class="text-muted small ms-1 mb-1">{{ filteredConvContacts.length }} contact(s)</div>
-              </div>
-              <div class="contact-list mt-1">
-                <div
-                  v-for="c in filteredConvContacts"
-                  :key="c.user_id"
-                  class="contact-item d-flex align-items-center justify-content-between"
-                  :class="{ selected: isSelected(c.user_id) }"
-                  @click="toggleSelect(c.user_id)"
-                >
-                  <div class="d-flex align-items-center">
-                    <span class="check-circle me-2" :class="{ checked: isSelected(c.user_id) }">
-                      <i class="bi" :class="isSelected(c.user_id) ? 'bi-check-lg' : 'bi-plus-lg'"></i>
-                    </span>
-                    <img v-if="c.avatar_url" :src="c.avatar_url" class="avatar-md me-2" alt="avatar" />
-                    <div v-else class="avatar-md-placeholder me-2">{{ initials(c.pseudo) }}</div>
-                    <div>
-                      <div class="fw-semibold">{{ c.pseudo }}</div>
-                      <div class="text-muted small">{{ c.email }}</div>
-                    </div>
-                  </div>
-                  <button
-                    class="btn btn-sm btn-soft"
-                    :class="isSelected(c.user_id) ? 'btn-soft-danger' : 'btn-soft-primary'"
-                    @click.stop="toggleSelect(c.user_id)"
-                  >
-                    {{ isSelected(c.user_id) ? 'Retirer' : 'Ajouter' }}
-                  </button>
-                </div>
-                <div v-if="filteredConvContacts.length === 0" class="text-muted small py-2">Aucun contact</div>
-              </div>
-            </div>
-            <div class="col-md-7 p-4">
-              <div class="mb-3">
-                <div class="step-label">Étape 1 • Participants</div>
-                <div class="selected-chips mt-3">
-                  <span v-for="uid in selectedUsers" :key="uid" class="chip">
-                    <template v-if="byId(uid)?.avatar_url">
-                      <img :src="byId(uid).avatar_url" class="chip-avatar-lg" alt="avatar" />
-                    </template>
-                    <template v-else>
-                      <span class="chip-avatar-lg chip-initials">{{ initials(byId(uid)?.pseudo) }}</span>
-                    </template>
-                    {{ byId(uid)?.pseudo || uid }}
-                    <i class="bi bi-x ms-1" role="button" aria-label="Retirer" @click="removeSelected(uid)"></i>
-                  </span>
-                  <div v-if="selectedUsers.length === 0" class="text-muted small">
-                    Sélectionnez au moins un contact à gauche
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div class="step-label">Étape 2 • Titre</div>
-                <input v-model="convTitle" type="text" class="form-control mt-2" placeholder="Titre de la conversation (obligatoire)" />
-                <small v-if="!convTitle && selectedUsers.length" class="text-muted">Suggestion : {{ titleSuggestion }}</small>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer sticky-footer d-flex align-items-center">
-          <div class="text-muted small me-auto">{{ selectedUsers.length }} participant(s) sélectionné(s)</div>
-          <button class="btn btn-secondary" @click="showConvModal = false">Annuler</button>
-          <button class="btn btn-create" @click="createConversation" :disabled="creatingConv || selectedUsers.length === 0 || !convTitle">
-            <span v-if="creatingConv" class="spinner-border spinner-border-sm me-1"></span>
-            <i v-else class="bi bi-chat-dots me-1"></i>
-            <span>Créer</span>
-          </button>
-      </div>
-    </div>
-  </div>
-</div>
-  <div v-if="actionModal.open" class="modal-backdrop-custom action-modal-backdrop">
-    <div class="action-modal-card">
-      <button
-        type="button"
-        class="btn-close action-modal-close"
-        aria-label="Fermer"
-        @click="closeActionModal"
-        :disabled="actionModal.loading"
-      ></button>
-      <div class="action-modal-header">
-        <div class="action-modal-icon" :class="actionModal.type">
-          <i class="bi" :class="actionModal.type === 'delete' ? 'bi-trash3-fill' : actionModal.type === 'leave' ? 'bi-box-arrow-right' : 'bi-pencil-square'"></i>
-        </div>
-        <h5 class="mb-0">{{ actionModal.title }}</h5>
-      </div>
-      <div class="action-modal-body">
-        <p class="action-modal-message">{{ actionModal.message }}</p>
-        <div v-if="actionModal.type === 'rename'" class="mb-3">
-          <label class="form-label fw-semibold">Nouveau titre</label>
-          <input
-            ref="actionModalInput"
-            v-model="actionModal.input"
-            type="text"
-            maxlength="100"
-            class="form-control"
-            placeholder="Titre de la conversation"
-            :disabled="actionModal.loading"
-          />
-        </div>
-        <p v-if="actionModal.error" class="text-danger small mb-0">{{ actionModal.error }}</p>
-      </div>
-      <div class="action-modal-footer">
-        <button class="btn btn-outline-secondary" type="button" :disabled="actionModal.loading" @click="closeActionModal">Annuler</button>
-        <button
-          type="button"
-          :class="['btn', 'btn-' + actionModal.confirmVariant]"
-          :disabled="actionModal.loading || (actionModal.type === 'rename' && !(actionModal.input || '').trim())"
-          @click="confirmActionModal"
-        >
-          <span v-if="actionModal.loading" class="spinner-border spinner-border-sm me-2"></span>
-          {{ actionModal.confirmLabel }}
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
 </div>
 </template>
-
 <script setup>
-import { ref, reactive, onMounted, nextTick, watch, computed, onUnmounted } from 'vue'
-import axios from 'axios'
-import { api, backendBase } from '@/utils/api'
-import { io } from 'socket.io-client'
-import LogoUrl from '@/assets/logo_COVA.png'
-import 'emoji-picker-element'
-// backendBase provided by central api util
+
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+
+import { useRoute, useRouter } from 'vue-router'
+import { api } from '@/utils/api'
+import { createConversationSocket } from '@/services/realtime'
+import {
+  pinMessage,
+  unpinMessage,
+  updateMessageReaction,
+  uploadAttachment,
+  editConversationMessage,
+  deleteConversationMessage,
+  searchConversationMessages,
+  updateConversation,
+  leaveConversation,
+  updateConversationMember,
+  listConversationInvites,
+  createConversationInvite,
+  revokeConversationInvite,
+} from '@/services/conversations'
+import { fetchGifs, hasGifApiSupport } from '@/services/media'
+
+
+const emojiSections = [
+  {
+    id: 'trending',
+    label: 'Émojis populaires',
+    items: ['👍','✨','🎉','🔥','👏','😊','😍','🤝','🤔','🙏'],
+  },
+  {
+    id: 'smileys',
+    label: 'Smileys & émotions',
+    items: [
+      '😀','😄','😅','😂','🥰','😍','😎','🤩','😇','🤓','🙂','🙃','😉','🤗','🤔','😬','😢','😭','😡','😤','🤯','😴','😳','🥱','😐',
+    ],
+  },
+  {
+    id: 'gestures',
+    label: 'Gestes & personnes',
+    items: ['🤝','👍','👎','👏','🙌','🙏','👊','🤛','🤞','✌','🤘','🤟','👋','👌','🖖','👊','✊','🤏','🤲'],
+  },
+  {
+    id: 'nature',
+    label: 'Animaux & nature',
+    items: ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔','🐧','🐦','🐤'],
+  },
+  {
+    id: 'food',
+    label: 'Cuisine & boissons',
+    items: ['🍏','🍎','🍊','🍉','🍓','🍇','🍒','🍑','🍍','🍏','🍅','🥑','🥦','🥕','🌽','🍔','🍕','🌭','🍟'],
+  },
+  {
+    id: 'activities',
+    label: 'Loisirs & voyages',
+    items: ['⚽','🏀','🏈','⚾','🎾','🏐','🏉','🎱','🏓','🏸','🥅','🎣','🎿','🏂','🏋','🤸','🤼','🤽','🚴'],
+  },
+]
+const emojiCatalog = emojiSections.flatMap((section) => section.items)
+
+const gifLibrary = [
+
+  { label: 'Bravo', url: 'https://media.giphy.com/media/111ebonMs90YLu/giphy.gif' },
+
+  { label: 'Fête', url: 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif' },
+
+  { label: 'Pouce', url: 'https://media.giphy.com/media/OkJat1YNdoD3W/giphy.gif' },
+
+  { label: 'Applaudissements', url: 'https://media.giphy.com/media/5GoVLqeAOo6PK/giphy.gif' },
+
+  { label: 'Celebration', url: 'https://media.giphy.com/media/26gssIytJvy1b1THO/giphy.gif' },
+
+  { label: 'LOL', url: 'https://media.giphy.com/media/l46CkATpdyLwLI7vi/giphy.gif' },
+
+  { label: 'Love', url: 'https://media.giphy.com/media/xT0xeJpnrWC4XWblEk/giphy.gif' },
+
+  { label: 'ThumbsUp', url: 'https://media.giphy.com/media/l2SpQXcg3dYgP2QbS/giphy.gif' },
+
+  { label: 'Party', url: 'https://media.giphy.com/media/3o6Zt481isNVuQI1l6/giphy.gif' },
+
+  { label: 'Confetti', url: 'https://media.giphy.com/media/26u4hLUL3xFqj2iUU/giphy.gif' },
+
+  { label: 'Wow', url: 'https://media.giphy.com/media/xT5LMHxhOfscxPfIfm/giphy.gif' },
+
+  { label: 'Happy Dance', url: 'https://media.giphy.com/media/Ju7l5y9osyymQ/giphy.gif' },
+
+]
+
+
 
 const conversations = ref([])
-const selectedConvId = ref(null)
-const messages = ref([])
-const newMessage = ref('')
-const loading = ref(true)
-const sendingMessage = ref(false)
-const messagesBox = ref(null)
-const pseudo = localStorage.getItem('pseudo') || 'Moi'
-const userId = Number(localStorage.getItem('user_id') || 0)
-const editingId = ref(null)
-const editContent = ref('')
-const showConvModal = ref(false)
-const contacts = ref([])
-const selectedUsers = ref([])
-const convTitle = ref('')
-const creatingConv = ref(false)
-const currentConvTitle = ref('')
-const socket = ref(null)
-let lastJoinedConv = null
-let markReadTimer = null
-let typingSendTimer = null
-let gifSearchTimer = null
-let gifController = null
-let conversationsRefreshTimer = null
-const callWindowWatchers = new Map()
-let typingClearTimer = null
-const actionModal = reactive({
-  open: false,
-  type: '',
-  title: '',
-  message: '',
-  input: '',
-  confirmLabel: 'Confirmer',
-  confirmVariant: 'primary',
+
+const conversationMeta = reactive({})
+
+const conversationSearch = ref('')
+
+const loadingConversations = ref(true)
+
+const conversationError = ref('')
+
+const unreadSummary = ref({ total: 0, conversations: [] })
+
+const conversationFilter = ref('all')
+const conversationFilters = [
+  { value: 'all', label: 'Toutes', icon: 'bi bi-inbox' },
+  { value: 'unread', label: 'Non lues', icon: 'bi bi-envelope-open' },
+  { value: 'direct', label: 'Direct', icon: 'bi bi-person' },
+  { value: 'group', label: 'Groupes', icon: 'bi bi-people' },
+]
+const conversationRoles = [
+  { value: 'owner', label: 'Propriétaire' },
+  { value: 'moderator', label: 'Modérateur' },
+  { value: 'member', label: 'Membre' },
+  { value: 'guest', label: 'Invité' },
+]
+const showConversationPanel = ref(false)
+const conversationForm = reactive({ title: '', topic: '', archived: false })
+const savingConversation = ref(false)
+const conversationInfoError = ref('')
+const invites = ref([])
+const loadingInvites = ref(false)
+const inviteForm = reactive({ email: '', role: 'member', expiresInHours: 72 })
+const inviteBusy = ref(false)
+const inviteRevokeBusy = reactive({})
+const memberBusy = reactive({})
+const leavingConversation = ref(false)
+const attachmentInput = ref(null)
+const pendingAttachments = ref([])
+const attachmentError = ref('')
+const composerState = reactive({
+  mode: 'new', // new | reply | forward | edit
+  targetMessageId: null,
+  replyTo: null,
+  forwardFrom: null,
+})
+const pagination = reactive({
+  beforeCursor: null,
+  afterCursor: null,
+  hasMoreBefore: false,
+  hasMoreAfter: false,
+})
+const loadingOlderMessages = ref(false)
+const suppressAutoScroll = ref(false)
+const showSearchPanel = ref(false)
+const messageSearch = reactive({
+  query: '',
+  results: [],
   loading: false,
   error: '',
 })
-const actionModalInput = ref(null)
-const typingLabel = ref('')
-const isAtBottom = ref(true)
-const showJumpToLatest = ref(false)
-const unreadCounts = ref({})
-const conversationSearch = ref('')
-const conversationFilter = ref('all')
-const FAVORITES_STORAGE_KEY = 'favorite_conversations'
-const favoriteConversationIds = ref([])
-const conversationFilters = [
-  { value: 'all', label: 'Tout', icon: 'bi-chat-dots' },
-  { value: 'unread', label: 'Non lues', icon: 'bi-envelope-open' },
-  { value: 'favorites', label: 'Favoris', icon: 'bi-star' },
-  { value: 'groups', label: 'Groupes', icon: 'bi-people' },
-]
-const endingCallId = ref(null)
-const loadingPreviewIds = new Set()
-function favoriteKey(id) {
-  return String(id)
-}
 
-function isFavorite(id) {
-  const key = favoriteKey(id)
-  return favoriteConversationIds.value.includes(key)
-}
+const selectedConversationId = ref(null)
+const messages = ref([])
 
-function applyFavoriteStateToConversations() {
-  const set = new Set(favoriteConversationIds.value || [])
-  for (const conv of conversations.value || []) {
-    conv.isFavorite = set.has(favoriteKey(conv.id))
-  }
-}
+const loadingMessages = ref(false)
 
-function loadFavorites() {
-  try {
-    const raw = localStorage.getItem(FAVORITES_STORAGE_KEY)
-    if (!raw) {
-      favoriteConversationIds.value = []
-      return
-    }
-    const parsed = JSON.parse(raw)
-    if (Array.isArray(parsed)) {
-      const unique = Array.from(new Set(parsed.map(value => favoriteKey(value))))
-      favoriteConversationIds.value = unique
-    } else if (parsed && typeof parsed === 'object') {
-      const keys = Object.keys(parsed).filter(key => parsed[key]).map(key => favoriteKey(key))
-      favoriteConversationIds.value = Array.from(new Set(keys))
-    } else {
-      favoriteConversationIds.value = []
-    }
-  } catch {
-    favoriteConversationIds.value = []
-  }
-  applyFavoriteStateToConversations()
-}
+const messageError = ref('')
 
-function saveFavorites() {
-  try {
-    localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favoriteConversationIds.value))
-  } catch {}
-}
+const messageInput = ref('')
 
-function applyUnreadCountsToConversations() {
-  if (!Array.isArray(conversations.value)) return
-  for (const conv of conversations.value) {
-    const key = favoriteKey(conv.id)
-    conv.unread_count = Number(unreadCounts.value[key] || 0)
-  }
-}
+const sending = ref(false)
 
-function saveUnreadToStorage(map = unreadCounts.value) {
-  try {
-    localStorage.setItem('unread_counts', JSON.stringify(map || {}))
-  } catch {}
-}
+const copiedMessageId = ref(null)
 
-function setUnreadCounts(map, options = {}) {
-  const { persist = true } = options
-  const normalized = {}
-  if (map && typeof map === 'object') {
-    for (const [rawKey, rawValue] of Object.entries(map)) {
-      const key = favoriteKey(rawKey)
-      const count = Math.max(0, Number(rawValue) || 0)
-      if (count > 0) normalized[key] = count
-    }
-  }
-  unreadCounts.value = normalized
-  applyUnreadCountsToConversations()
-  if (persist) saveUnreadToStorage(normalized)
-}
+const reactionPalette = ['\u{1F44D}', '\u{2705}', '\u{1F525}', '\u{26A0}', '\u{1F4A1}']
 
-function loadUnreadFromStorage() {
-  try {
-    const raw = JSON.parse(localStorage.getItem('unread_counts') || '{}') || {}
-    setUnreadCounts(raw, { persist: false })
-  } catch {
-    setUnreadCounts({}, { persist: false })
-  }
-}
+const pinBusy = reactive({})
 
-async function refreshUnreadFromServer() {
-  try {
-    const res = await api.get(`/messages/unread_summary`)
-    const map = res.data?.by_conversation || {}
-    setUnreadCounts(map)
-  } catch {
-    loadUnreadFromStorage()
-  }
-}
+const reactionBusy = reactive({})
 
-function incrementUnread(convId, delta = 1) {
-  if (!convId) return
-  const key = favoriteKey(convId)
-  const current = Number(unreadCounts.value[key] || 0)
-  const next = current + Number(delta || 0)
-  const map = { ...unreadCounts.value }
-  if (next > 0) map[key] = next
-  else delete map[key]
-  setUnreadCounts(map)
-}
-
-function clearUnread(convId) {
-  if (!convId) return
-  const key = favoriteKey(convId)
-  if (!unreadCounts.value[key]) {
-    const conv = conversations.value.find(c => c.id === convId)
-    if (conv) conv.unread_count = 0
-    return
-  }
-  const map = { ...unreadCounts.value }
-  delete map[key]
-  setUnreadCounts(map)
-}
-
-function broadcastActiveConversation(convId) {
-  if (typeof window === 'undefined') return
-  window.dispatchEvent(new CustomEvent('cova:active-conversation', { detail: { convId } }))
-}
-
-function scheduleConversationsRefresh(delay = 250) {
-  if (conversationsRefreshTimer) return
-  conversationsRefreshTimer = setTimeout(async () => {
-    conversationsRefreshTimer = null
-    try {
-      await fetchConversations()
-    } catch {}
-  }, delay)
-}
-
-function typingDisplayName(convId, remoteId) {
-  if (!remoteId || remoteId === userId) return ''
-  const conv = conversations.value.find(c => c.id === convId)
-  const fromConv = conv?.participants?.find?.(p => p.id_user === remoteId)?.pseudo
-  if (fromConv) return fromConv
-  const contactsEntry = contactsMap.value || {}
-  const contactKey = String(remoteId)
-  const fromContacts = contactsEntry[contactKey]?.pseudo
-  if (fromContacts) return fromContacts
-  return ''
-}
-
-function handleTypingEvent(payload) {
-  if (!payload || payload.conv_id !== selectedConvId.value) return
-  if (payload.user_id === userId) return
-  if (typingClearTimer) {
-    clearTimeout(typingClearTimer)
-    typingClearTimer = null
-  }
-  if (payload.is_typing) {
-    const label = typingDisplayName(payload.conv_id, payload.user_id) || "Quelqu'un"
-    typingLabel.value = label + " est en train d\u00e9crire..."
-    typingClearTimer = setTimeout(() => {
-      typingLabel.value = ''
-      typingClearTimer = null
-    }, 2200)
-  } else {
-    typingLabel.value = ''
-  }
-}
-
-function openActionModal(options = {}) {
-  actionModal.open = true
-  actionModal.type = options.type || ''
-  actionModal.title = options.title || ''
-  actionModal.message = options.message || ''
-  actionModal.input = options.input ?? ''
-  actionModal.confirmLabel = options.confirmLabel || 'Confirmer'
-  actionModal.confirmVariant = options.confirmVariant || 'primary'
-  actionModal.loading = false
-  actionModal.error = ''
-  if (actionModal.type === 'rename') {
-    nextTick(() => {
-      try {
-        actionModalInput.value?.focus()
-        actionModalInput.value?.select?.()
-      } catch {}
-    })
-  }
-}
-
-function closeActionModal() {
-  if (actionModal.loading) return
-  actionModal.open = false
-  actionModal.type = ''
-  actionModal.input = ''
-  actionModal.error = ''
-}
-
-async function confirmActionModal() {
-  if (!actionModal.open || actionModal.loading) return
-  if (!selectedConvId.value) return
-  actionModal.error = ''
-  actionModal.loading = true
-  let success = false
-  try {
-    if (actionModal.type === 'rename') {
-      success = await performRenameFromModal()
-    } else if (actionModal.type === 'leave') {
-      success = await performLeaveConversation()
-    } else if (actionModal.type === 'delete') {
-      success = await performDeleteConversation()
-    } else {
-      success = true
-    }
-  } catch (error) {
-    console.error('Action modal error', error)
-    actionModal.error = "Une erreur s'est produite. Veuillez réessayer."
-  } finally {
-    actionModal.loading = false
-  }
-  if (success) closeActionModal()
-}
-
-async function performRenameFromModal() {
-  const newTitle = (actionModal.input || '').trim()
-  if (!newTitle) {
-    actionModal.error = 'Le titre ne peut pas être vide.'
-    return false
-  }
-  try {
-    await api.patch(
-      `/conversations/${selectedConvId.value}/title`,
-      { titre: newTitle },
-    )
-    currentConvTitle.value = newTitle
-    await fetchConversations()
-    return true
-  } catch (error) {
-    actionModal.error = "Impossible de renommer la conversation pour le moment."
-    return false
-  }
-}
-
-async function performLeaveConversation() {
-  const convId = selectedConvId.value
-  if (!convId) return false
-  try {
-    await api.post(`/conversations/${convId}/leave`, {})
-    removeFavorite(convId)
-    conversations.value = conversations.value.filter(c => c.id !== convId)
-    const map = { ...callSessionsMap.value }
-    delete map[convId]
-    callSessionsMap.value = map
-    selectedConvId.value = null
-    messages.value = []
-    if (conversations.value.length) selectConversation(conversations.value[0].id)
-    return true
-  } catch (error) {
-    actionModal.error = "Impossible de quitter la conversation pour le moment."
-    return false
-  }
-}
-
-async function performDeleteConversation() {
-  const convId = selectedConvId.value
-  if (!convId) return false
-  try {
-    await api.delete(`/conversations/${convId}`)
-    removeFavorite(convId)
-    conversations.value = conversations.value.filter(c => c.id !== convId)
-    const map = { ...callSessionsMap.value }
-    delete map[convId]
-    callSessionsMap.value = map
-    selectedConvId.value = null
-    messages.value = []
-    if (conversations.value.length) selectConversation(conversations.value[0].id)
-    return true
-  } catch (error) {
-    actionModal.error = "Impossible de supprimer la conversation pour le moment."
-    return false
-  }
-}
-
-function normalizeMessageText(raw) {
-  if (raw == null) return ''
-  const str = String(raw)
-  return str
-    // handle escaped newline sequences first
-    .replace(/\\+r\\+n/gi, '\n')
-    .replace(/\\+n/gi, '\n')
-    .replace(/\\+r/gi, '\n')
-    // handle actual carriage returns/new lines
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/\u00a0/g, ' ')
-}
-
-function attachmentsLabel(input) {
-  const count = Array.isArray(input) ? input.length : Number(input) || 0
-  if (!count) return ''
-  const plural = count > 1 ? 's' : ''
-  return `${count} pièce${plural} jointe${plural}`
-}
-
-function formattedMessageText(message) {
-  const normalized = normalizeMessageText(message?.contenu_chiffre ?? '')
-  if (!normalized) return ''
-
-  // Preserve intentional blank lines but drop trailing whitespace-only lines
-  const trimmedEnd = normalized.replace(/(\s*\n)*\s*$/, '')
-  if (!trimmedEnd.trim()) {
-    return ''
-  }
-
-  const escaped = trimmedEnd
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-
-  return escaped.replace(/\n/g, '<br>')
-}
-
-function isRenderableMessage(message) {
-  if (!message) return false
-  const hasText = !!formattedMessageText(message)
-  const hasFiles = Array.isArray(message.files) && message.files.length > 0
-  return hasText || hasFiles
-}
-
-function previewTextForMessage(message) {
-  if (!message) return ''
-  const compact = normalizeMessageText(message.contenu_chiffre || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-  if (compact) return compact
-  return attachmentsLabel(message.files)
-}
-
-function applyConversationPreview(conv, message) {
-  if (!conv || !message) return
-  const text = previewTextForMessage(message) || 'Message'
-  const ts = message.ts_msg || message.ts || null
-  const sender = message.sender_id ?? (message.sentByMe ? userId : null)
-  conv.last = {
-    text,
-    ts,
-    sentByMe: sender === userId || message.sentByMe === true,
-  }
-}
-
-function toggleFavorite(id) {
-  const key = favoriteKey(id)
-  const set = new Set(favoriteConversationIds.value || [])
-  if (set.has(key)) set.delete(key)
-  else set.add(key)
-  favoriteConversationIds.value = Array.from(set)
-  applyFavoriteStateToConversations()
-  saveFavorites()
-}
-
-function removeFavorite(id) {
-  const key = favoriteKey(id)
-  if (!favoriteConversationIds.value.includes(key)) return
-  favoriteConversationIds.value = favoriteConversationIds.value.filter(item => item !== key)
-  applyFavoriteStateToConversations()
-  saveFavorites()
-}
-
-function setConversationFilter(value) {
-  conversationFilter.value = value
-}
-
-function getUnreadCount(conv) {
-  if (!conv) return 0
-  const key = favoriteKey(conv.id)
-  const stored = Number(unreadCounts.value?.[key] || 0)
-  const fromConv = Number(conv.unread_count || 0)
-  return Math.max(stored, fromConv)
-}
-
-const filteredConversations = computed(() => {
-  const q = conversationSearch.value.trim().toLowerCase()
-  const filter = conversationFilter.value
-  let list = conversations.value || []
-  if (filter === 'unread') {
-    list = list.filter(conv => getUnreadCount(conv) > 0)
-  } else if (filter === 'favorites') {
-    list = list.filter(conv => isFavorite(conv.id))
-  } else if (filter === 'groups') {
-    list = list.filter(conv => conv.is_group)
-  }
-  if (q) {
-    list = list.filter(conv => {
-      const name = (conv.displayName || conv.titre || '').toLowerCase()
-      const preview = (conv.last?.text || '').toLowerCase()
-      return name.includes(q) || preview.includes(q)
-    })
-  }
-  return list
-    .slice()
-    .sort((a, b) => {
-      const aFav = isFavorite(a.id) ? 1 : 0
-      const bFav = isFavorite(b.id) ? 1 : 0
-      if (aFav !== bFav) return bFav - aFav
-      const aUnread = getUnreadCount(a) > 0 ? 1 : 0
-      const bUnread = getUnreadCount(b) > 0 ? 1 : 0
-      if (aUnread !== bUnread) return bUnread - aUnread
-      const aTime = a.last?.ts ? new Date(a.last.ts).getTime() : 0
-      const bTime = b.last?.ts ? new Date(b.last.ts).getTime() : 0
-      if (aTime !== bTime) return bTime - aTime
-      const aName = (a.displayName || a.titre || '').toLowerCase()
-      const bName = (b.displayName || b.titre || '').toLowerCase()
-      return aName.localeCompare(bName)
-    })
-})
-
-const conversationFilterStats = computed(() => {
-  const list = conversations.value || []
-  const stats = { all: list.length, unread: 0, favorites: 0, groups: 0 }
-  for (const conv of list) {
-    if (getUnreadCount(conv) > 0) stats.unread += 1
-    if (isFavorite(conv.id)) stats.favorites += 1
-    if (conv.is_group) stats.groups += 1
-  }
-  return stats
-})
-
-const unreadSummary = computed(() => {
-  const map = {}
-  let total = 0
-  for (const conv of conversations.value || []) {
-    const count = getUnreadCount(conv)
-    if (count > 0) {
-      map[String(conv.id)] = count
-    }
-    total += count
-  }
-  return { total, byConversation: map }
-})
-
-const totalConversations = computed(() => conversations.value.length)
-const conversationBuckets = computed(() => {
-  const list = filteredConversations.value || []
-  if (!list.length) return []
-  if (conversationFilter.value !== 'all') {
-    return [{ key: 'default', title: null, items: list }]
-  }
-  const favorites = list.filter(conv => isFavorite(conv.id))
-  const others = list.filter(conv => !isFavorite(conv.id))
-  const buckets = []
-  if (favorites.length) buckets.push({ key: 'favorites', title: 'Favoris', items: favorites })
-  if (others.length) buckets.push({ key: 'others', title: favorites.length ? 'Autres conversations' : null, items: others })
-  return buckets
-})
-const activeConversationFilter = computed(
-  () => conversationFilters.find(filter => filter.value === conversationFilter.value) || conversationFilters[0]
-)
-const fileInput = ref(null)
-const messageInput = ref(null)
-const pendingFiles = ref([])
-const showEmojiPicker = ref(false)
-const showGifPicker = ref(false)
-const showMessageSearch = ref(false)
-const messageSearch = ref('')
-const messageSearchAuthor = ref('all') // all | me | others
-const messageSearchFrom = ref('') // yyyy-mm-dd
-const messageSearchTo = ref('') // yyyy-mm-dd
 const reactionPickerFor = ref(null)
-const gifSearchTerm = ref('')
-const gifResults = ref([])
-const gifLoading = ref(false)
+const messageMenuOpen = ref(null)
+
+const showPicker = ref(false)
+const pickerMode = ref('emoji')
+const emojiSearch = ref('')
+const gifSearch = ref('')
+const gifResults = ref(gifLibrary.slice())
+const loadingGifs = ref(false)
 const gifError = ref('')
-const attachmentPreviews = ref({})
-// Tenor API key can be configured via Vite env (VITE_TENOR_API_KEY). If absent, we fallback to v1 endpoint.
-const TENOR_API_KEY = (import.meta?.env?.VITE_TENOR_API_KEY || '').trim()
-const TENOR_CLIENT_KEY = 'cova_messaging_ui'
-const GIF_PAGE_LIMIT = 24
+const gifSearchAvailable = hasGifApiSupport()
+const messageToasts = ref([])
+const toastTimers = new Map()
+const optimisticMessageIds = new Set()
+let notificationPermissionRequestPending = false
+const browserNotificationsEnabled = ref(readBrowserNotificationPreference())
 
-const canSend = computed(() => newMessage.value.trim().length > 0 || pendingFiles.value.length > 0)
 
-const callSessionsMap = ref({})
-const callActionPending = ref('')
-const selectedCallSessions = computed(() => {
-  const convId = selectedConvId.value
-  if (!convId) return []
-  return callSessionsMap.value[convId] || []
-})
-const activeCallSessions = computed(() => {
-  return (selectedCallSessions.value || []).filter(session => !session?.ended_at)
-})
-const latestCall = computed(() => {
-  const list = activeCallSessions.value || []
-  if (!list.length) return null
-  const sorted = list.slice().sort((a, b) => new Date(b.started_at || 0) - new Date(a.started_at || 0))
-  return sorted[0] || null
-})
+const socketRef = ref(null)
 
-const lastMessageAt = computed(() => {
-  const list = messages.value || []
-  const lastMessageTs = list.length ? list[list.length - 1]?.ts_msg : null
-  const callTs = latestCall.value?.started_at || null
-  if (lastMessageTs && callTs) {
-    return new Date(callTs) > new Date(lastMessageTs) ? callTs : lastMessageTs
-  }
-  return callTs || lastMessageTs || null
-})
+const connectionStatus = ref('idle')
 
-const displayMessages = computed(() => {
-  let list = messages.value || []
-  // Remove empty system/placeholder messages
-  list = list.filter(isRenderableMessage)
-  // Author filter
-  if (messageSearchAuthor.value === 'me') list = list.filter(m => m.sender_id === userId)
-  else if (messageSearchAuthor.value === 'others') list = list.filter(m => m.sender_id !== userId)
-  // Date filters
-  if (messageSearchFrom.value) {
-    const from = new Date(messageSearchFrom.value)
-    from.setHours(0, 0, 0, 0)
-    list = list.filter(m => m.ts_msg && new Date(m.ts_msg) >= from)
-  }
-  if (messageSearchTo.value) {
-    const to = new Date(messageSearchTo.value)
-    to.setHours(23, 59, 59, 999)
-    list = list.filter(m => m.ts_msg && new Date(m.ts_msg) <= to)
-  }
-  // Text search
-  const q = (messageSearch.value || '').toLowerCase().trim()
-  if (!q) return list
-  const tokens = q.split(/\s+/).filter(Boolean)
-  return list.filter(m => {
-    const text = (m.contenu_chiffre || '').toLowerCase()
-    const inFiles = (m.files || []).some(f => (f.filename || '').toLowerCase().includes(q))
-    const tokenMatch = tokens.every(t => text.includes(t))
-    return tokenMatch || inFiles
-  })
-})
 
-const messageTimeline = computed(() => {
-  const items = []
-  let lastKey = null
-  for (const msg of displayMessages.value || []) {
-    const hasText = !!formattedMessageText(msg)
-    const hasFiles = Array.isArray(msg?.files) && msg.files.length > 0
-    if (!hasText && !hasFiles) {
-      continue
-    }
-    const key = buildDayKey(msg?.ts_msg)
-    if (key !== lastKey) {
-      items.push({ type: 'date', id: `day-${key}`, label: formatDayHeading(msg?.ts_msg) })
-      lastKey = key
-    }
-    items.push({ type: 'message', id: `msg-${msg.id_msg}`, message: msg })
-  }
-  return items
-})
-function clearMessageFilters() {
-  messageSearch.value = ''
-  messageSearchAuthor.value = 'all'
-  messageSearchFrom.value = ''
-  messageSearchTo.value = ''
-}
 
-function escapeHtml(str) {
-  return (str || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
+let copyTimer = null
+let gifSearchTimer = null
 
-function buildHighlightRegex(q) {
-  const tokens = (q || '').toLowerCase().trim().split(/\s+/).filter(Boolean)
-  if (!tokens.length) return null
-  const escaped = tokens.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-  return new RegExp('(' + escaped.join('|') + ')', 'gi')
-}
 
-function highlightMatches(text) {
-  const q = (messageSearch.value || '').trim()
-  if (!q) return escapeHtml(text || '')
-  const rx = buildHighlightRegex(q)
-  if (!rx) return escapeHtml(text || '')
-  return escapeHtml(text || '').replace(rx, '<mark class="hl">$1</mark>')
-}
+const route = useRoute()
 
-function highlightMessageText(text) {
-  return highlightMatches(text)
-}
+const router = useRouter()
 
-function highlightFilename(name) {
-  return highlightMatches(name)
-}
+const messageScroller = ref(null)
 
-function toggleMessageSearch() {
-  showMessageSearch.value = !showMessageSearch.value
-  if (!showMessageSearch.value) messageSearch.value = ''
-}
 
-const titleSuggestion = computed(() => {
-  const names = selectedUsers.value.map(u => byId(u)?.pseudo || '').filter(Boolean)
-  if (names.length <= 2) return names.join(', ')
-  return names.slice(0, 2).join(', ') + ' (+' + (names.length - 2) + ')'
-})
 
-const contactsMap = computed(() => {
-  const map = {}
-  for (const c of contacts.value || []) map[c.user_id] = c
-  return map
-})
+const currentUserId = ref(localStorage.getItem('user_id') || null)
+const authToken = ref(localStorage.getItem('access_token') || null)
 
-const convSearch = ref('')
-const convSearchInput = ref(null)
-const filteredConvContacts = computed(() => {
-  const q = (convSearch.value || '').toLowerCase()
-  if (!q) return contacts.value
-  return (contacts.value || []).filter(c => (c.pseudo || '').toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q))
-})
-function byId(uid) {
-  return (contacts.value || []).find(c => c.user_id === uid)
-}
-function isSelected(uid) {
-  return selectedUsers.value.includes(uid)
-}
-function toggleSelect(uid) {
-  const idx = selectedUsers.value.indexOf(uid)
-  if (idx >= 0) selectedUsers.value.splice(idx, 1)
-  else selectedUsers.value.push(uid)
-  if (!convTitle.value) convTitle.value = derivedTitle()
-}
-function removeSelected(uid) {
-  const idx = selectedUsers.value.indexOf(uid)
-  if (idx >= 0) selectedUsers.value.splice(idx, 1)
-  if (!convTitle.value) convTitle.value = derivedTitle()
-}
-function initials(name) {
-  const n = (name || '').trim()
-  if (!n) return 'C'
-  const parts = n.split(/\s+/)
-  const s = (parts[0]?.[0] || '') + (parts[1]?.[0] || '')
-  return (s || n[0]).toUpperCase()
-}
-function derivedTitle() {
-  const names = selectedUsers.value.map(u => byId(u)?.pseudo || '').filter(Boolean)
-  if (names.length === 1) return names[0]
-  if (names.length === 2) return names.join(', ')
-  if (names.length > 2) return `${names[0]}, ${names[1]} (+${names.length - 2})`
-  return ''
-}
-watch(gifSearchTerm, value => {
-  if (!showGifPicker.value) return
-  if (gifSearchTimer) {
-    clearTimeout(gifSearchTimer)
-    gifSearchTimer = null
-  }
-  gifSearchTimer = setTimeout(() => {
-    loadGifResults(value)
-  }, 350)
-})
-watch(showEmojiPicker, open => {
-  if (open) {
-    showGifPicker.value = false
-    reactionPickerFor.value = null
-  }
-})
-watch(showGifPicker, open => {
-  if (open) {
-    showEmojiPicker.value = false
-    reactionPickerFor.value = null
-    if (!gifResults.value.length) refreshGifResults()
-  } else {
-    if (gifSearchTimer) {
-      clearTimeout(gifSearchTimer)
-      gifSearchTimer = null
-    }
-    if (gifController) {
-      gifController.abort()
-      gifController = null
-    }
-    gifSearchTerm.value = ''
-    gifError.value = ''
-  }
-})
-watch(showConvModal, async open => {
-  if (open) {
-    await nextTick()
-    try {
-      convSearchInput.value?.focus()
-    } catch {}
-  }
-})
-watch(
-  () => actionModal.input,
-  () => {
-    if (actionModal.type === 'rename' && actionModal.error) actionModal.error = ''
-  },
-)
-watch(selectedUsers, () => {
-  if (!convTitle.value) convTitle.value = derivedTitle()
-})
-function ensureSocket() {
-  if (socket.value) return
+function readBrowserNotificationPreference() {
   try {
-    socket.value = io(backendBase, {
-      transports: ['websocket'],
-      auth: { token: localStorage.getItem('access_token') },
-    })
-    socket.value.on('typing', handleTypingEvent)
-    const onMessage = payload => handleIncomingMessage(payload)
-    socket.value.on('message_created', onMessage)
-    socket.value.on('new_message', onMessage)
-    socket.value.on('reaction_updated', payload => {
-      if (!payload) return
-      applyReactionUpdate(payload.message_id, payload)
-    })
-    socket.value.on('call_created', handleCallCreated)
-    socket.value.on('call_ended', handleCallEnded)
-  } catch (e) {
-    // ignore connection errors
-  }
-}
-
-function joinRoom(convId) {
-  ensureSocket()
-  if (!socket.value) return
-  if (lastJoinedConv && lastJoinedConv !== convId) {
-    socket.value.emit('leave_conversation', { conv_id: lastJoinedConv })
-  }
-  socket.value.emit('join_conversation', { conv_id: convId })
-  lastJoinedConv = convId
-}
-
-function handleTyping() {
-  ensureSocket()
-  if (!socket.value || !selectedConvId.value) return
-  socket.value.emit('typing', { conv_id: selectedConvId.value, is_typing: true })
-  if (typingSendTimer) clearTimeout(typingSendTimer)
-  typingSendTimer = setTimeout(() => {
-    socket.value?.emit('typing', { conv_id: selectedConvId.value, is_typing: false })
-  }, 1200)
-}
-
-function scheduleMarkRead() {
-  if (markReadTimer) clearTimeout(markReadTimer)
-  markReadTimer = setTimeout(() => {
-    markRead()
-  }, 300)
-}
-
-function markRead() {
-  ensureSocket()
-  if (!socket.value || !selectedConvId.value) return
-  const ids = messages.value.filter(m => !m.sentByMe).map(m => m.id_msg)
-  if (ids.length) socket.value.emit('mark_read', { conv_id: selectedConvId.value, message_ids: ids })
-}
-
-function onScroll() {
-  const el = messagesBox.value
-  if (!el) return
-  const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 48
-  isAtBottom.value = nearBottom
-  if (nearBottom) {
-    showJumpToLatest.value = false
-    scheduleMarkRead()
-  } else {
-    showJumpToLatest.value = (messages.value?.length || 0) > 0
-  }
-}
-
-function scrollToBottom(options = {}) {
-  const el = messagesBox.value
-  if (!el) return
-  const top = el.scrollHeight
-  const behavior = options.behavior || 'auto'
-  if (typeof el.scrollTo === 'function') el.scrollTo({ top, behavior })
-  else el.scrollTop = top
-  isAtBottom.value = true
-  showJumpToLatest.value = false
-}
-
-function onAttachmentImageLoad() {
-  // When an attachment image finishes loading, ensure the latest messages stay visible
-  scrollToBottom()
-}
-
-function jumpToLatest() {
-  scrollToBottom({ behavior: 'smooth' })
-}
-
-function requestNotificationPermission() {
-  if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission().catch(() => {})
-  }
-}
-
-function showNotification(title, body) {
-  if (!('Notification' in window)) return
-  if (Notification.permission !== 'granted') return
-  const n = new Notification(title || 'Nouveau message', { body: body || '', icon: LogoUrl })
-  n.onclick = () => window.focus()
-  setTimeout(() => n.close(), 4000)
-}
-
-function buildDayKey(ts) {
-  if (!ts) return 'unknown'
-  const date = new Date(ts)
-  if (Number.isNaN(date.getTime())) return 'unknown'
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function formatDayHeading(ts) {
-  if (!ts) return 'Date inconnue'
-  const date = new Date(ts)
-  if (Number.isNaN(date.getTime())) return 'Date inconnue'
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const day = new Date(date)
-  day.setHours(0, 0, 0, 0)
-  const diffDays = Math.round((today - day) / 86400000)
-  if (diffDays === 0) return "Aujourd'hui"
-  if (diffDays === 1) return 'Hier'
-  if (diffDays === -1) return 'Demain'
-  return date.toLocaleDateString('fr-BE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })
-}
-function formatDate(ts) {
-  if (!ts) return ''
-  const d = new Date(ts)
-  return d.toLocaleString('fr-BE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
-}
-
-async function fetchConversations() {
-    try {
-      const res = await api.get(`/conversations/`)
-      conversations.value = (res.data || []).map(c => ({ ...c }))
-      for (const conv of conversations.value) {
-        if (conv && conv.last && typeof conv.last.text === 'string') {
-          const preview = previewTextForMessage({
-            contenu_chiffre: conv.last.text,
-            files: conv.last.files || [],
-            ts_msg: conv.last.ts || conv.last.ts_msg,
-            sender_id: conv.last.sender_id,
-            sentByMe: conv.last.sentByMe,
-          })
-          conv.last.text = preview || conv.last.text || 'Message'
-        }
-      }
-      await enrichConversations()
-      applyFavoriteStateToConversations()
-      applyUnreadCountsToConversations()
-      if (!selectedConvId.value && conversations.value.length) {
-      selectConversation(conversations.value[0].id)
-    }
-  } catch (e) {
-    conversations.value = []
-  }
-}
-
-async function enrichConversations() {
-  for (const conv of conversations.value) {
-    try {
-      const d = await api.get(`/conversations/${conv.id}`)
-      const parts = d.data?.participants || []
-      conv.participants = parts
-      if (!conv.is_group) {
-        const other = parts.find(p => p.id_user !== userId)
-        conv.displayName = other?.pseudo || conv.titre
-        conv.other_user_id = other?.id_user
-        const contactEntry = contactsMap.value || {}
-        const contactKey = conv.other_user_id != null ? String(conv.other_user_id) : ''
-        conv.avatar_url = contactKey ? (contactEntry[contactKey]?.avatar_url || null) : null
-      } else {
-        conv.displayName = conv.titre
-        conv.avatar_url = null
-      }
-    } catch {}
-    try {
-      const mres = await api.get(`/conversations/${conv.id}/messages/`)
-      const arr = mres.data || []
-      const last = arr[arr.length - 1]
-      if (last) {
-        const normalizedLast = {
-          ...last,
-          sender_id: last.sender_id ?? null,
-          contenu_chiffre: normalizeMessageText(last.contenu_chiffre),
-          files: last.files || [],
-        }
-        applyConversationPreview(conv, normalizedLast)
-      }
-    } catch {}
-  }
-}
-
-async function fetchMessages() {
-  if (!selectedConvId.value) {
-    messages.value = []
-    return
-  }
-  loading.value = true
-  try {
-      const res = await api.get(`/conversations/${selectedConvId.value}/messages/`)
-      messages.value = (res.data || []).map(m => ({
-        ...m,
-        sentByMe: m.sender_id === userId,
-        sender_id: m.sender_id ?? null,
-        contenu_chiffre: normalizeMessageText(m.contenu_chiffre),
-        files: m.files || [],
-        reactions: m.reactions || [],
-        reaction_summary: m.reaction_summary || [],
-      }))
-      const latest = messages.value[messages.value.length - 1]
-      if (latest) {
-        const convEntry = conversations.value.find(c => c.id === selectedConvId.value)
-        if (convEntry) applyConversationPreview(convEntry, latest)
-      }
-      await nextTick()
-      scrollToBottom({ behavior: 'auto' })
-    scheduleMarkRead()
-  } catch (e) {
-    messages.value = []
-  } finally {
-    loading.value = false
-  }
-}
-
-function refresh() {
-  fetchMessages()
-}
-
-function normalizeCall(session) {
-  if (!session || typeof session !== 'object') return null
-  const initiator = session.initiator || null
-  return {
-    ...session,
-    initiator,
-    initiator_pseudo: session.initiator_pseudo || initiator?.pseudo || '',
-    isMine: session.initiator_id === userId,
-  }
-}
-
-function setCallSessions(convId, sessions) {
-  if (!convId) return
-  const safeList = (sessions || []).slice().sort((a, b) => new Date(a.started_at || 0) - new Date(b.started_at || 0))
-  callSessionsMap.value = { ...callSessionsMap.value, [convId]: safeList }
-}
-
-function upsertCallSession(call) {
-  if (!call || !call.conv_id) return
-  const existing = (callSessionsMap.value[call.conv_id] || []).slice()
-  const idx = existing.findIndex(item => item.id === call.id)
-  if (idx >= 0) existing[idx] = call
-  else existing.push(call)
-  setCallSessions(call.conv_id, existing)
-}
-
-async function fetchCallSessions(convId = selectedConvId.value) {
-  if (!convId) return
-  try {
-    const res = await api.get(`/conversations/${convId}/calls`)
-    const normalized = (res.data || []).map(normalizeCall).filter(Boolean)
-    setCallSessions(convId, normalized)
-    if (normalized.length) {
-      updateConversationPreviewWithCall(normalized[normalized.length - 1])
-    }
-  } catch (error) {
-    setCallSessions(convId, [])
-  }
-}
-
-function callTypeLabel(type) {
-  return type === 'audio' ? 'Appel audio' : 'Appel vidéo'
-}
-
-function callTypeIcon(type) {
-  return type === 'audio' ? 'bi-telephone-fill' : 'bi-camera-video-fill'
-}
-
-function callInitiatorLabel(call) {
-  if (!call) return ''
-  if (call.isMine) return 'vous'
-  return call.initiator_pseudo || call.initiator?.pseudo || 'un membre'
-}
-
-function updateConversationPreviewWithCall(call) {
-  if (!call) return
-  const conv = conversations.value.find(c => c.id === call.conv_id)
-  if (!conv) return
-  const callTs = call.ended_at || call.started_at || null
-  const currentTs = conv.last?.ts || null
-  if (callTs && currentTs && new Date(currentTs) > new Date(callTs)) return
-  const suffix = call.ended_at ? 'terminé' : 'démarré'
-  conv.last = {
-    text: `${callTypeLabel(call.call_type)} ${suffix}`,
-    ts: callTs,
-    sentByMe: call.isMine,
-  }
-}
-
-function handleCallCreated(payload) {
-  const call = normalizeCall(payload)
-  if (!call || !call.conv_id) return
-  upsertCallSession(call)
-  updateConversationPreviewWithCall(call)
-  if (call.conv_id === selectedConvId.value && !call.isMine && document.hidden) {
-    showNotification(callTypeLabel(call.call_type), `Lancé par ${callInitiatorLabel(call)}`)
-  }
-}
-
-function handleCallEnded(payload) {
-  const call = normalizeCall(payload)
-  if (!call || !call.conv_id) return
-  stopCallWatcher(call.id)
-  upsertCallSession(call)
-  updateConversationPreviewWithCall(call)
-}
-
-async function startCall(callType) {
-  if (!selectedConvId.value || callActionPending.value) return
-  callActionPending.value = callType
-  try {
-    const res = await api.post(
-      `/conversations/${selectedConvId.value}/calls`,
-      { type: callType },
-    )
-    const call = normalizeCall(res.data)
-    handleCallCreated(call)
-    joinCall(call)
-  } catch (error) {
-    console.error('Unable to start call', error)
-    alert("Impossible de démarrer l'appel pour le moment.")
-  } finally {
-    callActionPending.value = ''
-  }
-}
-
-function joinCall(call) {
-  if (!call || !call.join_url) return
-  try {
-    const win = window.open(call.join_url, '_blank', 'noopener')
-    if (win) watchCallWindow(call, win)
-  } catch {}
-}
-
-function stopCallWatcher(callId) {
-  if (!callId) return
-  const timer = callWindowWatchers.get(callId)
-  if (timer) {
-    clearInterval(timer)
-    callWindowWatchers.delete(callId)
-  }
-}
-
-function watchCallWindow(call, win) {
-  if (!call || !win || !call.isMine || !call.id) return
-  stopCallWatcher(call.id)
-  const timer = setInterval(() => {
-    if (win.closed) {
-      clearInterval(timer)
-      callWindowWatchers.delete(call.id)
-      endCall(call)
-    }
-  }, 1500)
-  callWindowWatchers.set(call.id, timer)
-}
-
-async function endCall(call) {
-  if (!call || call.ended_at || !call.conv_id || !call.id) return
-  if (endingCallId.value === call.id) return
-  endingCallId.value = call.id
-  stopCallWatcher(call.id)
-  try {
-    const res = await api.post(
-      `/conversations/${call.conv_id}/calls/${call.id}/end`,
-    )
-    handleCallEnded(res.data)
-  } catch (error) {
-    console.error('Unable to end call', error)
-  } finally {
-    if (endingCallId.value === call.id) endingCallId.value = null
-  }
-}
-
-function selectConversation(id) {
-  if (selectedConvId.value !== id) {
-    selectedConvId.value = id
-  }
-  const conv = conversations.value.find(c => c.id === id)
-  currentConvTitle.value = conv ? conv.displayName || conv.titre : 'Messagerie'
-  clearUnread(id)
-  joinRoom(id)
-  broadcastActiveConversation(id)
-}
-
-const partnerName = computed(() => {
-  const conv = conversations.value.find(c => c.id === selectedConvId.value)
-  if (!conv) return 'Utilisateur'
-  if (conv.is_group) return 'Membre'
-  return conv.displayName || 'Utilisateur'
-})
-const partnerAvatar = computed(() => {
-  const conv = conversations.value.find(c => c.id === selectedConvId.value)
-  if (!conv || conv.is_group) return ''
-  return conv.avatar_url || ''
-})
-
-function formatTime(ts) {
-  if (!ts) return ''
-  const d = new Date(ts)
-  const now = new Date()
-  const sameDay = d.toDateString() === now.toDateString()
-  return sameDay
-    ? d.toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })
-    : d.toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit' })
-}
-
-function promptRename() {
-  if (!selectedConvId.value) return
-  const convName = currentConvTitle.value || 'Conversation'
-  openActionModal({
-    type: 'rename',
-    title: 'Renommer la conversation',
-    message: `Choisissez un nouveau titre pour '${convName}'.`,
-    input: convName,
-    confirmLabel: 'Renommer',
-    confirmVariant: 'primary',
-  })
-}
-
-function leaveConversation() {
-  if (!selectedConvId.value) return
-  const conv = conversations.value.find(c => c.id === selectedConvId.value)
-  const convName = conv?.displayName || conv?.titre || 'cette conversation'
-  openActionModal({
-    type: 'leave',
-    title: 'Quitter la conversation',
-    message: `Vous êtes sur le point de quitter '${convName}'. Vous ne recevrez plus de nouveaux messages et devrez être réinvité pour revenir.`,
-    confirmLabel: 'Quitter',
-    confirmVariant: 'danger',
-  })
-}
-
-function deleteConversation() {
-  if (!selectedConvId.value) return
-  const conv = conversations.value.find(c => c.id === selectedConvId.value)
-  const convName = conv?.displayName || conv?.titre || 'cette conversation'
-  openActionModal({
-    type: 'delete',
-    title: 'Supprimer la conversation',
-    message: `Cette action supprimera définitivement '${convName}', y compris tous les messages associés. Voulez-vous continuer ?`,
-    confirmLabel: 'Supprimer',
-    confirmVariant: 'danger',
-  })
-}
-
-function triggerFilePicker() {
-  fileInput.value?.click()
-}
-
-function withPreviewForPending(file) {
-  if (file && file.type && file.type.startsWith('image/')) {
-    try {
-      file.previewUrl = URL.createObjectURL(file)
-    } catch {}
-  }
-  return file
-}
-
-function revokePendingPreview(file) {
-  if (file && file.previewUrl) {
-    URL.revokeObjectURL(file.previewUrl)
-    delete file.previewUrl
-  }
-}
-
-function handleFiles(event) {
-  const files = Array.from(event.target?.files || []).map(withPreviewForPending)
-  if (!files.length) return
-  pendingFiles.value = pendingFiles.value.concat(files)
-  if (fileInput.value) fileInput.value.value = ''
-}
-
-function removePendingFile(index) {
-  const removed = pendingFiles.value.splice(index, 1)
-  removed.forEach(revokePendingPreview)
-}
-
-function resetPendingFiles() {
-  pendingFiles.value.forEach(revokePendingPreview)
-  pendingFiles.value = []
-  if (fileInput.value) fileInput.value.value = ''
-}
-
-function toggleEmojiPicker() {
-  showEmojiPicker.value = !showEmojiPicker.value
-  if (showEmojiPicker.value) {
-    showGifPicker.value = false
-    reactionPickerFor.value = null
-    focusMessageInput()
-  }
-}
-
-function toggleGifPicker() {
-  showGifPicker.value = !showGifPicker.value
-  if (showGifPicker.value) {
-    showEmojiPicker.value = false
-    reactionPickerFor.value = null
-    refreshGifResults()
-    focusMessageInput()
-  }
-}
-
-function focusMessageInput() {
-  nextTick(() => {
-    messageInput.value?.focus()
-  })
-}
-
-function onComposerEmojiSelect(event) {
-  const emoji = extractEmoji(event)
-  if (!emoji) return
-  newMessage.value += emoji
-  showEmojiPicker.value = false
-  focusMessageInput()
-}
-
-function onReactionEmoji(msgId, event) {
-  const emoji = extractEmoji(event)
-  if (!emoji) return
-  selectReaction(msgId, emoji)
-}
-
-function extractEmoji(event) {
-  return (
-    event?.detail?.unicode ||
-    event?.detail?.emoji?.unicode ||
-    event?.detail?.native ||
-    event?.detail?.char ||
-    ''
-  )
-}
-
-async function refreshGifResults() {
-  return loadGifResults(gifSearchTerm.value)
-}
-
-async function loadGifResults(query = '') {
-  const search = (query || '').trim()
-  if (gifController) {
-    gifController.abort()
-    gifController = null
-  }
-  const controller = new AbortController()
-  gifController = controller
-  gifLoading.value = true
-  gifError.value = ''
-  try {
-    if (!TENOR_API_KEY) {
-      // No v2 key configured: fallback to legacy v1
-      const legacy = await fetchTenorV1(search, controller.signal)
-      gifResults.value = legacy
-      return
-    }
-    const endpoint = search ? 'search' : 'featured'
-    const params = new URLSearchParams({
-      key: TENOR_API_KEY,
-      client_key: TENOR_CLIENT_KEY,
-      limit: String(GIF_PAGE_LIMIT),
-      media_filter: 'minimal',
-    })
-    if (search) params.set('q', search)
-    const response = await fetch(`https://tenor.googleapis.com/v2/${endpoint}?${params.toString()}`, {
-      signal: controller.signal,
-    })
-    if (!response.ok) {
-      // Try legacy API when v2 fails (e.g., invalid key)
-      const legacy = await fetchTenorV1(search, controller.signal)
-      gifResults.value = legacy
-      return
-    }
-    const data = await response.json()
-    gifResults.value = data.results || []
-  } catch (error) {
-    if (error.name === 'AbortError') return
-    console.error('GIF search failed', error)
-    try {
-      const legacy = await fetchTenorV1(search)
-      gifResults.value = legacy
-      gifError.value = ''
-    } catch (e2) {
-      gifError.value = "Impossible de charger les GIFs pour le moment."
-    }
-  } finally {
-    if (gifController === controller) {
-      gifLoading.value = false
-      gifController = null
-    }
-  }
-}
-
-async function fetchTenorV1(search, signal) {
-  const endpoint = (search ? 'search' : 'trending')
-  const params = new URLSearchParams({
-    key: (import.meta?.env?.VITE_TENOR_V1_KEY || 'LIVDSRZULELA'),
-    limit: String(GIF_PAGE_LIMIT),
-    media_filter: 'minimal',
-  })
-  if (search) params.set('q', search)
-  const res = await fetch(`https://g.tenor.com/v1/${endpoint}?${params.toString()}`, { signal })
-  if (!res.ok) throw new Error(`Legacy Tenor HTTP ${res.status}`)
-  const data = await res.json()
-  return normalizeTenorV1Results(data)
-}
-
-function normalizeTenorV1Results(data) {
-  const results = data?.results || []
-  return results.map(item => {
-    const media = Array.isArray(item.media) && item.media.length ? item.media[0] : {}
-    const media_formats = {}
-    for (const key of ['gif', 'mediumgif', 'nanogif', 'tinygif', 'mp4']) {
-      if (media[key]?.url) media_formats[key] = { url: media[key].url }
-    }
-    return { id: item.id, media_formats }
-  })
-}
-
-function gifMediaUrl(gif) {
-  if (!gif || !gif.media_formats) return ''
-  const order = ['gif', 'mediumgif', 'nanogif', 'tinygif', 'loopedmp4']
-  for (const key of order) {
-    const candidate = gif.media_formats[key]
-    if (candidate?.url) return candidate.url
-  }
-  return ''
-}
-
-async function addGifToPending(gif) {
-  const url = gifMediaUrl(gif)
-  if (!url) {
-    gifError.value = 'GIF indisponible.'
-    return
-  }
-  try {
-    const response = await fetch(url)
-    if (!response.ok) throw new Error('download failed')
-    const blob = await response.blob()
-    const extension = (blob.type && blob.type.split('/')[1]) || 'gif'
-    const filename = `gif-${gif?.id || Date.now()}.${extension}`
-    const file = new File([blob], filename, { type: blob.type || 'image/gif' })
-    withPreviewForPending(file)
-    pendingFiles.value = pendingFiles.value.concat(file)
-    showGifPicker.value = false
-    gifError.value = ''
-    focusMessageInput()
-  } catch (error) {
-    console.error('Unable to attach GIF', error)
-    gifError.value = "Impossible d'ajouter ce GIF."
-  }
-}
-
-function formatSize(bytes) {
-  if (bytes === 0) return '0 o'
-  if (!bytes) return ''
-  const units = ['o', 'Ko', 'Mo', 'Go']
-  let size = bytes
-  let idx = 0
-  while (size >= 1024 && idx < units.length - 1) {
-    size /= 1024
-    idx += 1
-  }
-  return `${size % 1 === 0 ? size : size.toFixed(1)} ${units[idx]}`
-}
-
-async function sendMessage() {
-  if (!selectedConvId.value || sendingMessage.value) return
-  if (!canSend.value) return
-  const content = newMessage.value
-  const attachments = pendingFiles.value.slice()
-  const formData = new FormData()
-  formData.append('contenu_chiffre', content)
-  attachments.forEach(file => formData.append('files', file))
-  sendingMessage.value = true
-  newMessage.value = ''
-  showEmojiPicker.value = false
-  showGifPicker.value = false
-  try {
-      const res = await api.post(
-        `/conversations/${selectedConvId.value}/messages/`,
-        formData,
-      )
-      const created = {
-        ...res.data,
-        sentByMe: true,
-        files: res.data.files || [],
-        reactions: res.data.reactions || [],
-        reaction_summary: res.data.reaction_summary || [],
-      }
-      created.sender_id = created.sender_id ?? userId
-      created.contenu_chiffre = normalizeMessageText(created.contenu_chiffre)
-      messages.value.push(created)
-      const convEntry = conversations.value.find(c => c.id === selectedConvId.value)
-      if (convEntry) applyConversationPreview(convEntry, created)
-      resetPendingFiles()
-      await nextTick()
-      scrollToBottom()
-  } catch (e) {
-    newMessage.value = content
-    pendingFiles.value = attachments
-  } finally {
-    sendingMessage.value = false
-  }
-}
-
-function startEdit(msg) {
-  editingId.value = msg.id_msg
-  editContent.value = msg.contenu_chiffre
-}
-
-async function confirmEdit() {
-  if (!editingId.value) return
-  try {
-    await api.put(
-      `/conversations/${selectedConvId.value}/messages/${editingId.value}`,
-      { contenu_chiffre: editContent.value },
-    )
-    editingId.value = null
-    editContent.value = ''
-    await fetchMessages()
-  } catch {}
-}
-
-function cancelEdit() {
-  editingId.value = null
-}
-
-async function deleteMessage(id) {
-  if (!confirm('Supprimer ce message ?')) return
-  try {
-    await api.delete(
-      `/conversations/${selectedConvId.value}/messages/${id}`,
-    )
-    await fetchMessages()
-  } catch {}
-}
-
-async function fetchContacts() {
-  try {
-    const res = await api.get(`/contacts?statut=accepted`)
-    contacts.value = res.data.contacts || []
+    return localStorage.getItem('notif_browser') === '1'
   } catch {
-    contacts.value = []
+    return false
   }
 }
 
-function openConvModal() {
-  selectedUsers.value = []
-  convTitle.value = ''
-  convSearch.value = ''
-  fetchContacts()
-  showConvModal.value = true
+function syncBrowserNotificationPreference() {
+  browserNotificationsEnabled.value = readBrowserNotificationPreference()
 }
 
-async function createConversation() {
-  if (!convTitle.value) return
-  creatingConv.value = true
-  try {
-    const res = await api.post(
-      `/conversations/`,
-      {
-        titre: convTitle.value,
-        participants: selectedUsers.value,
-        is_group: selectedUsers.value.length > 1,
-      },
-    )
-    showConvModal.value = false
-    creatingConv.value = false
-    await fetchConversations()
-    if (res.data && res.data.id) {
-      selectConversation(res.data.id)
-      await fetchMessages()
-    }
-  } catch (e) {
-    creatingConv.value = false
+function handleBrowserPrefStorage(event) {
+  if (event?.key === 'notif_browser') {
+    syncBrowserNotificationPreference()
   }
 }
 
-function reactionSummary(msg) {
-  if (msg.reaction_summary && msg.reaction_summary.length) {
-    return msg.reaction_summary
-  }
-  return summariseReactions(msg.reactions || [])
-}
-
-function summariseReactions(reactions) {
-  const map = new Map()
-  for (const reaction of reactions || []) {
-    const entry = map.get(reaction.emoji) || { emoji: reaction.emoji, count: 0, mine: false }
-    entry.count += 1
-    if (reaction.is_mine) entry.mine = true
-    map.set(reaction.emoji, entry)
-  }
-  return Array.from(map.values())
-}
-
-function toggleReactionPicker(msgId) {
-  reactionPickerFor.value = reactionPickerFor.value === msgId ? null : msgId
-  if (reactionPickerFor.value) {
-    showEmojiPicker.value = false
-    showGifPicker.value = false
+function handleBrowserPrefBroadcast(event) {
+  if (event?.detail && typeof event.detail.enabled === 'boolean') {
+    browserNotificationsEnabled.value = event.detail.enabled
   }
 }
 
-function selectReaction(msgId, emoji) {
-  toggleReaction(msgId, emoji)
-  reactionPickerFor.value = null
+function computeInitials(label = '') {
+  if (!label) return 'C'
+  const tokens = String(label)
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+  if (!tokens.length) return 'C'
+  const first = tokens[0][0] || ''
+  const second = tokens.length > 1 ? tokens[tokens.length - 1][0] : tokens[0][1] || ''
+  const initials = (first + (second || '')).toUpperCase()
+  return initials || 'C'
 }
 
-async function toggleReaction(msgId, emoji) {
-  try {
-    const res = await api.post(
-      `/messages/${msgId}/reactions`,
-      { emoji },
-    )
-    applyReactionUpdate(msgId, res.data)
-  } catch {}
-}
-
-function applyReactionUpdate(messageId, payload) {
-  if (!payload) return
-  const target = messages.value.find(m => m.id_msg === messageId)
-  if (!target) return
-  target.reactions = payload.reactions || []
-  target.reaction_summary = payload.reaction_summary || summariseReactions(target.reactions)
-}
-
-function attachmentEndpoint(file) {
-  const fallback = `/api/messages/files/${file?.id_file}`
-  const raw = file?.url || fallback
-  const withInline = raw.includes('?') ? `${raw}&inline=1` : `${raw}?inline=1`
-  return withInline.startsWith('http') ? withInline : `${backendBase}${withInline}`
-}
-
-function isInlineImage(file) {
-  const mime = (file?.mime || '').toLowerCase()
-  if (mime.startsWith('image/')) return true
-  const name = (file?.filename || '').toLowerCase()
-  return /\.(png|jpe?g|gif|webp|bmp)$/i.test(name)
-}
-
-const _previewRetryCount = new Map()
-async function ensureAttachmentPreview(file) {
-  const key = file?.id_file
-  if (!key) return
-  const cacheKey = String(key)
-  if (attachmentPreviews.value[cacheKey] || loadingPreviewIds.has(cacheKey)) return
-  if (!isInlineImage(file)) return
-  loadingPreviewIds.add(cacheKey)
-  try {
-    const response = await api.get(attachmentEndpoint(file), { responseType: 'blob' })
-    const blobUrl = window.URL.createObjectURL(response.data)
-    attachmentPreviews.value = { ...attachmentPreviews.value, [cacheKey]: blobUrl }
-  } catch (error) {
-    // Retry once after a short delay in case the file is not yet available
-    const tries = _previewRetryCount.get(cacheKey) || 0
-    if (tries < 1) {
-      _previewRetryCount.set(cacheKey, tries + 1)
-      setTimeout(() => ensureAttachmentPreview(file), 800)
-    } else {
-      console.error('Unable to load preview', error)
-    }
-  } finally {
-    loadingPreviewIds.delete(cacheKey)
+function normalizeMember(member) {
+  if (!member) return null
+  const id = member.user_id || member.id || member.member_id
+  if (!id) return null
+  const displayName = member.display_name || member.email || 'Membre'
+  return {
+    id: String(id),
+    role: member.role || 'member',
+    state: member.state || 'active',
+    joinedAt: member.joined_at ? new Date(member.joined_at) : null,
+    mutedUntil: member.muted_until ? new Date(member.muted_until) : null,
+    displayName,
+    email: member.email || '',
+    avatarUrl: member.avatar_url || null,
+    initials: computeInitials(displayName),
   }
 }
 
-async function downloadAttachment(file) {
-  try {
-    const response = await axios.get(attachmentEndpoint(file), {
-      responseType: 'blob',
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-    })
-    const blobUrl = window.URL.createObjectURL(response.data)
-    const link = document.createElement('a')
-    link.href = blobUrl
-    link.download = file.filename || `piece-jointe-${file.id_file}`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(blobUrl)
-  } catch {}
-}
-
-watch(
-  messages,
-  list => {
-    const active = new Set()
-    for (const msg of list || []) {
-      for (const file of msg.files || []) {
-        if (!file || !file.id_file) continue
-        const key = String(file.id_file)
-        active.add(key)
-        if (isInlineImage(file)) ensureAttachmentPreview(file)
-      }
-    }
-    const cache = { ...attachmentPreviews.value }
-    let changed = false
-    for (const key of Object.keys(cache)) {
-      if (!active.has(key)) {
-        window.URL.revokeObjectURL(cache[key])
-        delete cache[key]
-        changed = true
-      }
-    }
-    if (changed) {
-      attachmentPreviews.value = { ...cache }
-    }
-  },
-  { deep: true, immediate: true },
-)
-
-function handleIncomingMessage(payload) {
-  if (!payload) return
-  const normalized = {
-    ...payload,
-    files: payload.files || [],
-    reactions: payload.reactions || [],
-    reaction_summary: payload.reaction_summary || [],
-    sender_id: payload.sender_id ?? null,
-    contenu_chiffre: normalizeMessageText(payload.contenu_chiffre),
-    sentByMe: payload.sender_id === userId,
+function normalizeConversation(payload) {
+  if (!payload) return null
+  const members = Array.isArray(payload.members)
+    ? payload.members.map((member) => normalizeMember(member)).filter(Boolean)
+    : []
+  const selfId = currentUserId.value ? String(currentUserId.value) : null
+  const activeParticipants = members.filter(
+    (member) => member.state === 'active' && (!selfId || member.id !== selfId),
+  )
+  const createdAt = payload.created_at ? new Date(payload.created_at) : new Date()
+  let displayName = payload.title ? String(payload.title).trim() : ''
+  if (!displayName) {
+    const names = activeParticipants
+      .map((member) => member.displayName || member.email)
+      .filter(Boolean)
+    displayName = names.join(', ')
   }
-  const already = messages.value.some(m => m.id_msg === normalized.id_msg)
-  if (already) {
-    applyReactionUpdate(normalized.id_msg, {
-      reactions: normalized.reactions,
-      reaction_summary: normalized.reaction_summary,
-    })
-    return
+  if (!displayName) {
+    displayName = members.length > 1 ? 'Conversation' : 'Nouvelle conversation'
   }
-  const convEntry = conversations.value.find(c => c.id === normalized.conv_id)
-  if (convEntry) {
-    applyConversationPreview(convEntry, normalized)
-  } else {
-    scheduleConversationsRefresh(50)
-  }
-  if (normalized.conv_id === selectedConvId.value) {
-    if (loading.value) loading.value = false
-    messages.value.push(normalized)
-    nextTick().then(() => {
-      scrollToBottom()
-      if (!normalized.sentByMe) scheduleMarkRead()
-    })
-    if (!normalized.sentByMe && !document.hasFocus()) {
-      const text = normalized.contenu_chiffre.trim()
-      const fallback = attachmentsLabel(normalized.files) || 'Nouveau message'
-      showNotification('Nouveau message', text || fallback)
-    }
-  } else if (normalized.sender_id !== userId) {
-    incrementUnread(normalized.conv_id)
-  } else if (convEntry) {
-    clearUnread(normalized.conv_id)
+  return {
+    id: String(payload.id),
+    title: payload.title || null,
+    topic: payload.topic || null,
+    type: payload.type || 'group',
+    archived: Boolean(payload.archived),
+    createdAt,
+    members,
+    participants: activeParticipants,
+    displayName,
+    initials: computeInitials(displayName),
+    avatarUrl: payload.avatar_url || null,
   }
 }
+const conversationSummary = computed(() => {
 
-const visibilityHandler = () => {
-  if (!document.hidden) scheduleMarkRead()
-}
+  if (loadingConversations.value) return 'Chargementâ€¦'
 
-watch(
-  unreadSummary,
-  summary => {
-    if (typeof window === 'undefined') return
-    window.dispatchEvent(new CustomEvent('cova:unread', { detail: summary }))
-  },
-  { deep: true, immediate: true },
-)
+  const count = conversations.value.length
 
-onMounted(async () => {
-  requestNotificationPermission()
-  loadUnreadFromStorage()
-  loadFavorites()
-  await fetchContacts()
-  await fetchConversations()
-  await refreshUnreadFromServer()
-  if (selectedConvId.value) selectConversation(selectedConvId.value)
-  await fetchMessages()
-  await nextTick()
-  scrollToBottom({ behavior: 'auto' })
-  await fetchCallSessions()
-  ensureSocket()
-  if (selectedConvId.value) joinRoom(selectedConvId.value)
-  document.addEventListener('visibilitychange', visibilityHandler)
+  return count ? `${count} conversation${count > 1 ? 's' : ''}` : 'Aucune conversation'
+
 })
 
-watch(selectedConvId, async val => {
-  closeActionModal()
-  if (!val) {
-    broadcastActiveConversation(null)
+
+
+const filteredEmojiSections = computed(() => {
+  const term = emojiSearch.value.trim().toLowerCase()
+  if (!term) return emojiSections
+  const matches = emojiSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((emoji) => emoji.toLowerCase().includes(term)),
+    }))
+    .filter((section) => section.items.length)
+  if (matches.length) return matches
+  return [
+    {
+      id: 'search',
+      label: 'Résultats',
+      items: emojiCatalog.filter((emoji) => emoji.toLowerCase().includes(term)),
+    },
+  ]
+})
+
+const displayedGifs = computed(() => (gifResults.value.length ? gifResults.value : gifLibrary))
+
+
+const activeFilterLabel = computed(() => {
+
+  const option = conversationFilters.find((filter) => filter.value === conversationFilter.value)
+
+  return option ? option.label : 'Toutes'
+
+})
+
+
+
+const selectedConversation = computed(() => {
+  if (!selectedConversationId.value) return null
+  return conversations.value.find((conv) => conv.id === selectedConversationId.value) || null
+})
+
+const headerParticipants = computed(() => {
+  const conv = selectedConversation.value
+  if (!conv || !Array.isArray(conv.participants)) return ''
+  const names = conv.participants
+    .map((participant) => participant.displayName || participant.email)
+    .filter(Boolean)
+  return names.join(', ')
+})
+
+const currentMembership = computed(() => {
+  const conv = selectedConversation.value
+  if (!conv || !Array.isArray(conv.members)) return null
+  const selfId = currentUserId.value ? String(currentUserId.value) : null
+  if (!selfId) return null
+  return conv.members.find((member) => member.id === selfId) || null
+})
+
+const isConversationOwner = computed(() => currentMembership.value?.role === 'owner')
+const canManageConversation = computed(() => isConversationOwner.value)
+const readyAttachments = computed(() => pendingAttachments.value.filter((entry) => entry.status === 'ready'))
+const hasAttachmentInProgress = computed(() => pendingAttachments.value.some((entry) => entry.status === 'uploading'))
+const isEditingMessage = computed(() => composerState.mode === 'edit' && Boolean(composerState.targetMessageId))
+const hasComposerContext = computed(() => {
+  return (
+    composerState.mode !== 'new' ||
+    composerState.replyTo !== null ||
+    composerState.forwardFrom !== null
+  )
+})
+
+
+const pinnedMessages = computed(() => {
+  return messages.value
+    .filter((message) => message.pinned)
+    .sort((a, b) => {
+
+      const aDate = (a.pinnedAt || a.createdAt).getTime()
+
+      const bDate = (b.pinnedAt || b.createdAt).getTime()
+
+      return bDate - aDate
+
+    })
+
+})
+
+
+
+const sortedConversations = computed(() => {
+
+  const term = conversationSearch.value.trim().toLowerCase()
+
+  const list = conversations.value.map((conv) => {
+
+    const meta = conversationMeta[conv.id] || {}
+
+    return {
+
+      ...conv,
+
+      unreadCount: meta.unreadCount || 0,
+
+      lastPreview: meta.lastPreview || '',
+
+      lastActivity: meta.lastActivity || conv.createdAt,
+
+      avatarUrl: meta.avatarUrl ?? conv.avatarUrl ?? null,
+
+    }
+
+  })
+
+  let filtered = list
+
+  if (conversationFilter.value === 'unread') {
+
+    filtered = filtered.filter((conv) => conv.unreadCount > 0)
+
+  } else if (conversationFilter.value === 'direct') {
+
+    filtered = filtered.filter((conv) => conv.participants.length <= 1)
+
+  } else if (conversationFilter.value === 'group') {
+
+    filtered = filtered.filter((conv) => conv.participants.length > 1)
+
+  }
+
+  if (term) {
+
+    filtered = filtered.filter(
+
+      (conv) =>
+
+        conv.displayName.toLowerCase().includes(term) || (conv.lastPreview || '').toLowerCase().includes(term),
+
+    )
+
+  }
+
+  return filtered.sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity))
+
+})
+
+
+
+const canSend = computed(() => {
+  const value = messageInput.value.trim()
+  const attachmentsReady = readyAttachments.value.length > 0 && !isEditingMessage.value
+  return (Boolean(value) || attachmentsReady || composerState.mode === 'reply' || composerState.mode === 'forward') &&
+    value.length <= 2000 &&
+    Boolean(selectedConversationId.value)
+})
+
+
+const connectionStatusClass = computed(() => {
+
+  switch (connectionStatus.value) {
+
+    case 'connected':
+
+      return 'ok'
+
+    case 'connecting':
+
+      return 'pending'
+
+    default:
+
+      return 'error'
+
+  }
+
+})
+
+
+
+const connectionStatusLabel = computed(() => {
+  switch (connectionStatus.value) {
+
+    case 'connected':
+
+      return 'Canal temps réel actif'
+
+    case 'connecting':
+
+      return 'Connexion…'
+
+    case 'error':
+
+      return 'Canal indisponible'
+
+    default:
+
+      return 'En veille'
+
+  }
+
+})
+
+
+
+watch(
+  () => route.query.conversation,
+  (id) => {
+    if (!id) return
+    const convId = String(id)
+    if (conversations.value.some((conv) => conv.id === convId)) {
+      selectConversation(convId)
+    }
+  },
+)
+
+watch(selectedConversationId, (id) => {
+  closeTransientMenus()
+  if (!id) {
+    showConversationPanel.value = false
+    invites.value = []
+    clearPendingAttachments()
+    resetComposerState()
+    resetSearchPanel()
     return
   }
-  isAtBottom.value = true
-  showJumpToLatest.value = false
-  selectConversation(val)
-  await fetchMessages()
-  await fetchCallSessions(val)
-  resetPendingFiles()
-  showEmojiPicker.value = false
-  showGifPicker.value = false
-  reactionPickerFor.value = null
-  typingLabel.value = ''
+  router.replace({ query: { ...route.query, conversation: id } }).catch(() => {})
+  emitActiveConversation(id)
+  resetComposerState()
+  resetSearchPanel()
+  if (showConversationPanel.value) {
+    syncConversationFormFromSelected()
+    if (canManageConversation.value) {
+      loadConversationInvites(id)
+    } else {
+      invites.value = []
+    }
+  }
+})
+
+watch(showConversationPanel, (open) => {
+  if (open) {
+    syncConversationFormFromSelected()
+    if (canManageConversation.value && selectedConversationId.value) {
+      loadConversationInvites(selectedConversationId.value)
+    } else {
+      invites.value = []
+    }
+  }
+})
+
+watch(canManageConversation, (canManage) => {
+  if (!showConversationPanel.value) return
+  if (canManage && selectedConversationId.value) {
+    loadConversationInvites(selectedConversationId.value)
+  } else {
+    invites.value = []
+  }
 })
 
 watch(
   () => messages.value.length,
-  (curr, prev) => {
-    if (curr <= prev) return
-    nextTick().then(() => {
-      const lastMessage = messages.value[messages.value.length - 1]
-      if (isAtBottom.value || lastMessage?.sentByMe) {
-        scrollToBottom({ behavior: prev === 0 ? 'auto' : 'smooth' })
-      } else {
-        showJumpToLatest.value = true
-      }
-    })
+  async () => {
+    await nextTick()
+    if (suppressAutoScroll.value) {
+      suppressAutoScroll.value = false
+      return
+    }
+    if (!loadingOlderMessages.value) {
+      scrollToBottom()
+    }
   },
 )
 
-onUnmounted(() => {
+watch([showPicker, pickerMode], ([visible, mode]) => {
+  if (visible && mode === 'gif') {
+    loadGifResults(gifSearch.value)
+  }
+})
+
+watch(gifSearch, (term) => {
+  if (pickerMode.value !== 'gif' || !showPicker.value) return
+  if (gifSearchTimer) clearTimeout(gifSearchTimer)
+  gifSearchTimer = setTimeout(() => {
+    loadGifResults(term)
+  }, 350)
+})
+
+
+async function loadConversations() {
+  loadingConversations.value = true
+  conversationError.value = ''
+  try {
+    const { data } = await api.get('/conversations/')
+    const list = Array.isArray(data) ? data.map((item) => normalizeConversation(item)).filter(Boolean) : []
+    conversations.value = list
+    list.forEach((conv) => initializeMeta(conv))
+    if (!selectedConversationId.value && list.length) {
+      const initial = route.query.conversation ? String(route.query.conversation) : list[0].id
+      await selectConversation(initial)
+    }
+    await loadUnreadSummary()
+
+  } catch (err) {
+
+    conversationError.value = extractError(err, "Impossible de charger les conversations.")
+
+  } finally {
+
+    loadingConversations.value = false
+
+  }
+
+}
+
+
+
+async function loadUnreadSummary() {
+
+  try {
+
+    const { data } = await api.get('/messages/unread_summary')
+
+    unreadSummary.value = {
+
+      total: Number(data?.total || 0),
+
+      conversations: Array.isArray(data?.conversations) ? data.conversations.map((entry) => ({
+
+        conversation_id: String(entry.conversation_id),
+
+        unread: Number(entry.unread || 0),
+
+      })) : [],
+
+    }
+
+    applyUnreadMeta()
+
+  } catch (err) {
+
+    console.warn('Unable to load unread summary', err)
+
+  }
+
+}
+
+
+
+async function loadMessages({ conversationId = selectedConversationId.value, reset = false, before = null, after = null, limit = 50 } = {}) {
+  if (!conversationId) return
+  if (before && after) return
+  if (reset) {
+    loadingMessages.value = true
+    messages.value = []
+    pagination.beforeCursor = null
+    pagination.afterCursor = null
+    pagination.hasMoreBefore = false
+    pagination.hasMoreAfter = false
+  }
+  messageError.value = ''
+  try {
+    const params = { limit }
+    if (before) params.before = before
+    if (after) params.after = after
+    const response = await api.get(`/conversations/${conversationId}/messages`, { params })
+    const list = Array.isArray(response.data) ? response.data.map(normalizeMessage) : []
+    updatePaginationFromHeaders(response.headers, { reset, before, after, received: list })
+    if (reset) {
+      messages.value = list
+    } else if (before) {
+      messages.value = [...list, ...messages.value]
+    } else if (after) {
+      messages.value = [...messages.value, ...list]
+    } else {
+      messages.value = list
+    }
+    const meta = ensureMeta(conversationId)
+    if (list.length && !before) {
+      const last = list[list.length - 1]
+      meta.lastPreview = last.preview
+      meta.lastActivity = last.createdAt
+    }
+    if (!before) {
+      const readableIds = list
+        .filter((message) => !message.sentByMe && !message.isSystem && !message.deleted)
+        .map((message) => message.id)
+      if (readableIds.length) {
+        await markConversationAsRead(conversationId, readableIds)
+      } else if (reset) {
+        await loadUnreadSummary()
+      }
+    }
+  } catch (err) {
+    if (reset) {
+      messageError.value = extractError(err, "Impossible de charger les messages.")
+      messages.value = []
+    }
+  } finally {
+    if (reset) {
+      loadingMessages.value = false
+      await nextTick()
+      scrollToBottom()
+    }
+  }
+}
+const paginationHeaderKeys = {
+  before: 'x-pagination-before',
+  after: 'x-pagination-after',
+  hasBefore: 'x-pagination-has-before',
+  hasAfter: 'x-pagination-has-after',
+}
+
+function readHeader(headers, name) {
+  if (!headers) return null
+  if (typeof headers.get === 'function') {
+    const value = headers.get(name)
+    if (value != null) return value
+    return headers.get(name.toLowerCase())
+  }
+  const lower = name.toLowerCase()
+  if (lower in headers) return headers[lower]
+  const exact = Object.keys(headers).find((key) => key.toLowerCase() === lower)
+  return exact ? headers[exact] : null
+}
+
+function updatePaginationFromHeaders(headers, context = {}) {
+  const beforeHeader = readHeader(headers, paginationHeaderKeys.before)
+  const afterHeader = readHeader(headers, paginationHeaderKeys.after)
+  const hasBeforeHeader = readHeader(headers, paginationHeaderKeys.hasBefore)
+  const hasAfterHeader = readHeader(headers, paginationHeaderKeys.hasAfter)
+
+  const parseNumber = (value) => {
+    if (value === null || value === undefined || value === '') return null
+    const num = Number(value)
+    return Number.isNaN(num) ? null : num
+  }
+
+  const parseBool = (value) => {
+    if (typeof value === 'boolean') return value
+    if (typeof value === 'string') {
+      if (value.toLowerCase() === 'true') return true
+      if (value.toLowerCase() === 'false') return false
+    }
+    return null
+  }
+
+  const before = parseNumber(beforeHeader)
+  const after = parseNumber(afterHeader)
+  const hasBefore = parseBool(hasBeforeHeader)
+  const hasAfter = parseBool(hasAfterHeader)
+
+  if (context.reset) {
+    pagination.beforeCursor = before
+    pagination.afterCursor = after
+    pagination.hasMoreBefore = hasBefore ?? false
+    pagination.hasMoreAfter = hasAfter ?? false
+    return
+  }
+
+  if (context.before != null) {
+    pagination.beforeCursor = before
+    pagination.hasMoreBefore = hasBefore ?? pagination.hasMoreBefore
+  } else if (context.after != null) {
+    pagination.afterCursor = after
+    pagination.hasMoreAfter = hasAfter ?? pagination.hasMoreAfter
+  } else if (before !== null || after !== null || hasBefore !== null || hasAfter !== null) {
+    pagination.beforeCursor = before
+    pagination.afterCursor = after
+    if (hasBefore !== null) pagination.hasMoreBefore = hasBefore
+    if (hasAfter !== null) pagination.hasMoreAfter = hasAfter
+  } else if (Array.isArray(context.received)) {
+    const list = context.received
+    pagination.beforeCursor = list.length ? list[0].streamPosition : null
+    pagination.afterCursor = list.length ? list[list.length - 1].streamPosition : null
+    pagination.hasMoreBefore = Boolean(context.before && list.length)
+    pagination.hasMoreAfter = Boolean(context.after && list.length)
+  }
+}
+
+async function ensureMessageVisible(messageId, streamPosition) {
+  if (messages.value.some((msg) => msg.id === messageId)) return
+
+  let guard = 0
+
+  while (
+
+    !messages.value.some((msg) => msg.id === messageId) &&
+
+    pagination.hasMoreBefore &&
+
+    pagination.beforeCursor
+
+  ) {
+
+    if (typeof streamPosition === 'number' && pagination.beforeCursor !== null && streamPosition >= pagination.beforeCursor) {
+
+      break
+
+    }
+
+    await loadOlderMessages()
+
+    guard += 1
+
+    if (guard > 20) break
+
+  }
+}
+
+
+function normalizeMessage(payload) {
+  const convId = String(payload.conversation_id || payload.conv_id || '')
+  const authorId = payload.author_id ? String(payload.author_id) : null
+  const createdAt = payload.created_at ? new Date(payload.created_at) : new Date()
+  const displayName =
+    payload.author_display_name || (authorId && authorId === currentUserId.value ? 'Vous' : 'Participant')
+
+  const content = (payload.content || '').toString()
+
+  const reactions = Array.isArray(payload.reactions)
+
+    ? payload.reactions.map((reaction) => ({
+
+        emoji: reaction.emoji,
+
+        count: Number(reaction.count || 0),
+
+        reacted: Boolean(reaction.reacted),
+
+      }))
+
+    : []
+
+  const deliveredAt = payload.delivered_at ? new Date(payload.delivered_at) : null
+  const readAt = payload.read_at ? new Date(payload.read_at) : null
+  const pinnedAt = payload.pinned_at ? new Date(payload.pinned_at) : null
+  const attachments = Array.isArray(payload.attachments)
+    ? payload.attachments.map((attachment) => mapAttachmentPayload(attachment)).filter(Boolean)
+    : []
+  const editedAt = payload.edited_at ? new Date(payload.edited_at) : null
+  const deletedAt = payload.deleted_at ? new Date(payload.deleted_at) : null
+  const deleted = Boolean(payload.deleted)
+  const replyTo = payload.reply_to ? mapReferencePayload(payload.reply_to) : null
+  const forwardFrom = payload.forward_from ? mapReferencePayload(payload.forward_from) : null
+  const streamPosition = Number(payload.stream_position ?? payload.streamPosition ?? null)
+  return {
+    id: String(payload.id || payload.message_id || generateLocalId()),
+    conversationId: convId,
+    authorId,
+    displayName,
+    avatarUrl: payload.author_avatar_url || null,
+    content: deleted ? '' : content,
+    createdAt,
+    isSystem: Boolean(payload.is_system),
+    sentByMe: Boolean(authorId && currentUserId.value && authorId === String(currentUserId.value)),
+    deliveryState: payload.delivery_state || null,
+    deliveredAt,
+    readAt,
+    reactions,
+    pinned: Boolean(payload.pinned),
+    pinnedAt,
+    pinnedBy: payload.pinned_by ? String(payload.pinned_by) : null,
+    security: {
+      scheme: payload.encryption_scheme || 'confidentiel',
+      metadata: payload.encryption_metadata || {},
+    },
+    preview: `${displayName}: ${content}`.trim(),
+    attachments,
+    editedAt,
+    deletedAt,
+    deleted,
+    replyTo,
+    forwardFrom,
+    streamPosition,
+  }
+}
+
+function mapAttachmentPayload(raw) {
+  if (!raw) return null
+
+  return {
+
+    id: String(raw.id || raw.attachment_id || generateLocalId()),
+
+    fileName: raw.file_name || raw.filename || raw.name || 'Pièce jointe',
+
+    mimeType: raw.mime_type || raw.mimeType || null,
+
+    sizeBytes: raw.size_bytes || raw.sizeBytes || null,
+
+    sha256: raw.sha256 || null,
+
+    downloadUrl: raw.download_url || raw.downloadUrl || null,
+
+    encryption: raw.encryption || {},
+
+  }
+
+}
+
+
+
+function mapReferencePayload(raw) {
+
+  if (!raw) return null
+
+  return {
+
+    id: String(raw.id || raw.message_id || generateLocalId()),
+
+    authorDisplayName: raw.author_display_name || 'Participant',
+
+    excerpt: raw.excerpt || '',
+
+    createdAt: raw.created_at ? new Date(raw.created_at) : null,
+
+    deleted: Boolean(raw.deleted),
+
+    attachments: Number(raw.attachments || 0),
+
+  }
+
+}
+
+
+
+function applyMessageUpdate(nextMessage) {
+
+  const idx = messages.value.findIndex((msg) => msg.id === nextMessage.id)
+
+  if (idx === -1) {
+
+    messages.value.push(nextMessage)
+
+    return nextMessage
+
+  }
+
+  const current = messages.value[idx]
+
+  const merged = {
+    ...current,
+    ...nextMessage,
+    createdAt: nextMessage.createdAt || current.createdAt,
+    deliveryState: nextMessage.deliveryState ?? current.deliveryState,
+    deliveredAt: nextMessage.deliveredAt ?? current.deliveredAt,
+    readAt: nextMessage.readAt ?? current.readAt,
+    reactions: nextMessage.reactions || current.reactions,
+    pinned: typeof nextMessage.pinned === 'boolean' ? nextMessage.pinned : current.pinned,
+    pinnedAt: nextMessage.pinnedAt ?? current.pinnedAt,
+    pinnedBy: nextMessage.pinnedBy ?? current.pinnedBy,
+    security: nextMessage.security || current.security,
+    preview: nextMessage.preview || current.preview,
+    attachments: Array.isArray(nextMessage.attachments) ? nextMessage.attachments : current.attachments,
+    editedAt: nextMessage.editedAt ?? current.editedAt,
+    deletedAt: nextMessage.deletedAt ?? current.deletedAt,
+    deleted: typeof nextMessage.deleted === 'boolean' ? nextMessage.deleted : current.deleted,
+    replyTo: nextMessage.replyTo ?? current.replyTo,
+    forwardFrom: nextMessage.forwardFrom ?? current.forwardFrom,
+    streamPosition: nextMessage.streamPosition ?? current.streamPosition,
+  }
+  messages.value[idx] = merged
+
+  return merged
+
+}
+
+
+
+function initializeMeta(conv) {
+
+  if (!conversationMeta[conv.id]) {
+
+    conversationMeta[conv.id] = {
+
+      unreadCount: 0,
+
+      lastPreview: '',
+
+      lastActivity: conv.createdAt,
+
+      avatarUrl: conv.avatarUrl,
+
+    }
+
+  }
+
+}
+
+
+
+function ensureMeta(convId) {
+
+  initializeMeta({ id: convId, createdAt: new Date(), avatarUrl: null })
+
+  return conversationMeta[convId]
+
+}
+
+
+
+function applyUnreadMeta() {
+
+  const map = new Map(unreadSummary.value.conversations.map((entry) => [String(entry.conversation_id), Number(entry.unread || 0)]))
+
+  conversations.value.forEach((conv) => {
+
+    const meta = ensureMeta(conv.id)
+
+    meta.unreadCount = map.get(conv.id) || 0
+
+  })
+
+}
+
+
+
+async function selectConversation(convId) {
+  const id = String(convId)
+  if (!conversations.value.some((conv) => conv.id === id)) return
+  const isSame = selectedConversationId.value === id
+  selectedConversationId.value = id
+  messageInput.value = ''
+  showPicker.value = false
+  emojiSearch.value = ''
+  gifSearch.value = ''
+  gifError.value = ''
+  loadingGifs.value = false
+  gifResults.value = gifLibrary.slice()
+  pickerMode.value = 'emoji'
+  clearPendingAttachments()
+  resetComposerState()
+  messages.value = []
+  disconnectRealtime()
+  await loadMessages({ conversationId: id, reset: true })
+  connectRealtime(id)
+  if (!isSame) {
+    await loadUnreadSummary()
+  }
+}
+
+async function markConversationAsRead(convId, ids = []) {
+  if (!convId) return
+
+  const meta = ensureMeta(convId)
+
+  meta.unreadCount = 0
+
+  const body = ids && ids.length ? { message_ids: ids } : {}
+
+  try {
+
+    await api.post(`/conversations/${convId}/read`, body)
+
+  } catch (err) {
+
+    console.warn('Unable to synchroniser la lecture', err)
+
+  }
+
+  await loadUnreadSummary()
+
+}
+
+
+
+function incrementUnreadCounter(convId) {
+  const meta = ensureMeta(convId)
+  meta.unreadCount = (meta.unreadCount || 0) + 1
+  const entries = unreadSummary.value.conversations.slice()
+  const idx = entries.findIndex((entry) => entry.conversation_id === convId)
+  if (idx >= 0) {
+
+    entries[idx] = { ...entries[idx], unread: entries[idx].unread + 1 }
+
+  } else {
+
+    entries.push({ conversation_id: convId, unread: 1 })
+
+  }
+
+  unreadSummary.value = {
+    total: unreadSummary.value.total + 1,
+    conversations: entries,
+  }
+}
+
+function applyConversationPatch(payload) {
+  if (!payload) return
+  const normalized = normalizeConversation(payload)
+  if (!normalized) return
+  const idx = conversations.value.findIndex((conv) => conv.id === normalized.id)
+  if (idx >= 0) {
+    conversations.value[idx] = { ...conversations.value[idx], ...normalized }
+  } else {
+    conversations.value.push(normalized)
+    initializeMeta(normalized)
+  }
+}
+
+function applyMemberPayload(payload) {
+  const normalized = normalizeMember(payload)
+  if (!normalized) return
+  const convId = selectedConversationId.value
+  if (!convId) return
+  const target = conversations.value.find((conv) => conv.id === convId)
+  if (!target) return
+  if (!Array.isArray(target.members)) {
+    target.members = []
+  }
+  const idx = target.members.findIndex((member) => member.id === normalized.id)
+  if (idx >= 0) {
+    target.members[idx] = normalized
+  } else {
+    target.members.push(normalized)
+  }
+  const activeMembers = target.members.filter((member) => member.state === 'active')
+  const selfId = currentUserId.value ? String(currentUserId.value) : null
+  target.participants = activeMembers.filter((member) => !selfId || member.id !== selfId)
+}
+
+function mapInvite(invite) {
+  if (!invite) return null
+  return {
+    id: invite.id,
+    email: invite.email,
+    role: invite.role,
+    token: invite.token,
+    expiresAt: invite.expires_at ? new Date(invite.expires_at) : null,
+    acceptedAt: invite.accepted_at ? new Date(invite.accepted_at) : null,
+  }
+}
+
+function roleLabel(role) {
+  const option = conversationRoles.find((entry) => entry.value === role)
+  return option ? option.label : role
+}
+
+async function loadGifResults(query = '') {
+  if (!showPicker.value || pickerMode.value !== 'gif') {
+    return
+  }
+  if (!gifSearchAvailable) {
+    gifResults.value = gifLibrary
+    gifError.value = ''
+    return
+  }
+  loadingGifs.value = true
+  gifError.value = ''
+  try {
+    const gifs = await fetchGifs({ query, limit: 30 })
+    gifResults.value = gifs.length ? gifs : gifLibrary
+  } catch (error) {
+    gifResults.value = gifLibrary
+    gifError.value = "Impossible de charger les GIFs."
+  } finally {
+    loadingGifs.value = false
+  }
+}
+
+
+function limitDraft() {
+
+  if (messageInput.value.length > 2000) {
+
+    messageInput.value = messageInput.value.slice(0, 2000)
+
+  }
+
+}
+
+
+
+async function sendMessage() {
+  if (!selectedConversationId.value || !canSend.value) return
+  if (composerState.mode === 'edit' && composerState.targetMessageId) {
+    await submitMessageEdit()
+    return
+  }
+  if (hasAttachmentInProgress.value) {
+    attachmentError.value = 'Sélectionnez une conversation avant d\'ajouter un fichier.'
+    return
+  }
+  if (pendingAttachments.value.some((entry) => entry.status === 'error')) {
+    attachmentError.value = 'Retirez ou renvoyez les fichiers en erreur avant l\'envoi.'
+    return
+  }
+  attachmentError.value = ''
+  const attachmentsPayload = readyAttachments.value
+    .map((entry) => entry.descriptor?.upload_token)
+    .filter(Boolean)
+    .map((token) => ({ upload_token: token }))
+  const draftContent = messageInput.value.trim()
+  const payload = {
+    content: draftContent,
+    attachments: attachmentsPayload,
+    reply_to_message_id: composerState.replyTo ? composerState.replyTo.id : null,
+    forward_message_id: composerState.forwardFrom ? composerState.forwardFrom.id : null,
+  }
+  const optimisticId = generateLocalId()
+  const optimisticMessage = {
+    id: optimisticId,
+    conversationId: selectedConversationId.value,
+    content: draftContent,
+    preview: draftContent.slice(0, 120),
+    displayName: 'Vous',
+    sentByMe: true,
+    createdAt: new Date(),
+    deliveryState: 'queued',
+    reactions: [],
+    pinned: false,
+    pinnedAt: null,
+    pinnedBy: null,
+    isSystem: false,
+    deleted: false,
+    attachments: mapOptimisticAttachments(readyAttachments.value),
+    replyTo: cloneComposerReference(composerState.replyTo),
+    forwardFrom: cloneComposerReference(composerState.forwardFrom),
+    localOnly: true,
+  }
+  messages.value.push(optimisticMessage)
+  optimisticMessageIds.add(optimisticId)
+  const previousInputValue = messageInput.value
+  messageInput.value = ''
+  await nextTick()
+  scrollToBottom()
+  sending.value = true
+  try {
+    const { data } = await api.post(`/conversations/${selectedConversationId.value}/messages`, payload)
+    const message = normalizeMessage(data)
+    message.sentByMe = true
+    resolveOptimisticMessage(optimisticId, message)
+    showPicker.value = false
+    emojiSearch.value = ''
+    gifSearch.value = ''
+    gifError.value = ''
+    loadingGifs.value = false
+    gifResults.value = gifLibrary.slice()
+    pickerMode.value = 'emoji'
+    clearPendingAttachments()
+    resetComposerState()
+    const meta = ensureMeta(selectedConversationId.value)
+    meta.lastPreview = message.preview
+    meta.lastActivity = message.createdAt
+    meta.unreadCount = 0
+    await loadUnreadSummary()
+  } catch (err) {
+    optimisticMessageIds.delete(optimisticId)
+    removeMessageById(optimisticId)
+    messageInput.value = previousInputValue
+    messageError.value = extractError(err, "Impossible d'envoyer le message.")
+  } finally {
+    sending.value = false
+  }
+}
+
+async function submitMessageEdit() {
+  if (!selectedConversationId.value || !composerState.targetMessageId) return
+  sending.value = true
+  try {
+    const data = await editConversationMessage(selectedConversationId.value, composerState.targetMessageId, {
+      content: messageInput.value.trim(),
+    })
+    const message = normalizeMessage(data)
+    message.sentByMe = true
+    applyMessageUpdate(message)
+    messageInput.value = ''
+    resetComposerState()
+    showPicker.value = false
+  } catch (err) {
+    messageError.value = extractError(err, 'Impossible de modifier le message.')
+  } finally {
+    sending.value = false
+  }
+}
+
+
+function connectRealtime(convId) {
+
+  if (!authToken.value) {
+
+    connectionStatus.value = 'idle'
+
+    return
+
+  }
+
+  connectionStatus.value = 'connecting'
+
+  socketRef.value = createConversationSocket(convId, {
+
+    token: authToken.value,
+
+    onOpen: () => (connectionStatus.value = 'connected'),
+
+    onError: () => (connectionStatus.value = 'error'),
+
+    onClose: () => (connectionStatus.value = 'idle'),
+
+    onEvent: (payload) => {
+
+      if (!payload || typeof payload !== 'object') return
+
+      if (payload.event === 'ready') {
+
+        connectionStatus.value = 'connected'
+
+        return
+
+      }
+
+      if (payload.event === 'message' || payload.event === 'message.updated') {
+        handleIncomingRealtime(payload)
+      }
+    },
+
+  })
+
+}
+
+
+
+function disconnectRealtime() {
+  if (socketRef.value) {
+    socketRef.value.close()
+    socketRef.value = null
+  }
+  connectionStatus.value = 'idle'
+}
+
+function handleIncomingRealtime(payload) {
+  const type = typeof payload?.event === 'string' ? payload.event : 'message'
+  const message = normalizeMessage(payload)
+  const meta = ensureMeta(message.conversationId)
+  if (typeof message.streamPosition === 'number') {
+    pagination.afterCursor = pagination.afterCursor
+      ? Math.max(pagination.afterCursor, message.streamPosition)
+      : message.streamPosition
+  }
+  if (type === 'message') {
+    meta.lastPreview = message.preview
+    meta.lastActivity = message.createdAt
+  }
+  const isSameConversation = message.conversationId === selectedConversationId.value
+  const shouldNotify = type === 'message' && !message.sentByMe && !message.isSystem && !message.deleted
+  if (isSameConversation) {
+    applyMessageUpdate(message)
+    if (shouldNotify) {
+      markConversationAsRead(message.conversationId, [message.id]).catch(() => {})
+    }
+  } else if (shouldNotify) {
+    incrementUnreadCounter(message.conversationId)
+  }
+  if (
+    shouldNotify &&
+    (!isSameConversation || (typeof document !== 'undefined' && (document.hidden || !document.hasFocus())))
+  ) {
+    notifyNewIncomingMessage(message)
+  }
+}
+
+function onThreadScroll() {
+  const el = messageScroller.value
+  if (!el || loadingOlderMessages.value || !pagination.hasMoreBefore) return
+  if (el.scrollTop < 120) {
+    loadOlderMessages()
+  }
+}
+
+function scrollToBottom() {
+  const el = messageScroller.value
+  if (el) el.scrollTop = el.scrollHeight
+}
+
+
+function onAvatarFailure(convId) {
+
+  const meta = ensureMeta(convId)
+
+  meta.avatarUrl = null
+
+}
+
+
+
+function emitActiveConversation(convId) {
+
+  window.dispatchEvent(new CustomEvent('cova:active-conversation', { detail: { convId } }))
+
+}
+
+
+
+function goToNewConversation() {
+
+  router.push({ path: '/dashboard/messages/new' }).catch(() => {})
+
+}
+
+
+
+function togglePicker() {
+  showPicker.value = !showPicker.value
+  if (showPicker.value) {
+    pickerMode.value = 'emoji'
+    emojiSearch.value = ''
+    gifSearch.value = ''
+    gifError.value = ''
+  } else {
+    emojiSearch.value = ''
+    gifSearch.value = ''
+    gifError.value = ''
+    loadingGifs.value = false
+    gifResults.value = gifLibrary.slice()
+  }
+}
+
+function setPickerMode(mode) {
+  pickerMode.value = mode
+  showPicker.value = true
+  if (mode !== 'emoji') {
+    emojiSearch.value = ''
+  }
+  if (mode === 'gif') {
+    loadGifResults(gifSearch.value)
+  }
+}
+
+function resetComposerState() {
+  composerState.mode = 'new'
+  composerState.targetMessageId = null
+  composerState.replyTo = null
+  composerState.forwardFrom = null
+}
+
+function startReply(message) {
+  if (!message) return
+  composerState.mode = 'reply'
+  composerState.replyTo = message
+  composerState.forwardFrom = null
+  composerState.targetMessageId = null
+}
+
+function startForward(message) {
+  if (!message) return
+  composerState.mode = 'forward'
+  composerState.forwardFrom = message
+  composerState.replyTo = null
+  composerState.targetMessageId = null
+  if (!messageInput.value) {
+    messageInput.value = message.content || ''
+  }
+}
+
+function startEdit(message) {
+  if (!message) return
+  composerState.mode = 'edit'
+  composerState.targetMessageId = message.id
+  composerState.replyTo = null
+  composerState.forwardFrom = null
+  messageInput.value = message.content || ''
+  clearPendingAttachments()
+}
+
+function cancelComposerContext() {
+  resetComposerState()
+}
+
+function toggleSearchPanel() {
+  showSearchPanel.value = !showSearchPanel.value
+  if (!showSearchPanel.value) {
+    resetSearchPanel()
+  }
+}
+
+function closeSearchPanel() {
+  showSearchPanel.value = false
+  resetSearchPanel()
+}
+
+function resetSearchPanel() {
+  messageSearch.query = ''
+  messageSearch.results = []
+  messageSearch.error = ''
+}
+
+async function performMessageSearch() {
+  if (!selectedConversationId.value) return
+  const query = messageSearch.query.trim()
+  if (!query) {
+    messageSearch.error = 'Entrez un mot-clé.'
+    messageSearch.results = []
+    return
+  }
+  messageSearch.loading = true
+  messageSearch.error = ''
+  try {
+    const data = await searchConversationMessages(selectedConversationId.value, { query, limit: 50 })
+    messageSearch.results = Array.isArray(data) ? data.map(normalizeMessage) : []
+  } catch (err) {
+    messageSearch.error = extractError(err, 'Recherche impossible.')
+  } finally {
+    messageSearch.loading = false
+  }
+}
+
+async function jumpToSearchResult(result) {
+  if (!result) return
+  if (result.conversationId && result.conversationId !== selectedConversationId.value) {
+    await selectConversation(result.conversationId)
+  }
+  const streamPosition = result.streamPosition ?? null
+  await ensureMessageVisible(result.id, streamPosition)
+  await nextTick()
+  scrollToMessage(result.id)
+  showSearchPanel.value = false
+  resetSearchPanel()
+}
+
+function triggerAttachmentPicker() {
+  attachmentError.value = ''
+  if (!selectedConversationId.value) {
+    attachmentError.value = 'Sélectionnez une conversation avant d\'ajouter un fichier.'
+    return
+  }
+  if (attachmentInput.value) {
+    attachmentInput.value.value = ''
+    attachmentInput.value.click()
+  }
+}
+function onAttachmentChange(event) {
+  const files = Array.from(event.target?.files || [])
+  if (!files.length) return
+  files.forEach((file) => queueAttachment(file))
+}
+
+function queueAttachment(file) {
+  if (!file) return
+  const entry = reactive({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name: file.name,
+    size: file.size,
+    type: file.type,
+    file,
+    status: 'uploading',
+    progress: 0,
+    descriptor: null,
+    error: '',
+  })
+  pendingAttachments.value = [...pendingAttachments.value, entry]
+  uploadAttachmentFile(entry)
+}
+
+async function uploadAttachmentFile(entry) {
+  if (!selectedConversationId.value) {
+    entry.status = 'error'
+    entry.error = 'Aucune conversation active.'
+    return
+  }
+  attachmentError.value = ''
+  try {
+    const descriptor = await uploadAttachment(selectedConversationId.value, entry.file, {
+      onUploadProgress: (event) => {
+        if (!event || !event.total) return
+        entry.progress = Math.min(100, Math.round((event.loaded / event.total) * 100))
+      },
+    })
+    entry.descriptor = descriptor
+    entry.status = 'ready'
+    entry.progress = 100
+  } catch (err) {
+    entry.status = 'error'
+    entry.error = extractError(err, 'Impossible de téléverser le fichier.')
+    attachmentError.value = entry.error
+  }
+}
+
+function removeAttachment(entryId) {
+  pendingAttachments.value = pendingAttachments.value.filter((item) => item.id !== entryId)
+}
+
+function clearPendingAttachments() {
+  pendingAttachments.value = []
+  attachmentError.value = ''
+}
+
+async function confirmDeleteMessage(message) {
+  if (!message || !selectedConversationId.value) return
+  const proceed = window.confirm('Supprimer ce message pour tous les participants ?')
+  if (!proceed) return
+  try {
+    const data = await deleteConversationMessage(selectedConversationId.value, message.id)
+    applyMessageUpdate(normalizeMessage(data))
+  } catch (err) {
+    messageError.value = extractError(err, "Impossible de supprimer le message.")
+  }
+}
+
+function syncConversationFormFromSelected() {
+  const conv = selectedConversation.value
+  if (!conv) return
+  conversationForm.title = conv.title || ''
+  conversationForm.topic = conv.topic || ''
+  conversationForm.archived = Boolean(conv.archived)
+}
+
+async function openConversationPanel() {
+  if (!selectedConversation.value) return
+  conversationInfoError.value = ''
+  syncConversationFormFromSelected()
+  showConversationPanel.value = true
+  if (canManageConversation.value && selectedConversationId.value) {
+    await loadConversationInvites(selectedConversationId.value)
+  }
+}
+
+function closeConversationPanel() {
+  showConversationPanel.value = false
+  invites.value = []
+}
+
+async function saveConversationSettings() {
+  if (!selectedConversationId.value) return
+  savingConversation.value = true
+  conversationInfoError.value = ''
+  try {
+    const payload = {
+      title: conversationForm.title.trim() || null,
+      topic: conversationForm.topic.trim() || null,
+      archived: conversationForm.archived,
+    }
+    const data = await updateConversation(selectedConversationId.value, payload)
+    applyConversationPatch(data)
+  } catch (err) {
+    conversationInfoError.value = extractError(err, "Impossible d'enregistrer la conversation.")
+  } finally {
+    savingConversation.value = false
+  }
+}
+
+async function leaveCurrentConversation() {
+  if (!selectedConversationId.value) return
+  leavingConversation.value = true
+  conversationInfoError.value = ''
+  const convId = selectedConversationId.value
+  try {
+    await leaveConversation(convId)
+    conversations.value = conversations.value.filter((conv) => conv.id !== convId)
+    delete conversationMeta[convId]
+    showConversationPanel.value = false
+    messages.value = []
+    disconnectRealtime()
+    selectedConversationId.value = null
+    const fallback = conversations.value[0]
+    if (fallback) {
+      selectConversation(fallback.id)
+    }
+  } catch (err) {
+    conversationInfoError.value = extractError(err, 'Impossible de quitter la conversation.')
+  } finally {
+    leavingConversation.value = false
+  }
+}
+
+async function loadConversationInvites(convId) {
+  if (!canManageConversation.value || !convId) {
+    invites.value = []
+    return
+  }
+  loadingInvites.value = true
+  conversationInfoError.value = ''
+  try {
+    const data = await listConversationInvites(convId)
+    invites.value = Array.isArray(data) ? data.map((invite) => mapInvite(invite)).filter(Boolean) : []
+  } catch (err) {
+    conversationInfoError.value = extractError(err, 'Impossible de charger les invitations.')
+  } finally {
+    loadingInvites.value = false
+  }
+}
+
+async function submitInvite() {
+  if (!selectedConversationId.value || !inviteForm.email.trim()) return
+  inviteBusy.value = true
+  conversationInfoError.value = ''
+  try {
+    const payload = {
+      email: inviteForm.email.trim(),
+      role: inviteForm.role,
+      expires_in_hours: inviteForm.expiresInHours,
+    }
+    const data = await createConversationInvite(selectedConversationId.value, payload)
+    const mapped = mapInvite(data)
+    if (mapped) {
+      invites.value = [mapped, ...invites.value]
+    }
+    inviteForm.email = ''
+  } catch (err) {
+    conversationInfoError.value = extractError(err, "Impossible de créer l'invitation.")
+  } finally {
+    inviteBusy.value = false
+  }
+}
+
+async function revokeInvite(inviteId) {
+  if (!selectedConversationId.value || !inviteId) return
+  inviteRevokeBusy[inviteId] = true
+  conversationInfoError.value = ''
+  try {
+    await revokeConversationInvite(selectedConversationId.value, inviteId)
+    invites.value = invites.value.filter((invite) => invite.id !== inviteId)
+  } catch (err) {
+    conversationInfoError.value = extractError(err, "Impossible de révoquer l'invitation.")
+  } finally {
+    delete inviteRevokeBusy[inviteId]
+  }
+}
+
+function formatInviteStatus(invite) {
+  if (!invite) return ''
+  if (invite.acceptedAt) {
+    return `Acceptée ${formatAbsolute(invite.acceptedAt)}`
+  }
+  if (invite.expiresAt) {
+    return `Expire ${formatAbsolute(invite.expiresAt)}`
+  }
+  return ''
+}
+
+async function updateMemberRole(member, role) {
+  if (!selectedConversationId.value || !member?.id || !role || member.role === role) return
+  memberBusy[member.id] = true
+  conversationInfoError.value = ''
+  try {
+    const data = await updateConversationMember(selectedConversationId.value, member.id, { role })
+    applyMemberPayload(data)
+  } catch (err) {
+    conversationInfoError.value = extractError(err, "Impossible de mettre à jour le membre.")
+  } finally {
+    delete memberBusy[member.id]
+  }
+}
+
+async function muteMember(member, minutes = 60) {
+  if (!selectedConversationId.value || !member?.id) return
+  memberBusy[member.id] = true
+  conversationInfoError.value = ''
+  const mutedUntil = new Date(Date.now() + minutes * 60000).toISOString()
+  try {
+    const data = await updateConversationMember(selectedConversationId.value, member.id, { muted_until: mutedUntil })
+    applyMemberPayload(data)
+  } catch (err) {
+    conversationInfoError.value = extractError(err, "Impossible de mettre le membre en sourdine.")
+  } finally {
+    delete memberBusy[member.id]
+  }
+}
+
+async function unmuteMember(member) {
+  if (!selectedConversationId.value || !member?.id) return
+  memberBusy[member.id] = true
+  conversationInfoError.value = ''
+  try {
+    const data = await updateConversationMember(selectedConversationId.value, member.id, { muted_until: null })
+    applyMemberPayload(data)
+  } catch (err) {
+    conversationInfoError.value = extractError(err, "Impossible de rétablir le membre.")
+  } finally {
+    delete memberBusy[member.id]
+  }
+}
+
+async function removeMember(member) {
+  if (!selectedConversationId.value || !member?.id) return
+  memberBusy[member.id] = true
+  conversationInfoError.value = ''
+  try {
+    const data = await updateConversationMember(selectedConversationId.value, member.id, { state: 'left' })
+    applyMemberPayload(data)
+  } catch (err) {
+    conversationInfoError.value = extractError(err, 'Impossible de retirer le membre.')
+  } finally {
+    delete memberBusy[member.id]
+  }
+}
+
+
+function addEmoji(emoji) {
+  if (!emoji) return
+  const separator = messageInput.value && !messageInput.value.endsWith(' ') ? ' ' : ''
+  messageInput.value = `${messageInput.value || ''}${separator}${emoji} `
+  showPicker.value = false
+  emojiSearch.value = ''
+  gifSearch.value = ''
+  limitDraft()
+}
+
+function insertGif(gif) {
+  if (!gif?.url) return
+  const base = messageInput.value ? `${messageInput.value.trim()} ` : ''
+  messageInput.value = `${base}${gif.url} `
+  showPicker.value = false
+  gifSearch.value = ''
+  gifError.value = ''
+  limitDraft()
+}
+
+
+
+
+async function copyMessage(message) {
+
+  if (!message?.content) return
+
+  try {
+
+    if (navigator?.clipboard?.writeText) {
+
+      await navigator.clipboard.writeText(message.content)
+
+      copiedMessageId.value = message.id
+
+      if (copyTimer) clearTimeout(copyTimer)
+
+      copyTimer = setTimeout(() => {
+
+        copiedMessageId.value = null
+
+        copyTimer = null
+
+      }, 1500)
+
+    }
+
+  } catch (err) {
+
+    console.warn('Impossible de copier le message', err)
+
+  }
+
+}
+
+
+
+function generateLocalId() {
+
+  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+
+    return globalThis.crypto.randomUUID()
+
+  }
+
+  return `msg_${Math.random().toString(36).slice(2, 10)}`
+
+}
+
+
+
+function queueToastNotification({ title, body, conversationId, messageId }) {
+  const toast = {
+    id: generateLocalId(),
+    title: title || 'Nouveau message',
+    body: body || '',
+    conversationId,
+    messageId,
+    createdAt: new Date(),
+  }
+  messageToasts.value = [toast, ...messageToasts.value].slice(0, 4)
+  if (toastTimers.has(toast.id)) {
+    clearTimeout(toastTimers.get(toast.id))
+  }
+  toastTimers.set(
+    toast.id,
+    setTimeout(() => {
+      dismissToast(toast.id)
+    }, 7000),
+  )
+}
+
+
+
+function dismissToast(id) {
+  messageToasts.value = messageToasts.value.filter((toast) => toast.id !== id)
+  if (toastTimers.has(id)) {
+    clearTimeout(toastTimers.get(id))
+    toastTimers.delete(id)
+  }
+}
+
+
+
+async function openToastConversation(toast) {
+  if (!toast?.conversationId) return
+  await selectConversation(toast.conversationId)
+  dismissToast(toast.id)
+  await nextTick()
+  if (toast.messageId) {
+    await ensureMessageVisible(toast.messageId)
+  }
+}
+
+
+
+function notifyNewIncomingMessage(message) {
+  if (!message || message.sentByMe || message.deleted || message.isSystem) return
+  const preview =
+    message.preview ||
+    (message.content ? String(message.content).slice(0, 140) : 'Nouveau message securise.')
+  const shouldToast = message.conversationId !== selectedConversationId.value
+  const browserAllowed =
+    browserNotificationsEnabled.value &&
+    typeof Notification !== 'undefined' &&
+    Notification.permission === 'granted'
+  const docHidden =
+    typeof document !== 'undefined' && (document.hidden || !document.hasFocus())
+  if (shouldToast) {
+    queueToastNotification({
+      title: message.displayName || 'Nouveau message',
+      body: preview,
+      conversationId: message.conversationId,
+      messageId: message.id,
+    })
+  }
+  const shouldBrowser = browserAllowed && (docHidden || shouldToast)
+  if (shouldBrowser) {
+    triggerBrowserNotification(message, preview)
+  }
+}function triggerBrowserNotification(message, body) {
+  if (!browserNotificationsEnabled.value || typeof Notification === 'undefined') return
+  if (Notification.permission === 'granted') {
+    const notification = new Notification(message.displayName || 'Messagerie securisee', {
+      body,
+      tag: message.conversationId,
+    })
+    notification.onclick = () => {
+      window.focus()
+      openToastConversation({ conversationId: message.conversationId, id: message.id, messageId: message.id })
+      notification.close()
+    }
+    return
+  }
+  if (Notification.permission === 'default' && !notificationPermissionRequestPending) {
+    notificationPermissionRequestPending = true
+    Notification.requestPermission()
+      .catch(() => {})
+      .finally(() => {
+        notificationPermissionRequestPending = false
+      })
+  }
+}function cloneComposerReference(target) {
+  if (!target) return null
+  return {
+    id: target.id,
+    displayName: target.displayName,
+    authorDisplayName: target.authorDisplayName || target.displayName || target.email || 'Participant',
+    excerpt: target.excerpt || messagePreviewText(target),
+    deleted: Boolean(target.deleted),
+  }
+}
+
+
+
+function mapOptimisticAttachments(entries) {
+  return entries.map((entry) => ({
+    id: entry.descriptor?.id || entry.id,
+    fileName: entry.name || entry.descriptor?.file_name || 'Pièce jointe',
+    mimeType: entry.type || entry.descriptor?.mime_type || 'Fichier',
+    sizeBytes: entry.size,
+    downloadUrl: entry.descriptor?.download_url || null,
+  }))
+}
+
+
+
+function removeMessageById(messageId) {
+  const idx = messages.value.findIndex((msg) => msg.id === messageId)
+  if (idx !== -1) {
+    messages.value.splice(idx, 1)
+  }
+}
+
+
+
+function resolveOptimisticMessage(localId, nextMessage) {
+  optimisticMessageIds.delete(localId)
+  removeMessageById(localId)
+  applyMessageUpdate(nextMessage)
+}
+
+
+
+function isPinning(messageId) {
+  return Boolean(pinBusy[messageId])
+}
+
+
+function isReactionPending(messageId, emoji) {
+  return Boolean(reactionBusy[`${messageId}:${emoji}`])
+}
+
+
+
+function toggleReactionPicker(messageId) {
+  if (!messageId) return
+  reactionPickerFor.value = reactionPickerFor.value === messageId ? null : messageId
+  if (reactionPickerFor.value) {
+    messageMenuOpen.value = null
+  }
+}
+
+
+
+function toggleMessageMenu(messageId) {
+  if (!messageId) return
+  messageMenuOpen.value = messageMenuOpen.value === messageId ? null : messageId
+  if (messageMenuOpen.value) {
+    reactionPickerFor.value = null
+  }
+}
+
+
+
+function closeTransientMenus() {
+  reactionPickerFor.value = null
+  messageMenuOpen.value = null
+}
+
+
+
+async function handlePinToggle(message) {
+  await togglePin(message)
+  closeTransientMenus()
+}
+
+
+
+async function handleReactionSelection(message, emoji) {
+  await toggleReaction(message, emoji)
+  reactionPickerFor.value = null
+}
+
+
+
+async function togglePin(message) {
+
+  if (!selectedConversationId.value) return
+
+  const messageId = message.id
+
+  pinBusy[messageId] = true
+
+  try {
+
+    const data = message.pinned
+
+      ? await unpinMessage(selectedConversationId.value, messageId)
+
+      : await pinMessage(selectedConversationId.value, messageId)
+
+    applyMessageUpdate(normalizeMessage(data))
+
+  } catch (err) {
+
+    messageError.value = extractError(err, "Impossible de mettre à jour l'épingle.")
+
+  } finally {
+
+    pinBusy[messageId] = false
+
+  }
+
+}
+
+
+
+async function toggleReaction(message, emoji) {
+
+  if (!selectedConversationId.value || !emoji) return
+
+  const key = `${message.id}:${emoji}`
+
+  reactionBusy[key] = true
+
+  try {
+
+    const data = await updateMessageReaction(selectedConversationId.value, message.id, { emoji })
+
+    applyMessageUpdate(normalizeMessage(data))
+
+  } catch (err) {
+
+    console.warn('Impossible de mettre à jour la réaction', err)
+
+  } finally {
+
+    reactionBusy[key] = false
+
+  }
+
+}
+
+
+
+function formatTime(date) {
+
+  if (!(date instanceof Date)) return ''
+
+  return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+
+}
+
+
+
+function formatListTime(date) {
+
+  if (!(date instanceof Date)) date = new Date(date || Date.now())
+
+  return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+
+}
+
+
+
+function formatAbsolute(date) {
+  if (!(date instanceof Date)) return ''
+  return date.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+function formatFileSize(bytes) {
+  if (typeof bytes !== 'number' || Number.isNaN(bytes)) return ''
+  if (bytes < 1024) return `${bytes} o`
+  const units = ['Ko', 'Mo', 'Go', 'To']
+  let size = bytes / 1024
+  let unit = 0
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024
+    unit += 1
+  }
+  return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[unit]}`
+}
+
+function downloadAttachment(attachment) {
+  if (!attachment || !attachment.downloadUrl) return
+  window.open(attachment.downloadUrl, '_blank', 'noopener')
+}
+
+function messagePreviewText(message) {
+
+  if (!message) return ''
+
+  if (message.excerpt) return message.excerpt
+
+  if (message.content) return String(message.content).slice(0, 120)
+
+  if (Array.isArray(message.attachments) && message.attachments.length) {
+
+    return `${message.attachments.length} piece(s) jointe(s)`
+
+  }
+
+  if (typeof message.attachments === 'number' && message.attachments > 0) {
+
+    return `${message.attachments} piece(s) jointe(s)`
+
+  }
+
+  return ''
+
+}
+
+
+
+function messageStatusLabel(message) {
+
+  if (!message.deliveryState) {
+
+    return message.sentByMe ? 'Envoi' : ''
+
+  }
+
+  switch (message.deliveryState) {
+
+    case 'read':
+
+      return 'Lu'
+
+    case 'delivered':
+
+      return 'Distribué'
+
+    case 'queued':
+
+      return 'Envoi'
+
+    default:
+
+      return ''
+
+  }
+
+}
+
+
+
+function messageStatusClass(message) {
+
+  switch (message.deliveryState) {
+
+    case 'read':
+
+      return 'state-read'
+
+    case 'delivered':
+
+      return 'state-delivered'
+
+    case 'queued':
+
+      return 'state-queued'
+
+    default:
+
+      return ''
+
+  }
+
+}
+
+
+
+function messageStatusDetail(message) {
+  if (message.deleted) return 'Supprimé'
+  if (!message.sentByMe) return ''
+  if (message.readAt) {
+    return `Lu ${formatTime(message.readAt)}`
+  }
+  if (message.deliveredAt) {
+
+    return `Distribué ${formatTime(message.deliveredAt)}`
+
+  }
+
+  return ''
+
+}
+
+
+
+function messageSecurityLabel(message) {
+
+  const scheme = message.security?.scheme || 'confidentiel'
+
+  if (scheme === 'plaintext') return 'Chiffrage applicatif'
+
+  return `Schéma ${scheme}`
+
+}
+
+
+
+function messageSecurityTooltip(message) {
+
+  const metadata = message.security?.metadata || {}
+
+  const lines = Object.entries(metadata).map(([key, value]) => `${key}: ${value}`)
+
+  return [`Schéma: ${message.security?.scheme || 'n/a'}`, ...lines].join('\n')
+
+}
+
+
+
+function scrollToMessage(messageId) {
+
+  const el = document.getElementById(`message-${messageId}`)
+
+  if (el) {
+
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+    el.classList.add('msg-bubble--focus')
+
+    setTimeout(() => {
+
+      el.classList.remove('msg-bubble--focus')
+
+    }, 1200)
+
+  }
+
+}
+
+
+
+function extractError(err, fallback) {
+  if (!err) return fallback
+  if (typeof err === 'string') return err
+  const data = err.response?.data
+  const detail =
+    (typeof data?.detail === 'string' && data.detail) ||
+    (Array.isArray(data?.detail) && data.detail.length && data.detail[0]) ||
+    data?.message ||
+    data?.error ||
+    err.message
+  if (typeof detail === 'string' && detail.trim()) return detail.trim()
+  return fallback
+}
+
+
+
+function handleDocumentClick() {
+  if (!reactionPickerFor.value && !messageMenuOpen.value) return
+  closeTransientMenus()
+}
+
+
+
+function handleDocumentKeydown(event) {
+  if (event.key !== 'Escape') return
+  if (!reactionPickerFor.value && !messageMenuOpen.value) return
+  event.preventDefault()
+  closeTransientMenus()
+}
+
+
+
+watch(
+  browserNotificationsEnabled,
+  (enabled) => {
+    if (
+      enabled &&
+      typeof Notification !== 'undefined' &&
+      Notification.permission === 'default' &&
+      !notificationPermissionRequestPending
+    ) {
+      notificationPermissionRequestPending = true
+      Notification.requestPermission()
+        .catch(() => {})
+        .finally(() => {
+          notificationPermissionRequestPending = false
+        })
+    }
+  },
+  { immediate: true },
+)
+
+onMounted(async () => {
+  await loadConversations()
+  if (typeof window !== 'undefined') {
+    document.addEventListener('click', handleDocumentClick)
+    document.addEventListener('keydown', handleDocumentKeydown)
+    window.addEventListener('storage', handleBrowserPrefStorage)
+    window.addEventListener('cova:browser-notifications', handleBrowserPrefBroadcast)
+  }
+  syncBrowserNotificationPreference()
+})
+
+
+
+onBeforeUnmount(() => {
+  disconnectRealtime()
   if (gifSearchTimer) {
     clearTimeout(gifSearchTimer)
-    gifSearchTimer = null
   }
-  if (gifController) {
-    gifController.abort()
-    gifController = null
+  toastTimers.forEach((timer) => clearTimeout(timer))
+  toastTimers.clear()
+  if (typeof window !== 'undefined') {
+    document.removeEventListener('click', handleDocumentClick)
+    document.removeEventListener('keydown', handleDocumentKeydown)
+    window.removeEventListener('storage', handleBrowserPrefStorage)
+    window.removeEventListener('cova:browser-notifications', handleBrowserPrefBroadcast)
   }
-  pendingFiles.value.forEach(revokePendingPreview)
-  pendingFiles.value = []
-  const cache = attachmentPreviews.value || {}
-  for (const url of Object.values(cache)) {
-    try {
-      window.URL.revokeObjectURL(url)
-    } catch {}
-  }
-  for (const timer of callWindowWatchers.values()) {
-    clearInterval(timer)
-  }
-  callWindowWatchers.clear()
-  if (typingClearTimer) {
-    clearTimeout(typingClearTimer)
-    typingClearTimer = null
-  }
-  if (conversationsRefreshTimer) {
-    clearTimeout(conversationsRefreshTimer)
-    conversationsRefreshTimer = null
-  }
-  actionModal.open = false
-  actionModal.loading = false
-  actionModal.error = ''
-  document.removeEventListener('visibilitychange', visibilityHandler)
-  broadcastActiveConversation(null)
 })
 </script>
 
 <style scoped>
-/* Create conversation modal styles */
-.modal-backdrop-custom .modal-dialog {
-  width: clamp(900px, 85vw, 1200px);
-  max-width: none;
-}
-.glass-modal {
-  border: 1px solid rgba(13, 110, 253, 0.12);
-  border-radius: 20px;
-  box-shadow: 0 20px 60px rgba(16, 24, 40, 0.35);
-  background: #fff;
-  height: clamp(620px, 80vh, 780px);
-  display: flex;
-  flex-direction: column;
-}
-.gradient-header {
-  background: linear-gradient(135deg, #2157d3 0%, #1a5ecc 50%, #0d6efd 100%);
-}
-.input-icon {
-  position: relative;
-}
-.input-icon i {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #8aa2d3;
-}
-.modal-body {
-  flex: 1 1 auto;
-  overflow: hidden;
-}
-.contact-list {
-  max-height: calc(80vh - 200px);
-  overflow-y: auto;
-  padding-right: 4px;
-}
-.contact-item {
-  padding: 0.55rem 0.5rem;
-  border-bottom: 1px solid #f1f3f7;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
-}
-.contact-item:hover {
-  background: #f4f8ff;
-}
-.contact-item.selected {
-  background: #eef4ff;
-  border-color: #d9e6ff;
-}
-.check-circle {
-  width: 20px;
-  height: 20px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: #e9eefb;
-  color: #668;
-  font-size: 0.85rem;
-}
-.check-circle.checked {
-  background: #0d6efd;
-  color: #fff;
-  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
-}
-.contact-item:last-child {
-  border-bottom: none;
-}
-.avatar-md {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  object-fit: cover;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
-}
-.avatar-md-placeholder {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #e9eefb;
-  color: #506;
-  font-weight: 600;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-}
-.selected-chips {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.35rem 0.7rem;
-  border: 1px solid #e8ecf5;
-  border-radius: 999px;
-  background: #f8faff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-}
-.chip-avatar-lg {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-.chip-initials {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: #e9eefb;
-  color: #506;
-  font-weight: 600;
-  border-radius: 50%;
-  width: 24px;
-  height: 24px;
-}
-.step-label {
-  font-weight: 600;
-  color: #1f3b76;
-  letter-spacing: 0.2px;
-}
-.btn-soft {
-  border: 1px solid transparent;
-}
-.btn-soft-primary {
-  background: #eaf1ff;
-  color: #0d6efd;
-  border-color: #dbe7ff;
-}
-.btn-soft-primary:hover {
-  background: #e0ebff;
-  color: #0a58ca;
-}
-.btn-soft-danger {
-  background: #ffe9ea;
-  color: #dc3545;
-  border-color: #ffd6d9;
-}
-.btn-soft-danger:hover {
-  background: #ffdfe2;
-  color: #bb2d3b;
-}
-.btn-create {
-  background: linear-gradient(135deg, #2157d3, #0d6efd);
-  color: #fff;
-  border: none;
-  box-shadow: 0 10px 24px rgba(13, 110, 253, 0.35);
-  padding: 0.6rem 1.1rem;
-  font-weight: 600;
-}
-.btn-create:disabled {
-  opacity: 0.65;
-  box-shadow: none;
+
+.msg-shell {
+
+  background: #eef1f8;
+
+  padding: 1.25rem 1.5rem;
+
+  border-radius: 32px;
+
+  box-shadow: 0 25px 60px rgba(12, 24, 56, 0.08);
+
 }
 
-/* Chat styles */
-.chat-container {
-  position: relative;
-  background: rgba(255, 255, 255, 0.95);
+
+
+.msg-layout {
+
+  display: grid;
+
+  grid-template-columns: 280px minmax(0, 1fr);
+
+  height: calc(100vh - 70px);
+
+  background: transparent;
+
+  column-gap: 1.25rem;
+
+}
+
+
+
+.msg-nav {
+
+  background: #fff;
+
+  border-right: none;
+
+  display: flex;
+
+  flex-direction: column;
+
+  padding: 1.35rem 1.5rem;
+
+  gap: 0.9rem;
+
   border-radius: 28px;
-  border: 1px solid #d6def2;
-  box-shadow: 0 28px 60px rgba(15, 38, 105, 0.15);
+
+  box-shadow: 0 20px 50px rgba(15, 26, 48, 0.08);
+
+  min-height: 0;
+
+  height: 100%;
+
+}
+
+
+
+.msg-nav__header {
+
+  display: flex;
+
+  justify-content: space-between;
+
+  align-items: flex-start;
+
+  gap: 1rem;
+
+}
+
+
+
+.msg-nav__eyebrow {
+
+  text-transform: uppercase;
+
+  font-size: 0.78rem;
+
+  letter-spacing: 0.08em;
+
+  color: #7f8ca8;
+
+  margin-bottom: 0.15rem;
+
+}
+
+
+
+.msg-nav__header h2 {
+
+  font-size: 1.4rem;
+
+  font-weight: 700;
+
+  margin-bottom: 0.2rem;
+
+}
+
+
+
+.msg-nav__header p {
+
+  margin: 0;
+
+  font-size: 0.82rem;
+
+  color: #6d7894;
+
+}
+
+
+
+.msg-nav__action {
+
+  width: 40px;
+
+  height: 40px;
+
+  border-radius: 12px;
+
+  border: none;
+
+  background: #eef3ff;
+
+  color: #1b64f2;
+
+  display: grid;
+
+  place-items: center;
+
+  font-size: 1.1rem;
+
+}
+
+.msg-search {
+
+  position: relative;
+
+  display: block;
+
+}
+
+
+
+.msg-search i {
+
+  position: absolute;
+
+  left: 0.75rem;
+
+  top: 50%;
+
+  transform: translateY(-50%);
+
+  color: #9aa4be;
+
+}
+
+
+
+.msg-search input {
+
+  padding-left: 2.2rem;
+
+  border-radius: 999px;
+
+  border: 1px solid #d3daeb;
+
+}
+
+
+
+.msg-alert {
+
+  background: #fff4cd;
+
+  border-radius: 12px;
+
+  padding: 0.6rem 0.9rem;
+
+  font-size: 0.82rem;
+
+  color: #7c6225;
+
+}
+
+
+
+.msg-filters {
+
+  display: flex;
+
+  gap: 0.35rem;
+
+  flex-wrap: wrap;
+
+}
+
+
+
+.msg-filters.compact {
+
+  justify-content: space-between;
+
+}
+
+
+
+.msg-filter {
+
+  border: 1px solid #d9e2f4;
+
+  border-radius: 999px;
+
+  padding: 0.25rem 0.8rem;
+
+  font-size: 0.78rem;
+
+  display: inline-flex;
+
+  align-items: center;
+
+  gap: 0.35rem;
+
+  background: transparent;
+
+  color: #4a5773;
+
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+
+}
+
+
+
+.msg-filter.active {
+
+  background: #1b64f2;
+
+  color: #fff;
+
+  border-color: #1b64f2;
+
+  box-shadow: 0 8px 18px rgba(27, 100, 242, 0.2);
+
+}
+
+.msg-nav__list {
+
+  list-style: none;
+
+  margin: 0;
+
+  padding: 0 0.35rem 1rem 0;
+
+  flex: 1;
+
+  overflow-y: auto;
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 0.35rem;
+
+}
+
+
+
+.msg-nav__item {
+
+  width: 100%;
+
+  border: none;
+
+  background: transparent;
+
+  display: grid;
+
+  grid-template-columns: auto 1fr auto;
+
+  gap: 0.75rem;
+
+  align-items: center;
+
+  padding: 0.55rem 0.65rem;
+
+  border-radius: 18px;
+
+  transition: background 0.15s ease;
+
+}
+
+
+
+.msg-nav__item:hover {
+
+  background: #f5f8ff;
+
+}
+
+
+
+.msg-nav__item.active {
+
+  background: #e6eeff;
+
+}
+
+
+
+.msg-avatar {
+
+  width: 46px;
+
+  height: 46px;
+
+  border-radius: 50%;
+
+  background: #eef2ff;
+
+  display: grid;
+
+  place-items: center;
+
+  color: #1b64f2;
+
+  font-weight: 600;
+
+  overflow: hidden;
+
+}
+
+
+
+.msg-avatar img {
+
+  width: 100%;
+
+  height: 100%;
+
+  object-fit: cover;
+
+}
+
+
+
+.msg-item__body {
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 0.15rem;
+
+}
+
+
+
+.msg-item__title {
+
+  font-weight: 600;
+
+  color: #13224b;
+
+  font-size: 0.92rem;
+
+}
+
+
+
+.msg-item__preview {
+
+  font-size: 0.78rem;
+
+  color: #7e8aa8;
+
+  white-space: nowrap;
+
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+
+}
+
+
+
+.msg-item__meta {
+
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: flex-end;
+
+  gap: 0.25rem;
+
+  font-size: 0.7rem;
+
+  color: #7f8ca8;
+
+}
+
+.msg-badge {
+
+  background: #ff6b6b;
+
+  color: #fff;
+
+  border-radius: 999px;
+
+  padding: 0.1rem 0.45rem;
+
+  font-size: 0.7rem;
+
+  font-weight: 600;
+
+}
+
+
+
+.msg-empty-row {
+
+  text-align: center;
+
+  font-size: 0.82rem;
+
+  color: #6d7894;
+
+  padding: 0.6rem 0;
+
+}
+
+
+
+.msg-main {
+
+  background: linear-gradient(180deg, #f2f6ff 0%, #e7ecfb 40%, #f8f9ff 100%);
+
+  display: flex;
+
+  flex-direction: column;
+
+  position: relative;
+
+  min-height: 0;
+
+  border-radius: 30px;
+
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 20px 45px rgba(15, 26, 48, 0.06);
+
+}
+
+
+
+.msg-body {
+
+  flex: 1;
+
+  display: flex;
+
+  flex-direction: column;
+
+  min-height: 0;
+
+  overflow: hidden;
+
+  padding: 0 2.25rem 1.25rem;
+
+  gap: 1rem;
+
+}
+
+
+
+.msg-empty {
+
+  margin: auto;
+
+  max-width: 420px;
+
+  text-align: center;
+
+  background: #fff;
+
+  padding: 2rem;
+
+  border-radius: 20px;
+
+  box-shadow: 0 15px 40px rgba(15, 26, 48, 0.08);
+
+}
+
+
+
+.msg-empty h3 {
+
+  font-weight: 700;
+
+  margin-bottom: 0.75rem;
+
+}
+
+
+
+.msg-empty p {
+
+  color: #6d7894;
+
+  margin-bottom: 1.25rem;
+
+}
+
+
+
+.msg-main__header {
+
+  padding: 1.75rem 2rem 1.25rem;
+
+  display: flex;
+
+  justify-content: space-between;
+
+  align-items: center;
+
+  gap: 1rem;
+
+  border-bottom: 1px solid rgba(13, 110, 253, 0.1);
+
+}
+
+
+
+.msg-main__identity {
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 0.85rem;
+
+}
+
+
+
+.msg-main__avatar {
+
+  width: 48px;
+
+  height: 48px;
+
+  border-radius: 50%;
+
+  background: #e4eaff;
+
+  display: grid;
+
+  place-items: center;
+
+  font-weight: 600;
+
+  color: #1b64f2;
+
+  overflow: hidden;
+
+}
+
+
+
+.msg-main__avatar img {
+
+  width: 100%;
+
+  height: 100%;
+
+  object-fit: cover;
+
+}
+
+
+
+.msg-main__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.msg-search-panel {
+  background: #f8fafc;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  padding: 0.75rem 1rem;
+  margin: 0 1.5rem 1rem;
+}
+
+.msg-search-panel__form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.msg-search-results {
+  list-style: none;
+  padding: 0;
+  margin: 0;
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  flex: 1;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-  backdrop-filter: blur(18px);
+  gap: 0.4rem;
 }
-.chat-container::before {
+
+.msg-search-results__item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.25rem;
+  border-bottom: 1px dashed #e2e8f0;
+}
+
+.msg-search__author {
+  font-weight: 600;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.msg-search__excerpt {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+
+.msg-main__icon {
+
+  width: 38px;
+
+  height: 38px;
+
+  border-radius: 12px;
+
+  border: none;
+
+  background: rgba(19, 34, 75, 0.08);
+
+  color: #1b243d;
+
+  display: grid;
+
+  place-items: center;
+
+  font-size: 1rem;
+
+}
+
+
+
+.msg-status__pill {
+
+  padding: 0.25rem 0.75rem;
+
+  border-radius: 999px;
+
+  font-size: 0.72rem;
+
+  text-transform: uppercase;
+
+  letter-spacing: 0.06em;
+
+}
+
+.msg-main__header h3 {
+
+  margin: 0 0 0.35rem;
+
+  font-weight: 700;
+
+  font-size: 1.45rem;
+
+  line-height: 1.2;
+
+}
+
+
+
+.msg-main__meta {
+
+  margin: 0;
+
+  font-size: 0.82rem;
+
+  color: #6d7894;
+
+}
+
+
+
+.msg-status {
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 0.4rem;
+
+  font-size: 0.8rem;
+
+  color: #6d7894;
+
+}
+
+
+
+.msg-status__dot {
+
+  width: 10px;
+
+  height: 10px;
+
+  border-radius: 50%;
+
+}
+
+
+
+.msg-status__dot.ok {
+
+  background: #31c48d;
+
+  box-shadow: 0 0 0 4px rgba(49, 196, 141, 0.15);
+
+}
+
+
+
+.msg-status__dot.pending {
+
+  background: #f8c924;
+
+  box-shadow: 0 0 0 4px rgba(248, 201, 36, 0.15);
+
+}
+
+
+
+.msg-status__dot.error {
+
+  background: #ff6b6b;
+
+  box-shadow: 0 0 0 4px rgba(255, 107, 107, 0.15);
+
+}
+
+
+
+.msg-pinned {
+
+  border-radius: 18px;
+
+  padding: 1rem 1.25rem;
+
+  border: 1px solid rgba(13, 110, 253, 0.12);
+
+  margin-bottom: 0.75rem;
+
+  background: #fff;
+
+}
+
+
+
+.msg-pinned__header {
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 0.75rem;
+
+  margin-bottom: 0.75rem;
+
+}
+
+
+
+.msg-pinned__header i {
+
+  font-size: 1.3rem;
+
+  color: #d69000;
+
+}
+
+
+
+.msg-pinned__list {
+
+  list-style: none;
+
+  padding: 0;
+
+  margin: 0;
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 0.4rem;
+
+}
+
+
+
+.msg-pinned__list button {
+
+  width: 100%;
+
+  text-align: left;
+
+  border: 1px dashed rgba(13, 110, 253, 0.25);
+
+  border-radius: 12px;
+
+  padding: 0.45rem 0.75rem;
+
+  background: rgba(13, 110, 253, 0.05);
+
+  display: flex;
+
+  gap: 0.75rem;
+
+  align-items: center;
+
+  transition: background 0.15s ease, border-color 0.15s ease;
+
+}
+
+
+
+.msg-pinned__list button:hover {
+
+  background: rgba(13, 110, 253, 0.1);
+
+  border-color: rgba(13, 110, 253, 0.5);
+
+}
+
+
+
+.msg-pinned__time {
+
+  font-size: 0.78rem;
+
+  color: #6d7894;
+
+  min-width: 56px;
+
+}
+
+
+
+.msg-pinned__preview {
+
+  font-size: 0.88rem;
+
+  color: #182135;
+
+  white-space: nowrap;
+
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+
+}
+
+.msg-thread__loading {
+
+  text-align: center;
+
+  color: #6d7894;
+
+  font-size: 0.82rem;
+
+}
+
+
+
+.msg-bubble {
+  align-self: flex-start;
+  max-width: min(52ch, 78%);
+  background: radial-gradient(circle at 20% 20%, #ffffff 0%, #f7f9fd 55%, #eff3fb 100%);
+  border-radius: 22px;
+  padding: 1rem 1.2rem 0.9rem;
+  border: 1px solid rgba(15, 23, 42, 0.05);
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+  position: relative;
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #1e2746;
+}
+
+.msg-bubble.pinned {
+  border-color: rgba(245, 158, 11, 0.5);
+  box-shadow: 0 24px 40px rgba(245, 158, 11, 0.18);
+}
+
+.msg-bubble--focus {
+  animation: bubble-focus 1s ease;
+}
+
+@keyframes bubble-focus {
+  0% {
+    box-shadow: 0 0 0 0 rgba(21, 84, 246, 0.35);
+  }
+  100% {
+    box-shadow: 0 0 0 26px rgba(21, 84, 246, 0);
+  }
+}
+
+.msg-bubble.me {
+  align-self: flex-end;
+  background: linear-gradient(140deg, #2236c7, #4b6cff 45%, #66b1ff);
+  color: #f3f7ff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 28px 45px rgba(20, 60, 190, 0.35);
+}
+
+.msg-bubble.me::after {
   content: '';
   position: absolute;
-  top: -120px;
-  left: -80px;
-  width: 280px;
-  height: 280px;
-  background: radial-gradient(circle, rgba(13, 110, 253, 0.18), transparent 70%);
-  opacity: 0.4;
+  inset: 3px;
+  border-radius: 20px;
+  background: linear-gradient(140deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0));
   pointer-events: none;
 }
-.chat-header {
+
+.msg-bubble.me > * {
   position: relative;
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-  padding: 1.5rem 1.75rem 1.25rem;
-  border-bottom: 1px solid #e3e8f3;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.55), rgba(239, 243, 255, 0.95));
-  z-index: 2;
-  box-shadow: 0 12px 30px rgba(15, 38, 105, 0.08);
+  z-index: 1;
 }
-.chat-header-icon {
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, rgba(13, 110, 253, 0.18), rgba(13, 110, 253, 0.05));
-  color: #2157d3;
+
+.msg-bubble.pending {
+  opacity: 0.9;
+}
+
+.msg-bubble.me.pending {
+  box-shadow: 0 24px 45px rgba(20, 60, 190, 0.25);
+}
+
+.msg-bubble.system {
+  font-style: italic;
+  background: rgba(15, 23, 42, 0.06);
+  color: #0f172a;
+  border-style: dashed;
+}
+
+.msg-bubble__meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-bottom: 0.45rem;
+  gap: 0.75rem;
+}
+
+.msg-bubble__identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  color: #2b3560;
+}
+
+.msg-security-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #0369a1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.4rem;
-  box-shadow: inset 0 0 0 1px rgba(13, 110, 253, 0.12);
+  font-size: 0.75rem;
 }
-.chat-title-row {
+
+.msg-bubble.me .msg-security-icon {
+  background: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+
+.msg-bubble__meta-aside {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
-.chat-title {
-  margin: 0;
-  font-size: 1.45rem;
-  font-weight: 700;
-  color: #152347;
+
+.msg-bubble.me .msg-bubble__identity,
+.msg-bubble.me .msg-bubble__meta,
+.msg-bubble.me .msg-bubble__meta span {
+  color: rgba(243, 247, 255, 0.92);
 }
-.chat-subtitle {
-  margin: 0.35rem 0 0;
-  color: #6c7898;
-  font-size: 0.95rem;
+
+.msg-bubble.me time {
+  color: rgba(255, 255, 255, 0.85);
 }
-.chat-subtitle.typing {
-  color: #1f7a55;
+
+.msg-pill {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #d97706;
+  background: rgba(217, 119, 6, 0.15);
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
   font-weight: 600;
 }
-.chat-meta {
-  margin-top: 0.75rem;
+
+.msg-bubble__timestamps {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+  text-align: right;
+}
+
+.msg-state {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  border: none;
+  background: rgba(100, 116, 139, 0.15);
+  color: #475569;
+  font-weight: 600;
+}
+
+.msg-state.state-read {
+  background: rgba(34, 197, 94, 0.2);
+  color: #059669;
+}
+
+.msg-state.state-delivered {
+  background: rgba(59, 130, 246, 0.2);
+  color: #1d4ed8;
+}
+
+.msg-state.state-queued {
+  background: rgba(234, 179, 8, 0.2);
+  color: #b45309;
+}
+
+.msg-bubble.me .msg-state {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fefefe;
+}
+
+.msg-bubble__body {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: #0f172a;
+}
+
+.msg-bubble.me .msg-bubble__body {
+  color: #f8fbff;
+  text-shadow: 0 1px 2px rgba(18, 53, 143, 0.35);
+}
+
+.msg-bubble__toolbar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.msg-bubble:hover .msg-bubble__toolbar,
+.msg-bubble:focus-within .msg-bubble__toolbar,
+.msg-bubble__toolbar:focus-within {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (hover: none) {
+  .msg-bubble__toolbar {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.icon-btn {
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: #fff;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: #475569;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.icon-btn:hover {
+  background: #eff4ff;
+  border-color: rgba(21, 84, 246, 0.4);
+  color: #1554f6;
+}
+
+.icon-btn.subtle {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.msg-bubble.me .icon-btn.subtle {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: transparent;
+  color: #fff;
+}
+
+.msg-bubble__copied {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  display: inline-block;
+  margin-top: 0.15rem;
+}
+
+.msg-reactions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
 }
-.chat-meta-chip {
+
+.msg-reaction {
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(148, 163, 184, 0.12);
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.78rem;
   display: inline-flex;
   align-items: center;
+  gap: 0.3rem;
+  color: #0f172a;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.msg-reaction.active {
+  border-color: rgba(21, 84, 246, 0.9);
+  background: rgba(21, 84, 246, 0.12);
+  color: #1554f6;
+}
+
+.msg-bubble.me .msg-reaction {
+  border-color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.msg-popover {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.16);
+  padding: 0.45rem;
+  z-index: 5;
+  min-width: 140px;
+}
+
+.msg-popover--reactions {
+  display: flex;
   gap: 0.35rem;
-  padding: 0.25rem 0.65rem;
-  border-radius: 999px;
-  border: 1px solid #dbe2f3;
-  background: rgba(13, 110, 253, 0.08);
-  color: #1f3b76;
-  font-weight: 600;
-  font-size: 0.8rem;
-  letter-spacing: 0.01em;
 }
-.chat-meta-chip i {
-  font-size: 0.9rem;
+
+.msg-popover--menu {
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
 }
-.chat-actions {
-  margin-left: auto;
+
+.msg-popover__item {
+  border: none;
+  background: transparent;
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.msg-popover__item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.msg-menu__item {
+  border: none;
+  background: transparent;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.4rem;
+  font-size: 0.84rem;
+  color: #0f172a;
+  padding: 0.25rem 0.15rem;
+  text-align: left;
+  border-radius: 8px;
 }
-.chat-action-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 14px;
-  border: 1px solid #dbe2f3;
-  background: #f6f8ff;
-  color: #1f3b76;
+
+.msg-menu__item:hover {
+  background: rgba(21, 84, 246, 0.08);
+  color: #1554f6;
+}
+
+.msg-menu__item i {
+  font-size: 0.95rem;
+}
+
+.msg-menu__item.text-danger {
+  color: #dc2626;
+}
+
+.msg-menu__item.text-danger:hover {
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+}
+
+.msg-bubble__note {
+  margin: 0.35rem 0 0;
+  font-size: 0.72rem;
+  color: #94a3b8;
   display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.msg-bubble.me .msg-bubble__note {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+
+.msg-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+
+.msg-reference {
+  background: #f0f3fb;
+  border-left: 3px solid #9dabce;
+  border-radius: 10px;
+  padding: 0.45rem 0.75rem;
+  margin-bottom: 0.45rem;
+}
+
+.msg-reference--forward {
+  border-left-color: #3a8be8;
+}
+
+.msg-reference__author {
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-bottom: 0.1rem;
+  color: #1f2b49;
+}
+
+.msg-reference__excerpt {
+  font-size: 0.76rem;
+  color: #475569;
+  margin: 0;
+}
+
+.msg-attachment {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.65rem;
+  background: #f1f5f9;
+  border-radius: 12px;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.msg-bubble__deleted {
+  font-style: italic;
+  color: #7c8aa8;
+  padding: 0.55rem 0.9rem;
+  background: rgba(148, 163, 184, 0.12);
+  border-radius: 14px;
+  border: 1px dashed rgba(146, 155, 173, 0.55);
+  letter-spacing: 0.015em;
+  text-align: center;
+}
+
+.msg-bubble.me .msg-bubble__deleted {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.55);
+}
+
+.msg-bubble__badge {
+  background: #fef9c3;
+  color: #854d0e;
+  font-size: 0.7rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  margin-left: 0.4rem;
+}
+
+
+
+.msg-composer {
+  background: linear-gradient(180deg, #f9fbff 0%, #ffffff 60%);
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+  padding: 1.2rem 1.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  border-bottom-left-radius: 28px;
+  border-bottom-right-radius: 28px;
+}
+
+.msg-composer textarea {
+  resize: none;
+  border-radius: 18px;
+  border: 1px solid #d3daeb;
+  padding: 1rem 1.15rem;
+  min-height: 110px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  background: #fdfdff;
+}
+
+.msg-composer textarea:focus {
+  border-color: #1554f6;
+  box-shadow: 0 0 0 3px rgba(21, 84, 246, 0.15);
+  background: #ffffff;
+}
+
+.msg-composer__pickers {
+  position: relative;
+}
+
+.msg-picker {
+  position: absolute;
+  bottom: calc(100% + 0.9rem);
+  right: 0;
+  width: min(520px, 92vw);
+  background: #fff;
+  border-radius: 22px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 35px 80px rgba(15, 23, 42, 0.25);
+  padding: 1.1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  z-index: 30;
+}
+
+.msg-picker__header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.msg-picker__tabs {
+  display: inline-flex;
+  background: #eef2fb;
+  border-radius: 14px;
+  padding: 0.2rem;
+  gap: 0.15rem;
+}
+
+.msg-picker__tabs button {
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-weight: 600;
+  padding: 0.35rem 1rem;
+  border-radius: 12px;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.msg-picker__tabs button.active {
+  background: #fff;
+  color: #1b4ed5;
+  box-shadow: 0 6px 14px rgba(27, 78, 213, 0.2);
+}
+
+.msg-picker__search {
+  flex: 1;
+  border: 1px solid #d3daeb;
+  border-radius: 999px;
+  padding: 0.4rem 0.95rem;
+  font-size: 0.92rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.msg-picker__search:focus {
+  border-color: #1554f6;
+  box-shadow: 0 0 0 3px rgba(21, 84, 246, 0.12);
+  outline: none;
+}
+
+.msg-picker__body {
+  max-height: 280px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-right: 0.3rem;
+}
+
+.msg-picker__body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.msg-picker__body::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.25);
+  border-radius: 999px;
+}
+
+.msg-picker__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.msg-picker__section-title {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.msg-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(42px, 1fr));
+  gap: 0.25rem;
+}
+
+.msg-picker__grid button {
+  border: none;
+  background: #f6f7fb;
+  border-radius: 12px;
+  height: 42px;
+  display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1rem;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: transform 0.1s ease, background 0.1s ease, box-shadow 0.1s ease;
 }
-.chat-action-btn:hover {
+
+.msg-picker__grid button:hover,
+.msg-picker__grid button:focus-visible {
+  background: #e8edff;
+  box-shadow: 0 6px 12px rgba(21, 84, 246, 0.15);
   transform: translateY(-2px);
-  background: linear-gradient(135deg, rgba(13, 110, 253, 0.18), rgba(13, 110, 253, 0.05));
-  border-color: rgba(13, 110, 253, 0.45);
-  color: #0d6efd;
-  box-shadow: 0 12px 28px rgba(13, 110, 253, 0.18);
+  outline: none;
 }
-.chat-action-btn:focus-visible {
-  outline: 2px solid rgba(13, 110, 253, 0.3);
-  outline-offset: 2px;
+
+.msg-picker__body--gifs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0.75rem;
+  max-height: 320px;
+  overflow-y: auto;
 }
-.chat-action-btn.dropdown-toggle::after {
-  display: none;
-}
-.chat-actions .dropdown-menu {
+
+.msg-picker__body--gifs button {
+  border: none;
+  background: #f5f7fb;
   border-radius: 16px;
-  padding: 0.35rem 0;
-  box-shadow: 0 18px 40px rgba(15, 38, 105, 0.12);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-.call-banner {
-  margin: 0 1.75rem 1rem;
-  padding: 0.85rem 1.2rem;
-  border-radius: 16px;
+
+.msg-picker__body--gifs button img {
+  width: 100%;
+  height: 96px;
+  object-fit: cover;
+}
+
+.msg-picker__body--gifs button span {
+  padding: 0.45rem 0.75rem 0.65rem;
+  font-size: 0.78rem;
+  color: #475569;
+}
+
+.msg-picker__body--gifs button:hover,
+.msg-picker__body--gifs button:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 15px 30px rgba(15, 23, 42, 0.15);
+  outline: none;
+}
+
+.msg-picker__hint {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.msg-picker__error {
+  color: #c2410c;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.msg-picker__loading {
   display: flex;
   align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.msg-toast-stack {
+  position: fixed;
+  top: 1.5rem;
+  right: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  z-index: 5000;
+  pointer-events: none;
+}
+
+.msg-toast {
+  background: #ffffff;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.25);
+  padding: 0.8rem 1rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.msg-toast__content {
+  flex: 1;
+}
+
+.msg-toast__title {
+  font-weight: 700;
+  font-size: 0.92rem;
+  margin: 0;
+  color: #0f172a;
+}
+
+.msg-toast__body {
+  margin: 0.15rem 0 0.25rem;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.msg-toast small {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.msg-toast__close {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  padding: 0.2rem;
+}
+
+.msg-toast-enter-active,
+.msg-toast-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.msg-toast-enter-from,
+.msg-toast-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.msg-composer__footer {
+  display: flex;
   justify-content: space-between;
-  gap: 1rem;
-  border: 1px solid rgba(13, 110, 253, 0.25);
-  background: rgba(13, 110, 253, 0.12);
-  color: #123d8c;
-  box-shadow: 0 12px 32px rgba(13, 110, 253, 0.12);
+  align-items: flex-end;
+  font-size: 0.82rem;
+  color: #6d7894;
 }
-.call-banner.audio {
-  border-color: rgba(25, 135, 84, 0.25);
-  background: rgba(25, 135, 84, 0.12);
-  color: #0f5132;
-}
-.call-banner-info {
+
+.msg-composer__left {
   display: flex;
   align-items: center;
   gap: 0.85rem;
 }
-.call-banner-icon {
+
+.msg-composer__actions {
+  display: inline-flex;
+  gap: 0.4rem;
+}
+
+.msg-icon-btn {
   width: 42px;
   height: 42px;
-  border-radius: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: #ffffff;
+  color: #1b4ed5;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.6);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
-  font-size: 1.2rem;
+  font-size: 1.1rem;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
-.call-banner-title {
-  font-weight: 700;
-  font-size: 1rem;
-  margin-bottom: 0.1rem;
+
+.msg-icon-btn:hover {
+  background: #edf2ff;
+  border-color: rgba(27, 100, 242, 0.4);
 }
-.call-banner-meta {
-  font-size: 0.85rem;
-  color: inherit;
-  opacity: 0.8;
-}
-.call-banner-actions .btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  border-radius: 999px;
-  padding-inline: 1rem;
-}
-.chat-messages {
-  position: relative;
-  flex: 1;
-  padding: 1.25rem 1.15rem 1.5rem;
-  overflow-y: auto;
-  background: #efeae2;
-  background-image: radial-gradient(circle at top left, rgba(0, 0, 0, 0.03) 0, transparent 55%),
-    radial-gradient(circle at bottom right, rgba(0, 0, 0, 0.02) 0, transparent 45%);
-  min-height: 0;
-}
-.chat-messages::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.25), transparent 18%),
-    linear-gradient(0deg, rgba(255, 255, 255, 0.18), transparent 22%);
-  opacity: 0.6;
-}
-.chat-messages > * {
-  position: relative;
-  z-index: 1;
-}
-.jump-to-latest {
-  position: absolute;
-  right: 1.75rem;
-  bottom: 1.5rem;
+
+.msg-icon-btn.primary {
   border: none;
-  border-radius: 999px;
-  background: #0d6efd;
+  background: linear-gradient(135deg, #1c6bff, #559dff);
   color: #fff;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.85rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  box-shadow: 0 12px 30px rgba(13, 110, 253, 0.35);
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 8px 16px rgba(28, 107, 255, 0.25);
 }
-.jump-to-latest:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 14px 34px rgba(13, 110, 253, 0.4);
+
+.msg-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
-.jump-to-latest:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.6);
-  outline-offset: 2px;
+
+.msg-composer small {
+  color: #94a3b8;
 }
-.jump-to-latest i {
-  font-size: 1rem;
+
+.msg-composer textarea::placeholder {
+  color: #9aa5ba;
 }
-.chat-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  min-height: 220px;
-  color: #6c7898;
-  text-align: center;
+
+@media (max-width: 768px) {
+  .msg-picker {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: min(520px, 95vw);
+  }
 }
-.chat-state.chat-empty i {
-  color: #9aa4c3;
+
+@media (max-width: 480px) {
+  .msg-picker {
+    padding: 0.9rem;
+    border-radius: 18px;
+  }
+  .msg-picker__header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .msg-picker__tabs {
+    width: 100%;
+    justify-content: center;
+  }
 }
-.chat-history {
-  display: flex;
-  flex-direction: column;
-  min-height: 100%;
-  gap: 0.5rem;
-}
-.messages-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  margin-top: auto;
-  padding-bottom: 1rem;
-}
-.timeline-entry {
-  display: contents;
-}
-.day-divider {
-  position: sticky;
-  top: 0.4rem;
-  display: flex;
-  justify-content: center;
-  pointer-events: none;
-  z-index: 5;
-  margin: 0.35rem 0;
-}
-.day-divider-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.2rem 0.65rem;
-  border-radius: 999px;
-  background: rgba(50, 55, 60, 0.16);
-  color: #2f3033;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-.day-divider-label::before,
-.day-divider-label::after {
+
+
+
+.msg-body::after {
+
   content: '';
+
   display: block;
-  width: 12px;
-  height: 1px;
-  background: currentColor;
-  opacity: 0.35;
+
+  height: 0.5rem;
+
+  flex-shrink: 0;
+
 }
-.chat-bubble {
-  max-width: min(54%, 440px);
-  padding: 0.45rem 0.85rem 0.4rem;
-  border-radius: 14px;
-  word-break: break-word;
-  position: relative;
-  background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.04);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
+
+
+
+
+
+.msg-status__pill.ok {
+
+  background: rgba(49, 196, 141, 0.15);
+
+  color: #1c8a62;
+
 }
-.chat-bubble.sent {
-  background: #d9fdd3;
-  color: #202020;
-  margin-left: auto;
-  border-color: rgba(0, 0, 0, 0.05);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+
+
+
+.msg-status__pill.pending {
+
+  background: rgba(248, 201, 36, 0.15);
+
+  color: #b88600;
+
 }
-.chat-bubble.received {
-  background: #ffffff;
-  color: #1f1f1f;
-  margin-right: auto;
+
+
+
+.msg-status__pill.error {
+
+  background: rgba(255, 107, 107, 0.15);
+
+  color: #a82323;
+
 }
-.chat-bubble:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
-}
-.bubble-header {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.72rem;
-  opacity: 0.75;
-  margin-bottom: 0.15rem;
-}
-.bubble-header .name {
-  font-weight: 600;
-}
-.bubble-header .time {
-  font-size: 0.72rem;
-  color: #6b6b6b;
-}
-.chat-bubble.sent .bubble-header .time {
-  color: rgba(0, 0, 0, 0.5);
-}
-.chat-bubble.sent .bubble-header .name {
-  color: #1a1a1a;
-}
-.bubble-body {
-  font-size: 0.85rem;
-  line-height: 1.3;
-  white-space: pre-wrap;
-}
-.chat-bubble:after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  width: 11px;
-  height: 11px;
-  background: inherit;
-}
-.chat-bubble.received:after {
-  left: -5px;
-  border-bottom-right-radius: 14px;
-  transform: translateY(-2px) rotate(45deg);
-  box-shadow: -1px 1px 3px rgba(0, 0, 0, 0.04);
-}
-.chat-bubble.sent:after {
-  right: -5px;
-  border-bottom-left-radius: 14px;
-  transform: translateY(-2px) rotate(-45deg);
-  box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.05);
-}
-.bubble-actions {
-  position: absolute;
-  right: 0.3rem;
-  bottom: 0.25rem;
-  opacity: 0;
-  transform: translateY(3px);
-  transition: all 0.12s ease;
-  pointer-events: none;
-}
-.chat-bubble:hover .bubble-actions {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-}
-.btn.btn-action {
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
-  border: none;
-  padding: 0.25rem 0.4rem;
-  border-radius: 8px;
-  backdrop-filter: saturate(140%) blur(2px);
-}
-.btn.btn-action:hover {
-  background: rgba(255, 255, 255, 0.28);
-}
-.btn.btn-action.danger {
-  background: rgba(255, 75, 90, 0.25);
-  color: #fff;
-}
-.btn.btn-action.danger:hover {
-  background: rgba(255, 75, 90, 0.35);
-}
-.chat-input {
-  padding: 1.25rem 1.75rem;
-  border-top: 1px solid #e3e8f3;
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 0 0 28px 28px;
-  position: relative;
-  box-shadow: 0 -8px 24px rgba(15, 38, 105, 0.08);
-}
-.composer-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  border-radius: 18px;
-  background: rgba(248, 250, 255, 0.9);
-  border: 1px solid #dbe2f3;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65), 0 12px 30px rgba(15, 38, 105, 0.12);
-  padding: 0.6rem 0.75rem;
-}
-.composer-tools {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.composer-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  border: 1px solid #dbe2f3;
-  background: #f6f8ff;
-  color: #1f3b76;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.05rem;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
-}
-.composer-icon:hover:enabled {
-  transform: translateY(-2px);
-  background: linear-gradient(135deg, rgba(13, 110, 253, 0.18), rgba(13, 110, 253, 0.05));
-  border-color: rgba(13, 110, 253, 0.4);
-  color: #0d6efd;
-  box-shadow: 0 12px 28px rgba(13, 110, 253, 0.18);
-}
-.composer-icon:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-.composer-input {
+
+.msg-thread {
   flex: 1;
-  border: none;
-  background: transparent;
-  color: #1f2937;
-  font-size: 1rem;
-  padding: 0.4rem 0.5rem;
-}
-.composer-input:focus {
-  outline: none;
-  box-shadow: none;
-}
-.composer-send {
-  width: 46px;
-  height: 46px;
-  border-radius: 16px;
-  border: none;
-  background: linear-gradient(135deg, #2157d3, #0d6efd);
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.1rem;
-  box-shadow: 0 18px 36px rgba(13, 110, 253, 0.28);
-  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
-}
-.composer-send:disabled {
-  opacity: 0.5;
-  box-shadow: none;
-  cursor: not-allowed;
-}
-.composer-send:not(:disabled):hover {
-  transform: translateY(-2px);
-  box-shadow: 0 24px 44px rgba(13, 110, 253, 0.32);
-}
-.pending-files {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-top: 0.75rem;
-}
-.pending-file {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.45rem 0.7rem;
-  border: 1px solid #dbe2f3;
-  border-radius: 14px;
-  background: rgba(248, 250, 255, 0.95);
-  box-shadow: 0 8px 20px rgba(13, 110, 253, 0.12);
-}
-.pending-thumb {
-  width: 48px;
-  height: 48px;
-  border-radius: 10px;
-  overflow: hidden;
-  background: #e5ecff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.pending-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.pending-details {
-  min-width: 0;
-}
-.pending-name {
-  font-weight: 600;
-  max-width: 180px;
-}
-.emoji-popover,
-.gif-popover {
-  position: absolute;
-  bottom: 90px;
-  left: 110px;
-  z-index: 30;
-  background: #fff;
-  border-radius: 16px;
-  border: 1px solid rgba(13, 110, 253, 0.2);
-  box-shadow: 0 18px 40px rgba(13, 110, 253, 0.15);
-  padding: 0.75rem;
-}
-.emoji-popover {
-  width: 320px;
-}
-.composer-emoji-picker {
-  width: 100%;
-  height: 320px;
-  border-radius: 12px;
-}
-.gif-popover {
-  width: 360px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.gif-search .input-group-text {
-  background: #f1f4ff;
-  border-color: #dbe2f3;
-}
-.gif-search .form-control,
-.gif-search .btn {
-  border-color: #dbe2f3;
-}
-.chat-search .input-group-text {
-  background: rgba(248, 250, 255, 0.95);
-  border: none;
-  color: #3d4f7c;
-}
-.chat-search .form-control,
-.chat-search .btn,
-.chat-search .form-select {
-  border: none;
-  background: transparent;
-  color: #1f3b76;
-}
-.chat-search .btn {
-  color: #1f3b76;
-}
-.chat-search .btn:hover {
-  color: #0d6efd;
-}
-.chat-search {
-  padding: 1.25rem 1.75rem;
-  background: rgba(255, 255, 255, 0.9);
-  border-bottom: 1px solid #e3e8f3;
-}
-.chat-search-bar {
-  border-radius: 14px;
-  overflow: hidden;
-  box-shadow: 0 12px 28px rgba(13, 110, 253, 0.08);
-}
-.chat-search-bar .form-control {
-  padding: 0.6rem 0.9rem;
-}
-.chat-search-bar .btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.chat-search-grid {
-  margin-top: 1rem !important;
-}
-.search-result-count {
-  color: #6c7898;
-}
-mark.hl {
-  background: #fff3cd;
-  color: inherit;
-  padding: 0 2px;
-  border-radius: 3px;
-}
-.chat-search .input-group-text {
-  background: #f1f4ff;
-  border-color: #dbe2f3;
-}
-.chat-search .form-control,
-.chat-search .btn {
-  border-color: #dbe2f3;
-}
-.gif-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.5rem;
-  max-height: 260px;
   overflow-y: auto;
-  padding-right: 0.25rem;
-}
-.gif-thumb {
-  border: none;
-  padding: 0;
-  border-radius: 12px;
-  overflow: hidden;
-  background: transparent;
-  cursor: pointer;
-  box-shadow: 0 6px 16px rgba(13, 110, 253, 0.14);
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
-}
-.gif-thumb:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 10px 26px rgba(13, 110, 253, 0.2);
-}
-.gif-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.gif-loading {
-  min-height: 96px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.reaction-strip {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-.reaction-chip {
-  border: 1px solid #dbe2f3;
-  border-radius: 999px;
-  background: #f0f4ff;
-  color: #1f3b76;
-  padding: 0.1rem 0.6rem;
-  font-size: 0.85rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-.reaction-chip.mine {
-  background: #0d6efd;
-  border-color: #0d6efd;
-  color: #fff;
-}
-.reaction-chip .emoji {
-  font-size: 1rem;
-}
-.reaction-picker {
-  position: relative;
-  z-index: 10;
-  background: #fff;
-  border: 1px solid rgba(13, 110, 253, 0.2);
-  border-radius: 14px;
-  box-shadow: 0 16px 38px rgba(13, 110, 253, 0.18);
-  padding: 0.35rem;
-}
-.reaction-emoji-picker {
-  width: 220px;
-  height: 240px;
-  border-radius: 12px;
-}
-.add-reaction {
-  border-radius: 999px;
-}
-.spinning {
-  animation: rotate 0.9s linear infinite;
-}
-@keyframes rotate {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-.bubble-attachments {
+  padding: 1rem 0 0.5rem;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-}
-.attachment-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.45rem 0.6rem;
-  border-radius: 12px;
-  background: #f0f4ff;
-}
-.attachment-item.preview {
-  background: #fff;
-  border: 1px solid rgba(13, 110, 253, 0.2);
-  box-shadow: 0 10px 28px rgba(13, 110, 253, 0.18);
-  align-items: stretch;
-}
-.attachment-thumb {
-  border: none;
-  background: transparent;
-  padding: 0;
-  width: 140px;
-  height: 140px;
-  border-radius: 12px;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.attachment-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.attachment-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  justify-content: center;
-  max-width: 180px;
-}
-.attachment-name {
-  font-weight: 600;
-  word-break: break-word;
-}
-.attachment-item:not(.preview) .attachment-link {
-  font-size: 0.95rem;
-  font-weight: 600;
-}
-
-.conv-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
   gap: 0.75rem;
-  margin-bottom: 1.1rem;
 }
 
-.conv-filter-btn {
-  position: relative;
-  width: 50px;
-  height: 50px;
-  display: inline-flex;
+.msg-thread__loader {
+  display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 16px;
-  border: 1px solid rgba(219, 226, 243, 0.9);
-  background: rgba(255, 255, 255, 0.78);
-  color: #1f3b76;
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
-  box-shadow: 0 4px 12px rgba(13, 110, 253, 0.12);
+  gap: 0.5rem;
+  color: #64748b;
+  font-size: 0.85rem;
+  padding-bottom: 0.5rem;
 }
 
-.conv-filter-btn .filter-count {
-  position: absolute;
-  bottom: -4px;
-  right: -4px;
-  min-width: 22px;
-  padding: 0.1rem 0.4rem;
-  border-radius: 999px;
-  background: rgba(13, 110, 253, 0.16);
-  color: #0d6efd;
-  font-weight: 700;
-  font-size: 0.68rem;
-  text-align: center;
-  box-shadow: 0 2px 6px rgba(13, 110, 253, 0.16);
-}
-
-.conv-filter-icon {
-  font-size: 1.1rem;
-}
-
-.conv-filter-btn:hover {
-  transform: translateY(-2px);
-  border-color: rgba(13, 110, 253, 0.35);
-  box-shadow: 0 10px 22px rgba(13, 110, 253, 0.2);
-  background: rgba(230, 238, 255, 0.9);
-}
-
-.conv-filter-btn:focus-visible {
-  outline: 2px solid rgba(13, 110, 253, 0.4);
-  outline-offset: 2px;
-}
-
-.conv-filter-btn.active {
-  background: linear-gradient(135deg, #2157d3 0%, #0d6efd 100%);
-  color: #fff;
-  border-color: transparent;
-  box-shadow: 0 12px 26px rgba(13, 110, 253, 0.32);
-}
-
-.conv-filter-btn.active .filter-count {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
-  box-shadow: none;
-}
-
-.conv-filter-btn.active .conv-filter-icon {
-  color: #fff;
-}
-
-.favorite-toggle {
-  border: none;
-  background: transparent;
-  color: #97a3bb;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
-}
-
-.favorite-toggle:hover {
-  color: #f3a712;
-  background: rgba(243, 167, 18, 0.16);
-  transform: translateY(-1px);
-}
-
-.favorite-toggle:focus-visible {
-  outline: 2px solid rgba(13, 110, 253, 0.4);
-  outline-offset: 1px;
-}
-
-.favorite-toggle.active {
-  color: #f3a712;
-}
-
-.conv-item.active .favorite-toggle {
-  color: rgba(255, 255, 255, 0.82);
-}
-
-.conv-item.active .favorite-toggle:hover {
-  background: rgba(255, 255, 255, 0.18);
-}
-
-.conv-item.active .favorite-toggle.active {
-  color: #ffe08a;
-}
-
-.messages-page {
-  min-height: 100vh;
-  height: 100vh;
-  padding: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  width: 100%;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border: 0;
-}
-
-.messages-wrapper {
-  position: relative;
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  padding: 1.4rem 1.6rem 1.6rem 1.3rem;
-  background: linear-gradient(135deg, rgba(13, 110, 253, 0.07), rgba(255, 255, 255, 0.9));
-  border-radius: 32px;
-  box-shadow: 0 24px 60px rgba(13, 38, 86, 0.12);
-  overflow: hidden;
-  margin-bottom: 0;
-  height: 100%;
-  min-height: 0;
-}
-.messages-wrapper::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at top left, rgba(13, 110, 253, 0.12), transparent 55%),
-    radial-gradient(circle at bottom right, rgba(99, 102, 241, 0.12), transparent 45%);
-  pointer-events: none;
-}
-.messages-layout {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
-  gap: 1.25rem;
-  width: 100%;
-  flex: 1 1 auto;
-  min-height: 0;
-  height: 100%;
-  align-items: stretch;
-}
-.conv-list {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  padding: 1.1rem 1rem;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid #dbe2f3;
-  box-shadow: 0 18px 48px rgba(15, 38, 105, 0.08);
-  height: 100%;
-  min-height: 0;
-  backdrop-filter: blur(18px);
-  overflow: hidden;
-}
-.conv-list::before {
-  content: '';
-  position: absolute;
-  top: -60px;
-  right: -60px;
-  width: 200px;
-  height: 200px;
-  background: radial-gradient(circle, rgba(13, 110, 253, 0.15), transparent 65%);
-  opacity: 0.6;
-  pointer-events: none;
-}
-.conv-search input {
-  border-radius: 14px;
-  border: 1px solid #dbe2f3;
-  background: rgba(255, 255, 255, 0.85);
-  padding-left: 2.6rem;
-  height: 42px;
-  box-shadow: 0 8px 24px rgba(13, 110, 253, 0.08);
-}
-.conv-search input:focus {
-  border-color: #0d6efd;
-  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.18);
+.msg-panel {
+  position: fixed;
+  top: 2rem;
+  right: 2rem;
+  width: 360px;
+  max-height: calc(100vh - 4rem);
+  overflow-y: auto;
   background: #fff;
+  border-radius: 24px;
+  box-shadow: 0 25px 60px rgba(15, 26, 48, 0.15);
+  padding: 1.5rem;
+  z-index: 20;
 }
-.conv-list-header {
+
+.msg-panel__header {
   display: flex;
-  align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1.25rem;
-}
-.conv-title {
-  margin: 0;
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: #1f3b76;
-}
-.conv-subtitle {
-  margin: 0.35rem 0 0;
-  color: #6c7898;
-  font-size: 0.9rem;
-}
-.conv-create-btn {
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #2157d3, #0d6efd);
-  color: #fff;
-  border: none;
-  box-shadow: 0 18px 36px rgba(13, 110, 253, 0.26);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-.conv-create-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 24px 44px rgba(13, 110, 253, 0.32);
-}
-.conv-create-btn:focus-visible {
-  outline: 2px solid rgba(13, 110, 253, 0.4);
-  outline-offset: 2px;
-}
-.conv-tools {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-bottom: 1.25rem;
-}
-.conv-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-.conv-meta-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.25rem 0.65rem;
-  border-radius: 999px;
-  border: 1px solid #dbe2f3;
-  background: rgba(13, 110, 253, 0.08);
-  color: #1f3b76;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-.conv-meta-chip i {
-  font-size: 0.85rem;
-}
-.conv-scroll {
-  flex: 1;
-  overflow-y: auto;
-  margin: 0 -0.5rem;
-  padding: 0 0.5rem 0.5rem;
-  min-height: 0;
-}
-.conv-empty {
-  background: transparent;
+  align-items: flex-start;
+  margin-bottom: 1rem;
 }
 
-.conv-sections {
-  display: flex;
-  flex-direction: column;
-  gap: 1.1rem;
-}
-.conv-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  margin-bottom: 1.2rem;
-}
-
-.conv-section:last-of-type {
-  margin-bottom: 0;
-}
-
-.conv-section-title {
-  margin: 0 0 0.35rem 0.35rem;
-  font-size: 0.7rem;
-  font-weight: 700;
+.msg-panel__eyebrow {
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #6c7898;
+  color: #94a3b8;
+  margin-bottom: 0.2rem;
 }
 
-.conv-list-scroll {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  width: 100%;
+.msg-panel__subtitle {
+  margin: 0.25rem 0 0;
+  color: #64748b;
+  font-size: 0.9rem;
 }
 
-.conv-item {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.65rem 0.8rem;
-  border-radius: 16px;
-  border: 1px solid transparent;
-  background: rgba(255, 255, 255, 0.7);
-  cursor: pointer;
-  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
-  overflow: hidden;
-}
-
-.conv-item::before {
-  content: '';
-  position: absolute;
-  left: 8px;
-  top: 8px;
-  bottom: 8px;
-  width: 4px;
-  border-radius: 999px;
+.msg-panel__close {
+  border: none;
   background: transparent;
-  transition: background 0.18s ease;
-  pointer-events: none;
-  z-index: 0;
+  color: #94a3b8;
+  font-size: 1.2rem;
+  line-height: 1;
 }
 
-.conv-item > * {
-  position: relative;
-  z-index: 1;
+.msg-panel__section {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 1rem;
+  margin-bottom: 1.5rem;
 }
 
-.conv-item.unread::before {
-  background: linear-gradient(180deg, rgba(13, 110, 253, 0.85), rgba(99, 102, 241, 0.6));
-}
-
-.conv-item.unread .conv-name {
-  font-weight: 700;
-  color: #153d7a;
-}
-
-.conv-item.unread .conv-item-preview {
-  color: #2d466f;
-}
-
-.conv-item.favorite:not(.active) {
-  background: rgba(255, 249, 224, 0.92);
-  border-color: rgba(255, 193, 7, 0.35);
-  box-shadow: 0 10px 30px rgba(255, 193, 7, 0.2);
-}
-
-.conv-item.favorite:not(.active)::before {
-  background: linear-gradient(180deg, rgba(255, 193, 7, 0.95), rgba(255, 160, 0, 0.7));
-}
-
-.conv-item:hover {
-  transform: translateY(-1px);
-  background: rgba(13, 110, 253, 0.12);
-  border-color: rgba(13, 110, 253, 0.26);
-  box-shadow: 0 12px 28px rgba(13, 110, 253, 0.16);
-}
-
-.conv-item:hover::before {
-  background: linear-gradient(180deg, rgba(13, 110, 253, 0.55), rgba(99, 102, 241, 0.4));
-}
-
-.conv-item.active {
-  background: linear-gradient(135deg, #3372ff, #0d6efd);
-  border-color: rgba(13, 110, 253, 0.65);
-  box-shadow: 0 18px 36px rgba(13, 110, 253, 0.28);
-  color: #fff;
-}
-
-.conv-item.active::before {
-  background: rgba(255, 255, 255, 0.75);
-}
-
-.conv-item-leading .avatar-list,
-.conv-item-leading .avatar-list-placeholder {
-  width: 44px;
-  height: 44px;
-}
-
-.conv-item-main {
-  flex: 1;
-  min-width: 0;
+.msg-panel__section-header {
   display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.conv-top-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  min-width: 0;
-}
-
-.conv-name-block {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  min-width: 0;
-  flex: 1;
-}
-
-.conv-name {
-  margin: 0;
-  font-weight: 600;
-  font-size: 0.95rem;
-  color: #1f3b76;
-}
-
-.conv-meta {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  color: #7383a6;
-  font-size: 0.74rem;
-}
-
-.conv-time {
-  color: inherit;
-}
-
-.conv-bottom-row {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  min-width: 0;
-}
-
-.conv-item-preview {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.84rem;
-  color: #5b6b88;
-  min-width: 0;
-  flex: 1;
-}
-
-.conv-preview-prefix {
-  font-weight: 600;
-  color: #4a5b80;
-  white-space: nowrap;
-}
-
-.conv-item.active .conv-name,
-.conv-item.active .conv-item-preview,
-.conv-item.active .conv-preview-prefix,
-.conv-item.active .conv-meta {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.conv-item.active .conv-item-preview {
-  color: rgba(255, 255, 255, 0.88);
-}
-
-.conv-item.active .conv-preview-prefix {
-  color: rgba(255, 255, 255, 0.95);
-}
-
-.conv-item-footer {
-  display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.conv-tags {
-  display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
 }
 
-.conv-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  background: rgba(31, 59, 118, 0.08);
-  color: #1f3b76;
-  border: 1px solid rgba(31, 59, 118, 0.18);
-}
-
-.conv-tag.favorite {
-  background: rgba(255, 193, 7, 0.22);
-  border-color: rgba(255, 193, 7, 0.4);
-  color: #7a5400;
-}
-
-.conv-item.active .conv-tag {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.55);
-  color: rgba(255, 255, 255, 0.92);
-}
-
-.conv-tag i {
-  font-size: 0.68rem;
-}
-
-.badge-unread {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 22px;
-  padding: 0.12rem 0.45rem;
-  background: #0d6efd;
-  color: #fff;
-  font-weight: 700;
-  font-size: 0.72rem;
-  border-radius: 999px;
-  box-shadow: 0 3px 8px rgba(13, 110, 253, 0.25);
-}
-
-.conv-item.active .badge-unread {
-  background: rgba(255, 255, 255, 0.92);
-  color: #0d47a1;
-  box-shadow: none;
-}
-.msg-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.35rem;
-  margin: 0 0.2rem;
+.msg-panel__list {
+  list-style: none;
   padding: 0;
-  animation: bubbleIn 0.16s ease;
-}
-.msg-row.sent {
-  justify-content: flex-end;
-}
-.msg-row:not(.sent) {
-  justify-content: flex-start;
-}
-
-.action-modal-backdrop {
-  padding: 1.5rem;
-}
-
-.action-modal-card {
-  background: #ffffff;
-  border-radius: 24px;
-  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.32);
-  width: min(420px, 92vw);
-  padding: 1.9rem 1.8rem 1.6rem;
-  position: relative;
+  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 0.85rem;
 }
 
-.action-modal-close {
-  position: absolute;
-  top: 18px;
-  right: 18px;
-  z-index: 1;
-}
-
-.action-modal-header {
+.msg-panel__list-item {
   display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
   align-items: center;
-  gap: 1rem;
 }
 
-.action-modal-icon {
-  height: 52px;
-  width: 52px;
-  border-radius: 16px;
+.msg-panel__member {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.msg-panel__member-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+  min-width: 150px;
+}
+
+.msg-panel__pill {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-}
-
-.action-modal-icon.rename {
-  background: rgba(13, 110, 253, 0.12);
-  color: #0d6efd;
-}
-
-.action-modal-icon.leave {
-  background: rgba(255, 193, 7, 0.18);
-  color: #b18500;
-}
-
-.action-modal-icon.delete {
-  background: rgba(220, 53, 69, 0.18);
-  color: #c62828;
-}
-
-.action-modal-body {
-  color: #414d63;
-}
-
-.action-modal-message {
-  line-height: 1.5;
-  margin-bottom: 0;
-}
-
-.action-modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 0.25rem;
-}
-
-.action-modal-footer .btn {
-  min-width: 120px;
+  background: #eef2ff;
+  color: #4338ca;
   border-radius: 999px;
-  font-weight: 600;
+  padding: 0.1rem 0.6rem;
+  font-size: 0.75rem;
 }
 
-.action-modal-footer .btn-outline-secondary {
-  background: #f8f9fb;
-  border: 1px solid #d7dce5;
-  color: #4a5468;
+.msg-panel__pill.muted {
+  background: #fff7ed;
+  color: #c2410c;
 }
 
-.action-modal-footer .btn-outline-secondary:hover:enabled {
-  background: #eef1f6;
+.msg-panel__pill.ok {
+  background: #ecfdf5;
+  color: #0f9e5e;
 }
 
-.action-modal-footer .btn-danger {
-  box-shadow: 0 10px 25px rgba(220, 53, 69, 0.25);
+.msg-panel__invite-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
 }
 
-.action-modal-footer .btn-primary {
-  box-shadow: 0 10px 25px rgba(13, 110, 253, 0.25);
-}
-
-.action-modal-footer .spinner-border {
-  width: 1rem;
-  height: 1rem;
+.msg-panel__invite-row {
+  display: flex;
+  gap: 0.5rem;
 }
 
 @media (max-width: 1200px) {
-  .messages-layout {
-    grid-template-columns: minmax(210px, 260px) minmax(0, 1fr);
+  .msg-panel {
+    position: fixed;
+    inset: 0.5rem;
+    width: auto;
+    max-height: calc(100vh - 1rem);
   }
 }
-@media (max-width: 992px) {
-  .messages-page {
-    min-height: auto;
-    height: auto;
+
+@media (max-width: 1200px) {
+  .msg-layout {
+
     padding: 1rem;
+
   }
-  .messages-wrapper {
-    padding: 1.1rem;
-    border-radius: 24px;
-    height: auto;
-    min-height: auto;
+
+
+
+  .msg-body {
+
+    padding: 0 1.5rem 1rem;
+
   }
-  .messages-layout {
+
+
+
+  .msg-main__header {
+
+    padding: 1.5rem 1.5rem 1rem;
+
+  }
+
+}
+
+
+
+@media (min-width: 1600px) {
+
+  .msg-layout {
+
+    max-width: 1700px;
+
+    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+
+    padding: 2rem 2.5rem;
+
+  }
+
+
+
+  .msg-body {
+
+    padding: 0 3rem 1.5rem;
+
+  }
+
+
+
+  .msg-main__header {
+
+    padding-left: 2.5rem;
+
+    padding-right: 2.5rem;
+
+  }
+
+}
+
+
+
+@media (max-width: 992px) {
+
+  .msg-layout {
+
     grid-template-columns: 1fr;
-    min-height: auto;
+
     height: auto;
-    gap: 1rem;
+
+    padding: 0;
+
+    border-radius: 0;
+
   }
-  .conv-list {
-    border-radius: 24px;
-    height: auto;
-    min-height: 0;
+
+
+
+  .msg-nav {
+
+    border-right: none;
+
+    border-bottom: 1px solid #e3e8f5;
+
+    border-radius: 0;
+
+    box-shadow: none;
+
+    padding: 1.25rem;
+
   }
-  .chat-container {
-    border-radius: 24px;
-    height: auto;
-    min-height: 0;
+
+
+
+  .msg-main {
+
+    border-radius: 0;
+
   }
+
+
+
+  .msg-body {
+
+    padding: 0 1rem 1rem;
+
+  }
+
 }
+
+
+
 @media (max-width: 576px) {
-  .chat-header {
-    flex-wrap: wrap;
-    gap: 1rem;
+
+  .msg-nav {
+
+    padding: 1rem;
+
   }
-  .chat-actions {
-    width: 100%;
-    justify-content: flex-start;
+
+
+
+  .msg-overview {
+
+    grid-template-columns: 1fr;
+
   }
-  .composer-bar {
-    flex-wrap: wrap;
-    padding: 0.75rem;
+
+
+
+  .msg-main__header {
+
+    flex-direction: column;
+
+    align-items: flex-start;
+
   }
-  .composer-input {
-    width: 100%;
+
+
+
+  .msg-composer {
+
+    padding: 1rem;
+
   }
-}
-.avatar-xs {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  object-fit: cover;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+
 }
 
-@keyframes bubbleIn {
-  from {
-    opacity: 0;
-    transform: translateY(4px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.modal-backdrop-custom {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(17, 24, 39, 0.45);
-  backdrop-filter: blur(6px) saturate(160%);
-  -webkit-backdrop-filter: blur(6px) saturate(160%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1050;
-  padding: 2vh 2vw;
-}
-
-.sticky-footer {
-  position: sticky;
-  bottom: 0;
-  background: #fff;
-  border-top: 1px solid #eef1f6;
-  padding: 0.75rem 1rem;
-}
 </style>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

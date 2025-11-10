@@ -119,9 +119,31 @@
 
         <div
           v-if="success"
-          class="alert alert-success text-center animate__animated animate__fadeInUp mt-3"
+          class="auth-success animate__animated animate__fadeInUp mt-3"
         >
-          {{ success }}
+          <div class="auth-success__icon">
+            <i class="bi bi-check2-circle"></i>
+          </div>
+          <div class="auth-success__body">
+            <p class="auth-success__title">{{ success }}</p>
+            <p v-if="successSubtitle" class="auth-success__subtitle">{{ successSubtitle }}</p>
+            <div v-if="requiresConfirmation && lastRegisteredEmail" class="resend-confirm">
+              <p class="resend-confirm__text">
+                Vous n'avez rien reçu ? Vérifiez vos spams ou renvoyez l'e-mail en un clic.
+              </p>
+              <button
+                type="button"
+                class="btn-resend-confirm"
+                :disabled="resendLoading"
+                @click="handleResend"
+              >
+                <span v-if="resendLoading" class="spinner-border spinner-border-sm"></span>
+                <span v-else>Renvoyer l'e-mail de confirmation</span>
+              </button>
+              <p v-if="resendSuccessMessage" class="resend-confirm__success">{{ resendSuccessMessage }}</p>
+              <p v-if="resendError" class="resend-confirm__error">{{ resendError }}</p>
+            </div>
+          </div>
         </div>
 
         <p class="auth-card__footer">
@@ -135,34 +157,78 @@
 
 <script setup>
 import { ref } from 'vue'
-import axios from 'axios'
-import { api } from '@/utils/api'
+import { registerAccount, resendConfirmationEmail } from '@/services/auth'
 
 const pseudo = ref('')
 const email = ref('')
 const password = ref('')
 const error = ref('')
 const success = ref('')
+const successSubtitle = ref('')
 const loading = ref(false)
+const lastRegisteredEmail = ref('')
+const resendLoading = ref(false)
+const resendSuccessMessage = ref('')
+const resendError = ref('')
+const requiresConfirmation = ref(false)
 
 async function handleRegister() {
   error.value = ''
   success.value = ''
+  successSubtitle.value = ''
   loading.value = true
   try {
-    const res = await api.post(`/register`, {
-      pseudo: pseudo.value,
+    const submittedEmail = email.value
+    const res = await registerAccount({
       email: email.value,
       password: password.value,
+      displayName: pseudo.value,
     })
-    success.value = res.data.message || "Inscription réussie. Un e-mail de confirmation a été envoyé."
+    const confirmationRequired = Boolean(res.confirmation_url)
+    success.value = 'Inscription finalisée avec succès !'
+    if (confirmationRequired) {
+      successSubtitle.value =
+        `Nous venons d'envoyer un e-mail d'activation à ${submittedEmail}. ` +
+        'Ouvrez-le puis cliquez sur « Confirmer mon adresse e-mail » dans les 30 prochaines minutes.'
+    } else {
+      successSubtitle.value = 'Vous pouvez désormais vous connecter immédiatement à votre espace sécurisé COVA.'
+    }
+    requiresConfirmation.value = Boolean(res.confirmation_url)
+    lastRegisteredEmail.value = requiresConfirmation.value ? submittedEmail : ''
+    resendSuccessMessage.value = ''
+    resendError.value = ''
     pseudo.value = ''
     email.value = ''
     password.value = ''
   } catch (err) {
-    error.value = err.response?.data?.error || 'Erreur inconnue. Veuillez réessayer.'
+    const detail = err.response?.data?.detail || err.response?.data?.error
+    error.value = detail || err.message || 'Erreur inconnue. Veuillez réessayer.'
+    lastRegisteredEmail.value = ''
+    resendSuccessMessage.value = ''
+    resendError.value = ''
+    requiresConfirmation.value = false
+    successSubtitle.value = ''
   } finally {
     loading.value = false
+  }
+}
+
+async function handleResend() {
+  if (!requiresConfirmation.value || !lastRegisteredEmail.value) {
+    resendError.value = 'Aucune inscription en attente de confirmation.'
+    return
+  }
+  resendLoading.value = true
+  resendSuccessMessage.value = ''
+  resendError.value = ''
+  try {
+    await resendConfirmationEmail(lastRegisteredEmail.value)
+    resendSuccessMessage.value = 'Nous avons renvoyé un e-mail de confirmation. Pensez à vérifier vos spams.'
+  } catch (err) {
+    const detail = err.response?.data?.detail || err.response?.data?.error || err.message
+    resendError.value = detail || "Impossible d'envoyer le message pour le moment."
+  } finally {
+    resendLoading.value = false
   }
 }
 </script>
@@ -499,6 +565,94 @@ async function handleRegister() {
 .alert {
   border-radius: 12px;
   font-weight: 500;
+}
+
+.auth-success {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.1rem 1.3rem;
+  border-radius: 18px;
+  border: 1px solid rgba(25, 89, 194, 0.12);
+  background: linear-gradient(135deg, rgba(223, 238, 255, 0.85), rgba(255, 255, 255, 0.9));
+}
+
+.auth-success__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(25, 89, 194, 0.12);
+  color: #1959c2;
+  display: grid;
+  place-items: center;
+  font-size: 1.35rem;
+}
+
+.auth-success__title {
+  margin: 0;
+  font-weight: 700;
+  color: #0f172a;
+  font-size: 1.05rem;
+}
+
+.auth-success__subtitle {
+  margin: 0.4rem 0 0;
+  color: #1f2b45;
+  font-size: 0.95rem;
+}
+
+.auth-success__body {
+  flex: 1;
+}
+
+.resend-confirm {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  background: rgba(25, 89, 194, 0.08);
+  border: 1px solid rgba(25, 89, 194, 0.12);
+}
+
+.resend-confirm__text {
+  font-size: 0.88rem;
+  color: rgba(16, 23, 40, 0.75);
+  margin-bottom: 0.75rem;
+}
+
+.btn-resend-confirm {
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #1959c2 0%, #418ae0 100%);
+  color: #fff;
+  font-weight: 600;
+  padding: 0.5rem 1.4rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-resend-confirm:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-resend-confirm:not(:disabled):hover,
+.btn-resend-confirm:not(:disabled):focus {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 22px rgba(25, 89, 194, 0.28);
+}
+
+.resend-confirm__success {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #0f6b2f;
+  font-weight: 600;
+}
+
+.resend-confirm__error {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #8b1c1c;
+  font-weight: 600;
 }
 
 @media (max-width: 1080px) {

@@ -69,7 +69,7 @@ onMounted(async () => {
   const token = localStorage.getItem('access_token')
   if (token) {
     try {
-      const res = await api.get('/me')
+      const res = await api.get('/me/profile')
       if (res.data?.avatar_url) {
         avatarUrl.value = res.data.avatar_url
         localStorage.setItem('avatar_url', res.data.avatar_url)

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <nav :class="['sidebar d-flex flex-column p-3', isDark ? 'sidebar-dark' : 'sidebar-light']">
     <router-link
       to="/dashboard"
@@ -45,41 +45,64 @@
       </button>
     </section>
 
-    <section class="sidebar-section">
-      <p class="sidebar-section-title">Navigation</p>
-      <ul class="nav nav-pills flex-column">
-        <li class="nav-item">
-          <router-link to="/dashboard" class="nav-link" exact-active-class="active">
-            <i class="bi bi-house me-2"></i> Accueil
-          </router-link>
-        </li>
-        <li>
-          <router-link to="/dashboard/messages" class="nav-link" active-class="active">
-            <i class="bi bi-chat-dots me-2"></i> Messages
-            <span v-if="unreadCount > 0" class="badge bg-danger ms-auto">{{ unreadCount }}</span>
-          </router-link>
-        </li>
-        <li>
-          <router-link to="/dashboard/contacts" class="nav-link" active-class="active">
-            <i class="bi bi-people me-2"></i> Contacts
-          </router-link>
-        </li>
-        <li>
-          <router-link to="/dashboard/invitations" class="nav-link" active-class="active">
-            <i class="bi bi-person-plus me-2"></i> Invitations
-          </router-link>
-        </li>
-        <li>
-          <router-link to="/dashboard/devices" class="nav-link" active-class="active">
-            <i class="bi bi-phone me-2"></i> Appareils
-          </router-link>
-        </li>
-        <li>
-          <router-link to="/dashboard/settings" class="nav-link" active-class="active">
-            <i class="bi bi-gear me-2"></i> Paramètres
-          </router-link>
-        </li>
-      </ul>
+    <section class="sidebar-section quick-links">
+      <p class="sidebar-section-title">Raccourcis sécurisés</p>
+      <div class="quick-links-grid">
+        <router-link
+          v-for="link in quickLinks"
+          :key="link.to"
+          class="quick-link"
+          :to="link.to"
+        >
+          <div class="quick-link__icon">
+            <i :class="link.icon"></i>
+          </div>
+          <div class="quick-link__body">
+            <span class="quick-link__label">{{ link.label }}</span>
+            <small class="quick-link__hint">{{ link.hint }}</small>
+          </div>
+          <i class="bi bi-arrow-right-short quick-link__chevron"></i>
+        </router-link>
+      </div>
+    </section>
+
+    <section class="sidebar-agenda mb-4">
+      <div class="agenda-header">
+        <div>
+          <p class="agenda-eyebrow">Aujourd'hui</p>
+          <h5 class="agenda-date">{{ formattedToday }}</h5>
+          <small class="agenda-time">{{ formattedTime }}</small>
+        </div>
+        <button class="btn btn-outline-light btn-sm agenda-add" @click="goToCalendar">
+          <i class="bi bi-calendar-plus"></i>
+        </button>
+      </div>
+      <div class="mini-calendar mt-3">
+        <button
+          v-for="(day, index) in calendarDays"
+          :key="day.dateKey"
+          :class="['mini-calendar__day', { active: index === selectedCalendarIndex }]"
+          @click="selectCalendarDay(index)"
+        >
+          <span>{{ day.weekday }}</span>
+          <strong>{{ day.day }}</strong>
+        </button>
+      </div>
+      <div class="agenda-list mt-3">
+        <div
+          v-for="item in agendaItems"
+          :key="item.id"
+          class="agenda-item"
+        >
+          <div class="agenda-item__time">{{ item.time }}</div>
+          <div class="agenda-item__body">
+            <p class="agenda-item__title">{{ item.title }}</p>
+            <small class="text-muted">{{ item.meta }}</small>
+          </div>
+          <i :class="['agenda-item__icon', item.icon]"></i>
+        </div>
+        <p v-if="!agendaItems.length" class="text-muted small mb-0">Aucun rappel pour cette journée.</p>
+      </div>
     </section>
 
     <section class="sidebar-section mt-4">
@@ -156,10 +179,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, defineProps, toRefs, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, defineProps, toRefs, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api, backendBase } from '@/utils/api'
-import { io } from 'socket.io-client'
 
 const props = defineProps({
   isDark: Boolean
@@ -172,9 +194,6 @@ const userId = Number(localStorage.getItem('user_id') || 0)
 const unreadCount = ref(0)
 const unreadByConversation = ref({})
 const activeConversationId = ref(null)
-const socketRef = ref(null)
-const conversationIds = ref([])
-const joinedRooms = new Set()
 const pseudo = ref('Utilisateur')
 const avatarUrl = ref(null)
 const isOnline = ref(typeof navigator !== 'undefined' ? navigator.onLine : true)
@@ -183,6 +202,9 @@ const securitySettings = ref({
   notificationLogin: false
 })
 const lastAuditLog = ref(null)
+const nowClock = ref(new Date())
+const selectedCalendarIndex = ref(0)
+let clockTimer = null
 
 const initials = computed(() => (pseudo.value ? pseudo.value.charAt(0).toUpperCase() : 'U'))
 const lastAuditText = computed(() => {
@@ -193,6 +215,84 @@ const lastAuditText = computed(() => {
     return `${relative} • IP ${ip}`
   }
   return relative || (ip ? `IP ${ip}` : '')
+})
+
+const quickLinks = computed(() => [
+  {
+    to: '/dashboard/messages',
+    label: 'Messages',
+    hint: unreadCount.value > 0 ? `${unreadCount.value} non lus` : 'Flux sécurisé',
+    icon: 'bi bi-chat-dots-fill',
+  },
+  {
+    to: '/dashboard/contacts',
+    label: 'Contacts',
+    hint: 'Équipe & partenaires',
+    icon: 'bi bi-person-lines-fill',
+  },
+  {
+    to: '/dashboard/devices',
+    label: 'Appareils',
+    hint: 'Sessions approuvées',
+    icon: 'bi bi-laptop',
+  },
+  {
+    to: '/dashboard/settings',
+    label: 'Paramètres',
+    hint: 'Sécurité & alertes',
+    icon: 'bi bi-gear-fill',
+  },
+])
+
+const calendarDays = computed(() => {
+  const days = []
+  const anchor = new Date(nowClock.value)
+  anchor.setHours(12, 0, 0, 0)
+  for (let offset = 0; offset < 5; offset += 1) {
+    const date = new Date(anchor)
+    date.setDate(anchor.getDate() + offset)
+    days.push({
+      offset,
+      dateKey: date.toISOString().slice(0, 10),
+      day: date.getDate(),
+      weekday: date
+        .toLocaleDateString('fr-FR', { weekday: 'short' })
+        .replace('.', '')
+        .replace(/^\w/, (c) => c.toUpperCase()),
+    })
+  }
+  return days
+})
+
+const formattedToday = computed(() =>
+  nowClock.value.toLocaleDateString('fr-FR', { weekday: 'long', month: 'long', day: 'numeric' }),
+)
+const formattedTime = computed(() =>
+  nowClock.value.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+)
+
+const agendaCatalog = [
+  { id: 1, offset: 0, time: '09:30', title: 'Briefing sécurité', meta: 'Salle Ops', icon: 'bi bi-shield-lock-fill' },
+  { id: 2, offset: 0, time: '16:15', title: 'Revue incidents', meta: 'SOC - Canal incidents', icon: 'bi bi-activity' },
+  { id: 3, offset: 1, time: '14:00', title: 'Comité conformité', meta: 'Visio COVA', icon: 'bi bi-people-fill' },
+  { id: 4, offset: 2, time: '11:00', title: 'Onboarding invité', meta: 'Contacts sécurisés', icon: 'bi bi-person-plus-fill' },
+  { id: 5, offset: 3, time: '08:45', title: 'Audit hebdomadaire', meta: 'Rapport exporté', icon: 'bi bi-clipboard-check-fill' },
+]
+
+const agendaItems = computed(() => {
+  const current = calendarDays.value[selectedCalendarIndex.value]
+  if (!current) return []
+  return agendaCatalog.filter((item) => item.offset === current.offset)
+})
+
+watch(calendarDays, (days) => {
+  if (!days.length) {
+    selectedCalendarIndex.value = 0
+    return
+  }
+  if (selectedCalendarIndex.value >= days.length) {
+    selectedCalendarIndex.value = 0
+  }
 })
 
 const updateNetworkStatus = () => {
@@ -209,8 +309,16 @@ const inviteContact = () => {
   router.push({ path: '/dashboard/contacts', query: { add: '1' } })
 }
 
+const goToCalendar = () => {
+  router.push({ path: '/dashboard/messages', query: { view: 'agenda' } })
+}
+
 const goToSecurity = () => {
   router.push({ path: '/dashboard/settings', query: { section: 'security' } })
+}
+
+const selectCalendarDay = (index) => {
+  selectedCalendarIndex.value = index
 }
 
 const onAvatarError = () => {
@@ -277,11 +385,21 @@ function clearUnread(convId) {
   const id = Number(convId)
   if (!id) return
   const key = String(id)
-  if (!unreadByConversation.value[key]) return
+if (!unreadByConversation.value[key]) return
   const map = { ...unreadByConversation.value }
   delete map[key]
   setUnreadMap(map)
 }
+
+watch(calendarDays, (days) => {
+  if (!days.length) {
+    selectedCalendarIndex.value = 0
+    return
+  }
+  if (selectedCalendarIndex.value >= days.length) {
+    selectedCalendarIndex.value = 0
+  }
+})
 
 function handleUnreadEvent(event) {
   applyUnreadSummary(event?.detail || {})
@@ -292,73 +410,22 @@ function handleActiveConversationEvent(event) {
   activeConversationId.value = convId > 0 ? convId : null
 }
 
-function handleSocketMessage(payload) {
-  if (!payload) return
-  const convId = Number(payload.conv_id)
-  if (!convId) return
-  const sender = Number(payload.sender_id ?? payload.user_id ?? 0)
-  if (sender && userId && sender === userId) return
-  if (convId === activeConversationId.value) return
-  incrementUnread(convId)
-}
 
-function handleMessageRead(payload) {
-  if (!payload) return
-  const reader = Number(payload.user_id ?? payload.id_user ?? 0)
-  if (reader && userId && reader !== userId) return
-  const convId = Number(payload.conv_id)
-  if (!convId) return
-  clearUnread(convId)
-}
 
-function ensureSocketConnected() {
-  if (socketRef.value) return
-  try {
-    socketRef.value = io(backendBase, {
-      transports: ['websocket'],
-      auth: { token: localStorage.getItem('access_token') },
-    })
-    socketRef.value.on('connect', () => {
-      joinedRooms.clear()
-      joinKnownRooms()
-    })
-    socketRef.value.on('disconnect', () => {
-      joinedRooms.clear()
-    })
-    socketRef.value.on('message_created', handleSocketMessage)
-    socketRef.value.on('new_message', handleSocketMessage)
-    socketRef.value.on('message_read', handleMessageRead)
-  } catch (error) {
-    socketRef.value = null
-  }
-}
 
-function joinKnownRooms() {
-  if (!socketRef.value) return
-  for (const id of conversationIds.value || []) {
-    const convId = Number(id)
-    if (!convId || joinedRooms.has(convId)) continue
-    socketRef.value.emit('join_conversation', { conv_id: convId })
-    joinedRooms.add(convId)
-  }
-}
 
-async function loadConversations() {
-  try {
-    const res = await api.get(`/conversations/`)
-    const ids = (res.data || [])
-      .map(item => Number(item?.id ?? item?.id_conv ?? 0))
-      .filter(id => Number.isFinite(id) && id > 0)
-    conversationIds.value = ids
-    joinKnownRooms()
-  } catch {
-    conversationIds.value = []
-  }
-}
+
+
+
+
+
 
 onMounted(async () => {
   pseudo.value = localStorage.getItem('pseudo') || 'Utilisateur'
   avatarUrl.value = localStorage.getItem('avatar_url') || null
+  clockTimer = setInterval(() => {
+    nowClock.value = new Date()
+  }, 60000)
 
   if (typeof window !== 'undefined') {
     window.addEventListener('online', updateNetworkStatus)
@@ -373,9 +440,6 @@ onMounted(async () => {
   if (!token) {
     return
   }
-
-  ensureSocketConnected()
-  await loadConversations()
 
   try {
     const profileRes = await api.get(`/me`)
@@ -418,19 +482,16 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  if (clockTimer) {
+    clearInterval(clockTimer)
+    clockTimer = null
+  }
   if (typeof window !== 'undefined') {
     window.removeEventListener('online', updateNetworkStatus)
     window.removeEventListener('offline', updateNetworkStatus)
     window.removeEventListener('cova:unread', handleUnreadEvent)
     window.removeEventListener('cova:active-conversation', handleActiveConversationEvent)
   }
-  if (socketRef.value) {
-    try {
-      socketRef.value.disconnect()
-    } catch {}
-    socketRef.value = null
-  }
-  joinedRooms.clear()
 })
 
 function formatRelativeTime(dateString) {
@@ -693,6 +754,179 @@ function formatRelativeTime(dateString) {
   padding: 0.55rem 0;
 }
 
+.quick-links-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.quick-link {
+  border-radius: 16px;
+  padding: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  text-decoration: none;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.sidebar-light .quick-link {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+.quick-link:hover {
+  transform: translateX(4px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.2);
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
+.quick-link__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  background: rgba(59, 130, 246, 0.18);
+  color: #60a5fa;
+}
+
+.quick-link__body {
+  flex: 1;
+}
+
+.quick-link__label {
+  font-weight: 600;
+  display: block;
+}
+
+.quick-link__hint {
+  font-size: 0.8rem;
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.quick-link__chevron {
+  font-size: 1.5rem;
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.sidebar-agenda {
+  border-radius: 20px;
+  padding: 1rem;
+  background: linear-gradient(135deg, rgba(14, 116, 144, 0.25), rgba(37, 99, 235, 0.35));
+  color: #fff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.35);
+}
+
+.sidebar-light .sidebar-agenda {
+  color: #0f172a;
+  background: linear-gradient(135deg, rgba(148, 187, 233, 0.4), rgba(238, 242, 255, 0.95));
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.1);
+}
+
+.agenda-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.agenda-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.7rem;
+  margin-bottom: 0.2rem;
+  opacity: 0.8;
+}
+
+.agenda-date {
+  margin: 0;
+  font-weight: 700;
+}
+
+.agenda-time {
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+.agenda-add {
+  border-color: rgba(255, 255, 255, 0.5);
+  color: inherit;
+}
+
+.sidebar-light .agenda-add {
+  border-color: rgba(15, 23, 42, 0.2);
+}
+
+.mini-calendar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(52px, 1fr));
+  gap: 0.4rem;
+}
+
+.mini-calendar__day {
+  border: none;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.15);
+  color: inherit;
+  padding: 0.35rem 0.4rem;
+  text-align: center;
+  font-size: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.mini-calendar__day strong {
+  font-size: 1.1rem;
+}
+
+.mini-calendar__day.active {
+  background: rgba(255, 255, 255, 0.3);
+  color: #0f172a;
+}
+
+.agenda-list {
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.sidebar-light .agenda-list {
+  background: rgba(15, 23, 42, 0.05);
+}
+
+.agenda-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.agenda-item__time {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.agenda-item__title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.agenda-item__icon {
+  font-size: 1.1rem;
+  opacity: 0.85;
+}
+
 .security-item .label {
   display: block;
   font-weight: 600;
@@ -810,3 +1044,5 @@ function formatRelativeTime(dateString) {
   width: 100%;
 }
 </style>
+
+

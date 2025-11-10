@@ -91,8 +91,37 @@
           </button>
         </form>
 
-        <div v-if="error" class="alert alert-danger text-center animate__animated animate__shakeX mt-3">
-          {{ error }}
+        <div v-if="error" class="auth-alert animate__animated animate__shakeX mt-3" role="alert">
+          <div class="auth-alert__icon">
+            <i class="bi bi-exclamation-octagon-fill"></i>
+          </div>
+          <div class="auth-alert__content">
+            <p class="auth-alert__title">{{ error }}</p>
+            <p v-if="errorHint" class="auth-alert__hint">{{ errorHint }}</p>
+            <router-link v-if="!showResend" to="/reset-password" class="auth-alert__action">
+              <i class="bi bi-arrow-counterclockwise"></i>
+              Réinitialiser mon mot de passe
+            </router-link>
+          </div>
+        </div>
+
+        <div v-if="showResend" class="resend-card mt-3">
+          <p class="resend-card__text">
+            Vous n'avez pas recu l'e-mail de confirmation ? Cliquez ci-dessous pour en recevoir un nouveau.
+          </p>
+          <button
+            type="button"
+            class="btn-resend"
+            :disabled="resendLoading"
+            @click="handleResend"
+          >
+            <span v-if="resendLoading" class="spinner-border spinner-border-sm"></span>
+            <span v-else>Renvoyer l'e-mail de confirmation</span>
+          </button>
+          <p v-if="resendSuccess" class="resend-card__success">
+            Un nouvel e-mail vient d'etre envoye. Pensez a verifier vos spams.
+          </p>
+          <p v-if="resendError" class="resend-card__error">{{ resendError }}</p>
         </div>
 
         <p class="auth-card__footer">
@@ -105,16 +134,22 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import axios from 'axios'
-import { api, backendBase } from '@/utils/api'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, watch } from 'vue'
+import { api } from '@/utils/api'
+import { loginWithPassword } from '@/services/auth'
+import { useRouter, useRoute } from 'vue-router'
 
 const email = ref('')
 const password = ref('')
 const error = ref('')
+const errorHint = ref('')
 const loading = ref(false)
+const showResend = ref(false)
+const resendLoading = ref(false)
+const resendSuccess = ref(false)
+const resendError = ref('')
 const router = useRouter()
+const route = useRoute()
 // Normalize API base so it always ends with '/api'
 // Use centralized API base + backend origin
 
@@ -124,32 +159,73 @@ onMounted(() => {
   }
 })
 
+watch(
+  () => route.query.reason,
+  (reason) => {
+    if (!reason) return
+    const reasonValue = Array.isArray(reason) ? reason[0] : reason
+    applyLogoutReason(reasonValue)
+    clearReasonQuery()
+  },
+  { immediate: true },
+)
+
+function setError(message, hint = '') {
+  error.value = message
+  errorHint.value = hint
+}
+
+const logoutReasons = {
+  'session-expired': {
+    title: 'Votre session a expiré.',
+    hint: 'Reconnectez-vous pour reprendre vos conversations sécurisées.',
+  },
+  'invalid-token': {
+    title: 'Votre authentification n’est plus valide.',
+    hint: 'Merci de vous reconnecter pour sécuriser votre accès.',
+  },
+}
+
+function applyLogoutReason(reason) {
+  const payload = logoutReasons[reason]
+  if (!payload) return
+  setError(payload.title, payload.hint)
+  showResend.value = false
+}
+
+function clearReasonQuery() {
+  try {
+    const nextQuery = { ...route.query }
+    delete nextQuery.reason
+    router.replace({ path: route.path, query: nextQuery })
+  } catch {
+    // ignore navigation replacement errors
+  }
+}
+
 async function handleLogin() {
-  error.value = ''
+  setError('')
+  showResend.value = false
+  resendError.value = ''
+  resendSuccess.value = false
   loading.value = true
   try {
-    const res = await api.post(`/login`, {
+    const session = await loginWithPassword({
       email: email.value,
       password: password.value,
     })
-    localStorage.setItem('access_token', res.data.access_token)
-    localStorage.setItem('refresh_token', res.data.refresh_token)
-    localStorage.setItem('pseudo', res.data.user?.pseudo || '')
-    localStorage.setItem('user_id', res.data.user?.id || '')
-    localStorage.setItem('user_email', res.data.user?.email || '')
-
-    try {
-      const profile = await api.get(`/me`)
-      if (profile.data.avatar) {
-        localStorage.setItem(
-          'avatar_url',
-          `${backendBase}/static/avatars/${profile.data.avatar}`
-        )
-      } else {
-        localStorage.removeItem('avatar_url')
-      }
-    } catch (e) {
-      // ignore profile fetch errors
+    const user = session?.user || null
+    const profile = user?.profile || null
+    const displayName = profile?.display_name || user?.email || 'Utilisateur'
+    if (displayName) {
+      localStorage.setItem('pseudo', displayName)
+    } else {
+      localStorage.removeItem('pseudo')
+    }
+    if (profile?.avatar_url) {
+      localStorage.setItem('avatar_url', profile.avatar_url)
+    } else {
+      localStorage.removeItem('avatar_url')
     }
     router.push('/dashboard')
   } catch (err) {
@@ -161,13 +237,56 @@ async function handleLogin() {
       loading.value = false
       router.push('/login/totp')
       return
-    } else if (err.response?.data?.error) {
-      error.value = err.response.data.error
+    }
+
+    const detailRaw = err.response?.data?.error || err.response?.data?.detail
+    const detail = typeof detailRaw === 'string' ? detailRaw : ''
+    const lowerDetail = detail.toLowerCase()
+    if (lowerDetail === 'email not confirmed') {
+      setError(
+        'Veuillez confirmer votre adresse e-mail avant de vous connecter.',
+        'Nous pouvons vous renvoyer le lien de validation ci-dessous.',
+      )
+      showResend.value = true
+    } else if (
+      lowerDetail.includes('incorrect') ||
+      lowerDetail.includes('invalid credentials') ||
+      lowerDetail.includes('invalid username or password') ||
+      err.response?.status === 401
+    ) {
+      setError(
+        'Identifiants incorrects.',
+        'Vérifiez l’orthographe de votre e-mail et de votre mot de passe ou utilisez le lien « Mot de passe oublié ».',
+      )
+      showResend.value = false
+    } else if (detail) {
+      setError(detail)
+      showResend.value = false
     } else {
-      error.value = 'Erreur inconnue, reessayez.'
+      setError('Une erreur est survenue. Veuillez réessayer.')
+      showResend.value = false
     }
   } finally {
     loading.value = false
+  }
+}
+
+async function handleResend() {
+  if (!email.value) {
+    resendError.value = 'Veuillez indiquer votre adresse e-mail.'
+    return
+  }
+  resendLoading.value = true
+  resendSuccess.value = false
+  resendError.value = ''
+  try {
+    await api.post(`/auth/resend-confirmation`, { email: email.value })
+    resendSuccess.value = true
+  } catch (err) {
+    const detail = err.response?.data?.detail || err.response?.data?.error || err.message
+    resendError.value = detail || "Impossible d'envoyer le message pour le moment."
+  } finally {
+    resendLoading.value = false
   }
 }
 </script>
@@ -524,6 +643,107 @@ async function handleLogin() {
   font-weight: 500;
 }
 
+.auth-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 0.9rem 1.1rem;
+  border-radius: 16px;
+  border: 1px solid rgba(234, 76, 106, 0.2);
+  background: linear-gradient(135deg, rgba(255, 231, 236, 0.95), rgba(255, 255, 255, 0.9));
+  color: #881337;
+}
+
+.auth-alert__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: rgba(234, 76, 106, 0.15);
+  display: grid;
+  place-items: center;
+  font-size: 1.35rem;
+  color: #be123c;
+}
+
+.auth-alert__title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.auth-alert__content {
+  flex: 1;
+}
+
+.auth-alert__hint {
+  margin: 0.25rem 0 0;
+  color: #9f1239;
+  font-size: 0.9rem;
+}
+
+.auth-alert__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.65rem;
+  font-weight: 600;
+  color: #be123c;
+}
+
+.auth-alert__action:hover,
+.auth-alert__action:focus {
+  text-decoration: underline;
+}
+
+.resend-card {
+  background: rgba(25, 89, 194, 0.08);
+  border-radius: 12px;
+  padding: 1rem 1.3rem;
+  border: 1px solid rgba(25, 89, 194, 0.12);
+  text-align: center;
+}
+
+.resend-card__text {
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+  color: rgba(16, 23, 40, 0.75);
+}
+
+.btn-resend {
+  border: none;
+  border-radius: 999px;
+  padding: 0.55rem 1.6rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #1959c2 0%, #418ae0 100%);
+  color: #fff;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-resend:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-resend:not(:disabled):hover,
+.btn-resend:not(:disabled):focus {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(25, 89, 194, 0.28);
+}
+
+.resend-card__success {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #0f6b2f;
+  font-weight: 600;
+}
+
+.resend-card__error {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #8b1c1c;
+  font-weight: 600;
+}
+
 @media (max-width: 1080px) {
   .auth-grid {
     gap: 2rem;
@@ -588,4 +808,5 @@ async function handleLogin() {
   }
 }
 </style>
+
 

@@ -122,7 +122,6 @@
 
 <script setup>
 import { ref } from 'vue'
-import axios from 'axios'
 import { api } from '@/utils/api'
 
 const email = ref('')
@@ -135,7 +134,7 @@ async function handleReset() {
   success.value = ''
   loading.value = true
   try {
-    await api.post(`/forgot-password`, {
+    await api.post(`/auth/forgot-password`, {
       email: email.value,
     })
     success.value =

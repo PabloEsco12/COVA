@@ -80,7 +80,7 @@
           v-model="newMessage"
           type="text"
           class="form-control"
-          placeholder="Ã‰crire un messageâ€¦"
+          placeholder="Écrire un message…"
           :disabled="loading"
           @keyup.enter="sendMessage"
           autocomplete="off"
@@ -111,7 +111,7 @@
           <button class="btn btn-secondary" @click="showConvModal = false">Annuler</button>
           <button class="btn btn-primary" @click="createConversation" :disabled="creatingConv">
             <span v-if="creatingConv" class="spinner-border spinner-border-sm"></span>
-            <span v-else>CrÃ©er</span>
+            <span v-else>Créer</span>
           </button>
         </div>
       </div>
@@ -159,18 +159,18 @@ async function fetchConversations() {
   }
 }
 
-// RÃ©cupÃ¨re les messages d'une conversation
+// Récupère les messages d'une conversation
 async function fetchMessages() {
     if (!selectedConvId.value) { messages.value = []; return }
   loading.value = true
   try {
     const res = await api.get(`/conversations/${selectedConvId.value}/messages/`)
-    // Adapter selon le format de rÃ©ponse rÃ©el de lâ€™API
+        // Adapter selon le format de réponse réel de l’API
     messages.value = (res.data || []).map(m => ({
       ...m,
       sentByMe: m.sender_id === userId
     }))
-    // Scrolle en bas aprÃ¨s chargement
+        // Scrolle en bas après chargement
     await nextTick()
     messagesEnd.value.scrollTop = messagesEnd.value.scrollHeight
   } catch (e) {

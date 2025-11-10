@@ -1,13 +1,56 @@
-<template>
-  <div class="reset-bg">
-    <div class="reset-container animate__animated animate__fadeInDown">
-      <img src="@/assets/logo_COVA.png" alt="Logo COVA" class="reset-logo" />
-      <h2 class="reset-title mb-3">Confirmation d'email</h2>
+﻿<template>
+  <div class="confirm-bg">
+    <div class="confirm-card animate__animated animate__fadeInDown">
+      <img src="@/assets/logo_COVA.png" alt="Logo COVA" class="confirm-logo" />
+      <p class="confirm-eyebrow">Messagerie COVA</p>
+      <h2 class="confirm-title">Validation de votre accès</h2>
+      <p class="confirm-lead">
+        Nous vérifions chaque lien pour garantir que vos conversations restent protégées.
+      </p>
+
       <Spinner v-if="loading" />
+
       <div v-else>
-        <div v-if="error" class="alert alert-danger text-center">{{ error }}</div>
-        <div v-if="success" class="alert alert-success text-center">{{ success }}</div>
-        <router-link v-if="success" to="/login" class="btn btn-link mt-2 w-100">Se connecter</router-link>
+        <div v-if="success" class="status-block status-block--success">
+          <div class="status-block__icon">
+            <i class="bi bi-shield-check"></i>
+          </div>
+          <div class="status-block__body">
+            <p class="status-block__title">{{ success }}</p>
+            <p class="status-block__text">{{ successSubtitle }}</p>
+          </div>
+        </div>
+
+        <div v-else class="status-block status-block--error">
+          <div class="status-block__icon">
+            <i class="bi bi-exclamation-octagon"></i>
+          </div>
+          <div class="status-block__body">
+            <p class="status-block__title">Impossible de confirmer ce lien</p>
+            <p class="status-block__text">{{ error }}</p>
+            <p class="status-block__hint">{{ errorHelp }}</p>
+          </div>
+        </div>
+
+        <div class="confirm-actions">
+          <router-link
+            v-if="success"
+            to="/login"
+            class="confirm-btn confirm-btn--primary"
+          >
+            Accéder à ma messagerie
+          </router-link>
+          <router-link
+            v-else
+            to="/register"
+            class="confirm-btn confirm-btn--ghost"
+          >
+            Refaire une demande d'activation
+          </router-link>
+          <router-link to="/" class="confirm-secondary-link">
+            Retourner à l'accueil COVA
+          </router-link>
+        </div>
       </div>
     </div>
   </div>
@@ -15,22 +58,29 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
 import { api } from '@/utils/api'
 import { useRoute } from 'vue-router'
 import Spinner from './Spinner.vue'
 
 const route = useRoute()
 const loading = ref(true)
-const error = ref('')
 const success = ref('')
+const successSubtitle = ref('')
+const error = ref('')
+const errorHelp = ref('')
 
 onMounted(async () => {
   try {
-    const res = await api.get(`/confirm-email/${route.params.token}`)
-    success.value = res.data.message || "E-mail confirmé.";
+    const res = await api.get(`/auth/confirm/${route.params.token}`)
+    const apiMessage = (res.data?.message || '').trim()
+    success.value = apiMessage || 'Votre adresse e-mail est confirmée.'
+    successSubtitle.value =
+      "Votre accès sécurisé est désormais actif. Vous pouvez vous connecter et échanger en toute confidentialité."
   } catch (err) {
-    error.value = err.response?.data?.error || 'Erreur inconnue'
+    const detail = err.response?.data?.detail || err.response?.data?.error
+    error.value = detail || err.message || 'Une erreur inconnue est survenue.'
+    errorHelp.value =
+      "Le lien peut avoir expiré ou avoir déjà été utilisé. Demandez un nouvel e-mail de confirmation depuis la page de connexion."
   } finally {
     loading.value = false
   }
@@ -38,37 +88,171 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.reset-bg {
+.confirm-bg {
   min-height: 100vh;
-  background: linear-gradient(135deg, #1959c2 0%, #162041 100%);
+  background: radial-gradient(circle at 20% 20%, rgba(25, 89, 194, 0.35), transparent 45%),
+    radial-gradient(circle at 80% 0%, rgba(14, 22, 64, 0.55), transparent 50%),
+    #0f172a;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 2rem 1rem;
 }
-.reset-container {
-  background: rgba(255,255,255,0.14);
-  border-radius: 24px;
-  box-shadow: 0 8px 32px 0 rgba(31,38,135,0.25);
-  backdrop-filter: blur(7px);
-  -webkit-backdrop-filter: blur(7px);
-  padding: 3rem 2rem 2rem 2rem;
+
+.confirm-card {
   width: 100%;
-  max-width: 410px;
-  border: 1.5px solid rgba(255,255,255,0.12);
+  max-width: 480px;
+  background: rgba(245, 247, 251, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 28px;
+  padding: 2.75rem 2.25rem;
   text-align: center;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 25px 80px rgba(7, 12, 23, 0.55);
+  color: #f8fafc;
 }
-.reset-logo {
-  width: 56px;
-  margin-bottom: 12px;
-  border-radius: 10px;
-  box-shadow: 0 2px 12px #1959c2ad;
+
+.confirm-logo {
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+  margin-bottom: 1rem;
+  box-shadow: 0 10px 30px rgba(25, 89, 194, 0.4);
 }
-.reset-title {
+
+.confirm-eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 0.74rem;
+  color: #8ea6d8;
+}
+
+.confirm-title {
+  margin: 0.4rem 0 0.6rem;
+  font-size: 1.85rem;
   font-weight: 600;
-  letter-spacing: 1px;
-  color: #1b2845;
+  color: #ffffff;
 }
-.alert {
-  font-size: 1rem;
+
+.confirm-lead {
+  margin: 0 0 1.8rem;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.status-block {
+  display: flex;
+  gap: 1rem;
+  padding: 1.4rem 1.2rem;
+  border-radius: 20px;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.status-block--success {
+  background: rgba(12, 189, 121, 0.12);
+  border-color: rgba(12, 189, 121, 0.3);
+}
+
+.status-block--error {
+  background: rgba(220, 53, 69, 0.12);
+  border-color: rgba(220, 53, 69, 0.35);
+}
+
+.status-block__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+}
+
+.status-block--success .status-block__icon {
+  background: rgba(12, 189, 121, 0.18);
+  color: #54e0b0;
+}
+
+.status-block--error .status-block__icon {
+  background: rgba(220, 53, 69, 0.2);
+  color: #ff8a91;
+}
+
+.status-block__title {
+  margin: 0;
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: #ffffff;
+}
+
+.status-block__text {
+  margin: 0.35rem 0 0;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.95rem;
+}
+
+.status-block__hint {
+  margin: 0.65rem 0 0;
+  font-size: 0.85rem;
+  color: rgba(230, 239, 255, 0.75);
+}
+
+.confirm-actions {
+  margin-top: 1.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.confirm-btn {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0.95rem 1rem;
+  border-radius: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.confirm-btn--primary {
+  background: linear-gradient(135deg, #1f65d6, #4aa8ff);
+  color: #fff;
+  box-shadow: 0 15px 35px rgba(38, 110, 224, 0.4);
+}
+
+.confirm-btn--ghost {
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #f8fafc;
+  background: transparent;
+}
+
+.confirm-btn:hover {
+  transform: translateY(-2px);
+}
+
+.confirm-secondary-link {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: underline;
+}
+
+@media (max-width: 520px) {
+  .confirm-card {
+    padding: 2.3rem 1.6rem;
+  }
+
+  .status-block {
+    flex-direction: column;
+    text-align: center;
+    align-items: center;
+  }
+
+  .status-block__icon {
+    width: 48px;
+    height: 48px;
+  }
 }
 </style>

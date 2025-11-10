@@ -1,0 +1,34 @@
+"""Example integration test for FastAPI v2 auth.
+
+The test is skipped by default; configure DATABASE_URL before enabling.
+"""
+
+import os
+import pytest
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.app_v2.main import app
+from backend.app_v2.db.session import get_session
+
+pytestmark = pytest.mark.asyncio
+
+
+@pytest.fixture
+async def test_client():
+    async with AsyncClient(app=app, base_url="http://testserver") as client:
+        yield client
+
+
+@pytest.mark.skip(reason="Requires running Postgres and isolated database")
+async def test_register_and_login_flow(test_client):
+    response = await test_client.post(
+        "/api/auth/register",
+        json={"email": "user@example.com", "password": "Secret123!", "display_name": "Test"},
+    )
+    assert response.status_code == 201
+    login_response = await test_client.post(
+        "/api/auth/login",
+        json={"email": "user@example.com", "password": "Secret123!"},
+    )
+    assert login_response.status_code == 200

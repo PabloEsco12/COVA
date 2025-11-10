@@ -1,0 +1,2 @@
+This Alembic environment manages the next-generation FastAPI schema
+defined in `backend/app/db_v2`.

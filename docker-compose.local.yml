@@ -1,10 +1,12 @@
+version: "3.9"
+
 services:
   db:
     image: postgres:14
     container_name: securechat_db
     env_file: .env.docker
     ports:
-      - "55432:5432"
+    - "5543:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
@@ -14,38 +16,108 @@ services:
       retries: 5
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    container_name: securechat_redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "56379:6379"
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: securechat_minio
+    command: ["server", "--console-address", ":9001", "/data"]
+    env_file: .env.docker
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_KEY}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    restart: unless-stopped
+
+  clamav:
+    image: clamav/clamav:latest
+    container_name: securechat_clamav
+    ports:
+      - "3310:3310"
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
+    
       dockerfile: Dockerfile
     container_name: securechat_backend
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
+      clamav:
+        condition: service_started
     env_file: .env.docker
     environment:
-      - FLASK_ENV=development
-    ports:
-      - "5000:5000"
+      UVICORN_RELOAD: "true"
     volumes:
-      # migrations & assets persistants (si tu veux)
-      - ./backend/app/migrations:/app/migrations
-      - ./backend/app/static/avatars:/app/app/static/avatars
-      - ./backend/app/static/uploads:/app/app/static/uploads
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    entrypoint: >
+      sh -c "
+        /wait-for-it.sh db:5432 --timeout=60 --strict &&
+        /wait-for-it.sh redis:6379 --timeout=60 --strict &&
+        python -m alembic -c /app/alembic.ini upgrade head &&
+        uvicorn app_v2.main:app --host 0.0.0.0 --port 8000 ${UVICORN_RELOAD:+--reload}
+      "
     restart: unless-stopped
 
-  # astuce : tu développes le front *hors docker* avec npm run dev
-  # mais si tu veux un service dev dans docker :
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: securechat_worker
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
+      clamav:
+        condition: service_started
+    env_file: .env.docker
+    volumes:
+      - ./backend:/app
+    entrypoint: >
+      sh -c "
+        /wait-for-it.sh db:5432 --timeout=60 --strict &&
+        /wait-for-it.sh redis:6379 --timeout=60 --strict &&
+        python -m app_v2.workers.notification_worker
+      "
+    restart: unless-stopped
+
   frontend-dev:
     image: node:18-alpine
     container_name: securechat_frontend_dev
     working_dir: /app
     volumes:
       - ./frontend/secure_messagerie:/app
-    command: ["npm","run","dev","--","--host","0.0.0.0"]
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5176"]
     ports:
-      - "5173:5173"
+      - "5176:5176"
+    environment:
+      - VITE_API_URL=http://localhost:8000/api
     restart: unless-stopped
 
 volumes:
   db_data:
+  redis_data:
+  minio_data:

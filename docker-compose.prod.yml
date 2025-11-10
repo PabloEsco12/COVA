@@ -44,6 +44,26 @@ services:
     labels:
       - autoheal=true
 
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: securechat_worker
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env.prod
+    volumes:
+      - ./backend:/app
+    entrypoint: >
+      sh -c "
+        /wait-for-it.sh db:5432 --timeout=60 --strict &&
+        python -m app_v2.workers.notification_worker
+      "
+    labels:
+      - autoheal=true
+
   frontend:
     build:
       context: ./frontend/secure_messagerie

@@ -104,7 +104,6 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import axios from 'axios'
 import { api } from '@/utils/api'
 import { useRoute } from 'vue-router'
 
@@ -188,8 +187,9 @@ async function handleNewPassword() {
 
   loading.value = true
   try {
-    await api.post(`/reset-password/${token}`, {
-      password: password.value
+    await api.post(`/auth/reset-password`, {
+      token,
+      password: password.value,
     })
     success.value = 'Mot de passe mis à jour. Vous pouvez à présent vous connecter.'
     password.value = ''
