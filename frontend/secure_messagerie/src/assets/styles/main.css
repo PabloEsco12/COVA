@@ -1,0 +1,34 @@
+@import './base.css';
+
+/* on ne met plus de max-width sur #app,
+   c’est le dashboard qui gère la largeur */
+#app {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  font-weight: normal;
+}
+
+a,
+.green {
+  text-decoration: none;
+  color: hsla(160, 100%, 37%, 1);
+  transition: 0.4s;
+  padding: 3px;
+}
+
+@media (hover: hover) {
+  a:hover {
+    background-color: hsla(160, 100%, 37%, 0.2);
+  }
+}
+
+/* IMPORTANT : on supprime l’ancien layout Vite */
+@media (min-width: 1024px) {
+  body {
+    /* plus de display:flex ici */
+  }
+  #app {
+    /* plus de grid ici */
+  }
+}

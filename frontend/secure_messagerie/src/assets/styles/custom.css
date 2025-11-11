@@ -1,0 +1,95 @@
+/* =========================
+   Variables de thème
+   ========================= */
+:root {
+  --cova-bg: #e9edf5;
+  --cova-surface: #ffffff;
+  --cova-border: rgba(15, 23, 42, 0.06);
+  --cova-radius-lg: 20px;
+  --cova-radius-md: 14px;
+  --cova-shadow: 0 4px 16px rgba(12, 74, 110, 0.08);
+  --cova-primary: #0d6efd;
+  --cova-primary-soft: rgba(13, 110, 253, 0.12);
+  --cova-text: #0f172a;
+  --cova-muted: #6b7280;
+}
+
+/* mode sombre global (le reste est géré dans les composants) */
+body.dark-mode {
+  background: radial-gradient(circle at top, #0f172a 0%, #020617 40%, #020617 100%);
+  color: #e2e8f0;
+}
+
+body.light-mode {
+  background: var(--cova-bg);
+  color: var(--cova-text);
+}
+
+/* fallback si aucune classe sur body */
+body {
+  background: var(--cova-bg);
+  color: var(--cova-text);
+  min-height: 100vh;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* =========================
+   Contenu principal
+   (ne touche PAS au sidebar)
+   ========================= */
+.main-content {
+  background: #f7f9fb;
+  border-radius: 20px;
+  box-shadow: 0 4px 16px rgba(25, 89, 194, 0.2);
+  transition: background 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+}
+
+body.dark-mode .main-content {
+  background: rgba(21, 26, 35, 0.96);
+  color: #e9ecef;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* petites cartes globales */
+.card {
+  background: var(--cova-surface);
+  border: 1px solid rgba(15, 23, 42, 0.035);
+  border-radius: 16px;
+  box-shadow: 0 6px 22px rgba(15, 23, 42, 0.04);
+}
+
+body.dark-mode .card {
+  background: rgba(15, 23, 42, 0.55);
+  border-color: rgba(148, 163, 184, 0.05);
+  box-shadow: 0 6px 26px rgba(0, 0, 0, 0.28);
+}
+
+/* boutons globaux */
+.btn-primary {
+  background-color: var(--cova-primary);
+  border-color: var(--cova-primary);
+  font-weight: 600;
+}
+
+.btn-outline-secondary {
+  border-color: rgba(15, 23, 42, 0.15);
+}
+
+/* états / alertes */
+.alert {
+  border-radius: 14px;
+}
+
+/* petits utilitaires */
+.shadow-sm {
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04) !important;
+}
+
+/* =========================
+   IMPORTANT
+   =========================
+   On NE met plus ici de .sidebar, .sidebar-light,
+   .sidebar-dark, .header-bar, etc.
+   C’est ton Sidebar.vue et ton DashboardHeader.vue
+   (qui ont <style scoped>) qui s’en occupent.
+*/

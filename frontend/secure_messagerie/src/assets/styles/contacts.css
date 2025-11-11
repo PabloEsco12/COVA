@@ -1,0 +1,516 @@
+/******************************
+ * PAGE CONTACTS GLOBALE
+ ******************************/
+.contacts-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+/******************************
+ * HEADER
+ ******************************/
+.contacts-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  background: #fff;
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.contacts-header .title {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.contacts-header .subtitle {
+  font-size: 0.9rem;
+  color: #6c757d;
+  margin: 0;
+}
+
+/******************************
+ * TOOLBAR (recherche + filtres)
+ ******************************/
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  background: #fff;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.search-group {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 0.5rem;
+}
+
+.search-group .form-control {
+  background: transparent;
+}
+
+.filter-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  color: #495057;
+  border-radius: 50px;
+  padding: 0.35rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  transition: 0.15s;
+}
+
+.filter-chip:hover {
+  background: #e9ecef;
+}
+
+.filter-chip.active {
+  background: #0d6efd;
+  color: #fff;
+  border-color: #0d6efd;
+}
+
+.filter-chip.active .badge {
+  background: #fff !important;
+  color: #0d6efd !important;
+}
+
+/******************************
+ * ÉTAT VIDE
+ ******************************/
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  background: #fff;
+  border-radius: 0.75rem;
+}
+
+.empty-icon {
+  font-size: 3rem;
+  color: #adb5bd;
+  margin-bottom: 1rem;
+}
+
+/******************************
+ * LISTE CONTACTS
+ ******************************/
+.contact-section {
+  background: #fff;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  margin-bottom: 1rem;
+}
+
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.contact-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .contact-grid {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  }
+}
+
+/******************************
+ * CARTE CONTACT
+ ******************************/
+.contact-card {
+  border: none;
+  border-radius: 0.75rem;
+  transition: box-shadow 0.2s;
+  cursor: default;
+  background: #fff;
+}
+
+.contact-card:hover {
+  box-shadow: 0 0 0 2px #0d6efd20;
+}
+
+.contact-card--highlight {
+  box-shadow: 0 0 0 3px #0d6efd40 !important;
+  animation: fadeHighlight 4s ease-out;
+}
+
+@keyframes fadeHighlight {
+  from {
+    box-shadow: 0 0 0 4px #0d6efd80;
+  }
+  to {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.contact-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.contact-main--interactive {
+  cursor: pointer;
+}
+
+.contact-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #e9ecef;
+  color: #495057;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.contact-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.contact-info {
+  flex: 1;
+}
+
+.contact-name {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.contact-meta {
+  font-size: 0.85rem;
+}
+
+.dot-separator::before {
+  content: '•';
+  margin: 0 0.3rem;
+  color: #adb5bd;
+}
+
+.contact-actions {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.alias-editor input {
+  min-width: 0;
+}
+
+/******************************
+ * MODALES GÉNÉRALES
+ ******************************/
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(3px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1050;
+}
+
+.modal-card {
+  background: #fff;
+  border-radius: 0.75rem;
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modal-header,
+.modal-footer {
+  padding: 1rem;
+  background: #f8f9fa;
+}
+
+.modal-body {
+  padding: 1rem;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.danger-card .modal-header h5 {
+  color: #dc3545;
+}
+
+/******************************
+ * MODALE DÉTAIL CONTACT
+ ******************************/
+.detail-card {
+  max-width: 600px;
+}
+
+.detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.detail-hero {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.detail-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #e9ecef;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: #495057;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.detail-field {
+  display: flex;
+  flex-direction: column;
+  background: #f8f9fa;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.detail-field .label {
+  font-size: 0.8rem;
+  color: #6c757d;
+}
+
+.detail-field .value {
+  font-weight: 500;
+}
+
+/******************************
+ * MODALE SUPPRESSION
+ ******************************/
+.delete-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.preview-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #e9ecef;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+/******************************
+ * SQUELETTES
+ ******************************/
+.skeleton-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.skeleton-card {
+  background: #fff;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.skeleton-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #e9ecef;
+}
+
+.skeleton-lines {
+  flex: 1;
+}
+
+.skeleton-lines .line {
+  height: 10px;
+  background: #e9ecef;
+  border-radius: 5px;
+  margin-bottom: 0.5rem;
+}
+
+.skeleton-lines .w-60 {
+  width: 60%;
+}
+
+.skeleton-lines .w-40 {
+  width: 40%;
+}
+
+/******************************
+ * ANIMATIONS
+ ******************************/
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/****************************************************************
+ * DARK MODE (s’aligne sur body.dark-mode de custom.css)
+ ****************************************************************/
+body.dark-mode .contacts-page {
+  background: transparent;
+}
+
+body.dark-mode .contacts-header {
+  background: #23272c !important;
+  color: #e9ecef;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
+}
+
+body.dark-mode .contacts-header .subtitle {
+  color: #9aa4b5;
+}
+
+body.dark-mode .toolbar {
+  background: #1b1f27 !important;
+  border: 1px solid rgba(255, 255, 255, 0.01);
+}
+
+body.dark-mode .search-group .form-control {
+  background: transparent;
+  color: #e9ecef;
+}
+
+body.dark-mode .filter-chip {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(255, 255, 255, 0.04);
+  color: #e9ecef;
+}
+
+body.dark-mode .filter-chip:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+body.dark-mode .contact-section {
+  background: #23272c !important;
+  color: #e9ecef;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+}
+
+body.dark-mode .empty-state {
+  background: #23272c !important;
+  color: #e9ecef;
+}
+
+body.dark-mode .contact-card {
+  background: #1b1f27 !important;
+  color: #e9ecef;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.28);
+}
+
+body.dark-mode .contact-meta {
+  color: #9aa4b5 !important;
+}
+
+body.dark-mode .contact-avatar {
+  background: #2a2f38;
+  color: #e9ecef;
+}
+
+body.dark-mode .modal-card {
+  background: #1b1f27 !important;
+  color: #e9ecef;
+  border: 1px solid #2a2f38;
+}
+
+body.dark-mode .modal-header,
+body.dark-mode .modal-footer {
+  background: #151922 !important;
+  border-color: #2a2f38;
+  color: #e9ecef;
+}
+
+body.dark-mode .detail-field {
+  background: #151922;
+  border: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+body.dark-mode .detail-field .label {
+  color: #9aa4b5;
+}
+
+body.dark-mode .skeleton-card {
+  background: #23272c;
+}
+
+body.dark-mode .skeleton-lines .line,
+body.dark-mode .skeleton-avatar {
+  background: rgba(255, 255, 255, 0.04);
+}
