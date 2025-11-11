@@ -3,7 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 // pages publiques
 import LoginView from '@/views/LoginView.vue'
-import LoginTotp from '../components/LoginTotp.vue'
+import LoginTotpView from '@/views/LoginTotpView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import ResetPasswordView from '@/views/ResetPasswordView.vue'
 import NewPasswordView from '@/views/NewPasswordView.vue'
@@ -22,7 +22,7 @@ const routes = [
   { path: '/', redirect: '/login' },
 
   { path: '/login', name: 'login', component: LoginView },
-  { path: '/login/totp', name: 'login-totp', component: LoginTotp },
+  { path: '/login/totp', name: 'login-totp', component: LoginTotpView },
   { path: '/register', name: 'register', component: RegisterView },
   { path: '/reset-password', name: 'reset-password', component: ResetPasswordView },
   { path: '/new-password', name: 'new-password', component: NewPasswordView },
