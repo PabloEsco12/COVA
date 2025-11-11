@@ -617,3 +617,4 @@ function extractError(err, fallback = 'Erreur inconnue.') {
   return detail ? String(detail) : fallback
 }
 </script>
+<style scoped src="@/assets/styles/devices.css"></style>

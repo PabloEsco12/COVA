@@ -11,8 +11,8 @@ import ContactsView from '@/views/ContactsView.vue'
 import ResetPassword from '../components/ResetPassword.vue'
 import NewPassword from '../components/NewPassword.vue'
 import ConfirmEmailView from '@/views/ConfirmEmailView.vue'
-import DevicesView from '@/views/DevicesView.vue' 
-import Settings from '../components/Settings.vue'
+import DevicesView from '@/views/DevicesView.vue'
+import SettingsView from '@/views/SettingsView.vue'
 
 const routes = [
   { path: '/', redirect: '/login' },
@@ -28,12 +28,12 @@ const routes = [
     path: '/dashboard',
     component: Dashboard,
     children: [
-      { path: '', component: DashboardHome },              // /dashboard
+      { path: '', component: DashboardHome },               // /dashboard
       { path: 'messages/new', component: NewConversation }, // /dashboard/messages/new
       { path: 'messages', component: Messages },            // /dashboard/messages
       { path: 'contacts', component: ContactsView },        // /dashboard/contacts
-      { path: 'devices', component: DevicesView },          // /dashboard/devices ✅
-      { path: 'settings', component: Settings },            // /dashboard/settings
+      { path: 'devices', component: DevicesView },          // /dashboard/devices
+      { path: 'settings', component: SettingsView },        // /dashboard/settings ✅
     ],
   },
 ]
@@ -54,9 +54,10 @@ router.beforeEach((to, from, next) => {
     '/new-password',
   ]
 
-  const isPublic = publicPages.includes(to.path)
+  const isPublic =
+    publicPages.includes(to.path) ||
     // on autorise aussi /confirm/<token>
-    || to.path.startsWith('/confirm/')
+    to.path.startsWith('/confirm/')
 
   const isDashboard = to.path.startsWith('/dashboard')
   const loggedIn = !!localStorage.getItem('access_token')
