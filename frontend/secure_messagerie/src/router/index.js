@@ -6,7 +6,7 @@ import Login from '../components/Login.vue'
 import LoginTotp from '../components/LoginTotp.vue'
 import RegisterView from '../views/RegisterView.vue'
 import ResetPasswordView from '@/views/ResetPasswordView.vue'
-import NewPassword from '../components/NewPassword.vue'
+import NewPasswordView from '@/views/NewPasswordView.vue'
 import ConfirmEmailView from '@/views/ConfirmEmailView.vue'
 
 // layout / dashboard
@@ -25,7 +25,7 @@ const routes = [
   { path: '/login/totp', name: 'login-totp', component: LoginTotp },
   { path: '/register', name: 'register', component: RegisterView },
   { path: '/reset-password', name: 'reset-password', component: ResetPasswordView },
-  { path: '/new-password', name: 'new-password', component: NewPassword },
+  { path: '/new-password', name: 'new-password', component: NewPasswordView },
 
   // ✅ on accepte les 2 URLs possibles venant du mail
   { path: '/confirm/:token', name: 'confirm-email', component: ConfirmEmailView },
