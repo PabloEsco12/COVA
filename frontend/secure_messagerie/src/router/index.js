@@ -5,7 +5,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Login from '../components/Login.vue'
 import LoginTotp from '../components/LoginTotp.vue'
 import RegisterView from '../views/RegisterView.vue'
-import ResetPassword from '../components/ResetPassword.vue'
+import ResetPasswordView from '@/views/ResetPasswordView.vue'
 import NewPassword from '../components/NewPassword.vue'
 import ConfirmEmailView from '@/views/ConfirmEmailView.vue'
 
@@ -24,7 +24,7 @@ const routes = [
   { path: '/login', name: 'login', component: Login },
   { path: '/login/totp', name: 'login-totp', component: LoginTotp },
   { path: '/register', name: 'register', component: RegisterView },
-  { path: '/reset-password', name: 'reset-password', component: ResetPassword },
+  { path: '/reset-password', name: 'reset-password', component: ResetPasswordView },
   { path: '/new-password', name: 'new-password', component: NewPassword },
 
   // ✅ on accepte les 2 URLs possibles venant du mail
