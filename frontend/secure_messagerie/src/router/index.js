@@ -11,7 +11,7 @@ import ContactsView from '@/views/ContactsView.vue'
 import ResetPassword from '../components/ResetPassword.vue'
 import NewPassword from '../components/NewPassword.vue'
 import ConfirmEmailView from '@/views/ConfirmEmailView.vue'
-import DevicesView from '@/components/Devices.vue' // vue qu’on vient de créer
+import DevicesView from '@/views/DevicesView.vue' 
 import Settings from '../components/Settings.vue'
 
 const routes = [

@@ -70,18 +70,28 @@
 </template>
 
 <script setup>
+/*
+  Composant reconstitué pour coller au résultat de ton ancien Devices.vue
+  - GET /me/devices  --> { devices: [...] }
+  - POST /me/devices --> { device_id, push_token, platform }
+  - toutes les fonctions utilitaires sont dans CE fichier
+*/
+
 import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import Spinner from '../confirm/Spinner.vue'
-import { api } from '../../utils/api'
+import { api } from '@/utils/api'
 
-import DevicesToolbar from './DevicesToolbar.vue'
-import DevicesSummary from './DevicesSummary.vue'
-import DevicesEmptyState from './DevicesEmptyState.vue'
-import DevicesGrid from './DevicesGrid.vue'
-import DeviceDetailsModal from './DeviceDetailsModal.vue'
-import RenameDeviceModal from './RenameDeviceModal.vue'
-import DeleteDeviceModal from './DeleteDeviceModal.vue'
+import Spinner from '@/components/confirm/Spinner.vue'
+import DevicesToolbar from '@/components/devices/DevicesToolbar.vue'
+import DevicesSummary from '@/components/devices/DevicesSummary.vue'
+import DevicesEmptyState from '@/components/devices/DevicesEmptyState.vue'
+import DevicesGrid from '@/components/devices/DevicesGrid.vue'
+import DeviceDetailsModal from '@/components/devices/DeviceDetailsModal.vue'
+import RenameDeviceModal from '@/components/devices/RenameDeviceModal.vue'
+import DeleteDeviceModal from '@/components/devices/DeleteDeviceModal.vue'
 
+/* -------------------------------------------------------------------------- */
+/* state                                                                      */
+/* -------------------------------------------------------------------------- */
 const devices = ref([])
 const loading = ref(true)
 const error = ref('')
@@ -106,8 +116,11 @@ const localDeviceId = ref('')
 let successTimer = null
 let autoRegistrationTried = false
 
+/* -------------------------------------------------------------------------- */
+/* computed                                                                   */
+/* -------------------------------------------------------------------------- */
 const currentDevicePresent = computed(() =>
-  devices.value.some((device) => device.id === localDeviceId.value),
+  devices.value.some((d) => d.id === localDeviceId.value),
 )
 
 const deviceCards = computed(() =>
@@ -122,6 +135,9 @@ const deviceCards = computed(() =>
 
 const summary = computed(() => buildSummary(deviceCards.value))
 
+/* -------------------------------------------------------------------------- */
+/* lifecycle                                                                  */
+/* -------------------------------------------------------------------------- */
 onMounted(async () => {
   localDeviceId.value = ensureLocalDeviceId()
   await init()
@@ -134,12 +150,16 @@ onBeforeUnmount(() => {
   }
 })
 
+/* -------------------------------------------------------------------------- */
+/* main logic                                                                 */
+/* -------------------------------------------------------------------------- */
 async function init() {
   loading.value = true
   error.value = ''
   try {
     await loadDevices()
 
+    // si l'appareil actuel n'est pas dans la liste → faire comme avant : 1 sync auto
     if (!currentDevicePresent.value && !autoRegistrationTried) {
       autoRegistrationTried = true
       await manualSync()
@@ -157,14 +177,14 @@ async function init() {
 }
 
 async function loadDevices() {
-  // ⚠️ ton backend renvoie { devices: [...] }
+  // IMPORTANT : ton backend renvoie { devices: [...] }
   const { data } = await api.get('/me/devices')
   devices.value = Array.isArray(data?.devices) ? data.devices : []
 }
 
 async function manualSync() {
   try {
-    await syncCurrentDevice({ silent: false })
+    await syncCurrentDevice()
     await loadDevices()
   } catch (err) {
     const status = err?.response?.status
@@ -173,51 +193,46 @@ async function manualSync() {
   }
 }
 
-async function syncCurrentDevice({ silent } = { silent: false }) {
+async function syncCurrentDevice() {
   if (!localDeviceId.value) {
     localDeviceId.value = ensureLocalDeviceId()
   }
-  if (!localDeviceId.value) {
-    if (!silent) error.value = "Impossible de générer un identifiant pour cet appareil."
-    return
-  }
-
   const meta = buildMetadata()
-  const payload = encodeMetadata({ ...meta, deviceId: localDeviceId.value })
-  if (!payload) {
-    if (!silent) error.value = "Impossible de préparer l'empreinte de cet appareil."
-    return
+  const label = safeGetLocal(deviceLabelKey)
+  if (label) {
+    meta.label = label
   }
 
-  if (!silent) {
-    registering.value = true
-    error.value = ''
-  }
+  const pushToken = encodeMetadata(meta)
+
+  registering.value = true
+  error.value = ''
 
   try {
     await api.post('/me/devices', {
       device_id: localDeviceId.value,
-      push_token: payload,
+      push_token: pushToken,
       platform: mapDeviceTypeToPlatform(meta.deviceType),
     })
-    if (!silent) setSuccessMessage('Appareil synchronisé.')
-  } catch (err) {
-    if (!silent) error.value = extractError(err, "Impossible d'enregistrer cet appareil.")
-    throw err
+    setSuccessMessage('Appareil synchronisé.')
   } finally {
-    if (!silent) registering.value = false
+    registering.value = false
   }
 }
 
+/* -------------------------------------------------------------------------- */
+/* UI actions                                                                 */
+/* -------------------------------------------------------------------------- */
 function openDetails(device) {
   detailsModal.value = device
 }
 
 function openRenameModal() {
-  const current = deviceCards.value.find((d) => d.isCurrent)
-  const stored = safeGetLocal(deviceLabelKey)
-  renameValue.value = current?.metadata.label || stored || detectDefaultLabel({})
   renameError.value = ''
+  renameValue.value =
+    safeGetLocal(deviceLabelKey) ||
+    deviceCards.value.find((d) => d.isCurrent)?.label ||
+    detectDefaultLabel({})
   showRenameModal.value = true
   nextTick(() => {})
 }
@@ -242,8 +257,8 @@ async function confirmRename() {
   renameBusy.value = true
   try {
     safeSetLocal(deviceLabelKey, nextLabel)
-    showRenameModal.value = false
     await manualSync()
+    showRenameModal.value = false
     setSuccessMessage("Nom de l'appareil mis à jour.")
   } catch (err) {
     renameError.value = extractError(err, "Impossible de renommer cet appareil.")
@@ -265,15 +280,17 @@ function closeDeleteModal() {
 }
 
 async function confirmDelete(deviceOverride) {
-  let target = deviceOverride || deleteTarget.value
+  const target = deviceOverride || deleteTarget.value
   if (!target || deleteBusy.value) return
   if (!target.id) {
     deleteError.value = "Identifiant de l'appareil indisponible."
     return
   }
+
   deleteBusy.value = true
   deleteError.value = ''
   revoking.value = target.id
+
   try {
     await api.delete(`/me/devices/${encodeURIComponent(target.id)}`)
     showDeleteModal.value = false
@@ -283,8 +300,7 @@ async function confirmDelete(deviceOverride) {
   } catch (err) {
     const status = err?.response?.status
     if (status === 401) return
-    const msg = extractError(err, "Impossible de déconnecter cet appareil.")
-    deleteError.value = msg
+    deleteError.value = extractError(err, "Impossible de déconnecter cet appareil.")
   } finally {
     deleteBusy.value = false
     revoking.value = ''
@@ -305,11 +321,12 @@ async function logoutEverywhere() {
   }
 }
 
-function setSuccessMessage(message) {
-  success.value = message
-  if (successTimer) {
-    clearTimeout(successTimer)
-  }
+/* -------------------------------------------------------------------------- */
+/* helpers d’affichage                                                        */
+/* -------------------------------------------------------------------------- */
+function setSuccessMessage(msg) {
+  success.value = msg
+  if (successTimer) clearTimeout(successTimer)
   successTimer = setTimeout(() => {
     success.value = ''
     successTimer = null
@@ -358,12 +375,19 @@ function transformDevice(raw) {
   }
 }
 
+function buildSubtitle(browser, os) {
+  const parts = []
+  if (browser) parts.push(browser)
+  if (os) parts.push(os)
+  return parts.join(' · ')
+}
+
 function buildSummary(list) {
   const total = list.length
   const risky = list.filter((d) => d.trustVariant === 'watch' || d.trustVariant === 'alert').length
   const current = list.find((d) => d.isCurrent)
   const lastSeen = list
-    .filter((device) => device.lastSeenAt)
+    .filter((d) => d.lastSeenAt)
     .sort((a, b) => new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime())[0]
 
   return {
@@ -375,14 +399,9 @@ function buildSummary(list) {
   }
 }
 
-function detectDefaultLabel({ browser, os } = {}) {
-  const parts = []
-  if (browser) parts.push(browser)
-  if (os) parts.push(os)
-  if (!parts.length) return 'Appareil'
-  return parts.join(' · ')
-}
-
+/* -------------------------------------------------------------------------- */
+/* utils metadata                                                             */
+/* -------------------------------------------------------------------------- */
 function buildMetadata() {
   const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
   const lang = typeof navigator !== 'undefined' ? navigator.language : ''
@@ -401,77 +420,31 @@ function buildMetadata() {
   }
 }
 
-function ensureLocalDeviceId() {
-  const key = 'cova_device_id'
-  if (typeof localStorage === 'undefined') return ''
-  let id = localStorage.getItem(key)
-  if (!id) {
-    id = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)
-    localStorage.setItem(key, id)
-  }
-  return id
-}
-
-function encodeMetadata(meta) {
+function encodeMetadata(obj) {
   try {
-    const payload = { ...meta }
-    delete payload.raw
-    return toBase64(JSON.stringify(payload))
-  } catch (err) {
-    console.error('encodeMetadata failure', err)
+    return toBase64(JSON.stringify(obj))
+  } catch {
     return ''
   }
 }
 
-function decodeMetadata(token) {
-  if (!token) return {}
+function decodeMetadata(value) {
+  if (!value) return {}
   try {
-    const decoded = fromBase64(token)
-    const parsed = JSON.parse(decoded)
-    if (parsed && typeof parsed === 'object') {
-      return { ...parsed, raw: token }
-    }
-  } catch (err) {
-    console.warn('decodeMetadata failure', err)
+    const json = fromBase64(value)
+    const data = JSON.parse(json)
+    return data && typeof data === 'object' ? data : {}
+  } catch {
+    return {}
   }
-  return { raw: token }
 }
 
-function toBase64(value) {
-  if (!value) return ''
-  try {
-    if (typeof window !== 'undefined' && typeof window.btoa === 'function') {
-      return window.btoa(unescape(encodeURIComponent(value)))
-    }
-    if (typeof globalThis !== 'undefined' && globalThis.Buffer) {
-      return globalThis.Buffer.from(value, 'utf-8').toString('base64')
-    }
-  } catch {}
-  return ''
-}
-
-function fromBase64(value) {
-  if (!value) return ''
-  try {
-    if (typeof window !== 'undefined' && typeof window.atob === 'function') {
-      return decodeURIComponent(
-        window
-          .atob(value)
-          .split('')
-          .map((char) => `%${char.charCodeAt(0).toString(16).padStart(2, '0')}`)
-          .join(''),
-      )
-    }
-    if (typeof globalThis !== 'undefined' && globalThis.Buffer) {
-      return globalThis.Buffer.from(value, 'base64').toString('utf-8')
-    }
-  } catch {}
-  return ''
-}
-
+/* -------------------------------------------------------------------------- */
+/* utils navigateur / device                                                  */
+/* -------------------------------------------------------------------------- */
 function detectBrowser(ua = '') {
+  ua = (ua || '').toLowerCase()
   if (!ua) return ''
-  ua = ua.toLowerCase()
   if (ua.includes('chrome') && !ua.includes('edge') && !ua.includes('opr')) return 'Chrome'
   if (ua.includes('safari') && !ua.includes('chrome')) return 'Safari'
   if (ua.includes('firefox')) return 'Firefox'
@@ -481,8 +454,8 @@ function detectBrowser(ua = '') {
 }
 
 function detectOs(ua = '') {
+  ua = (ua || '').toLowerCase()
   if (!ua) return ''
-  ua = ua.toLowerCase()
   if (ua.includes('windows')) return 'Windows'
   if (ua.includes('mac os') || ua.includes('macos')) return 'macOS'
   if (ua.includes('android')) return 'Android'
@@ -492,7 +465,7 @@ function detectOs(ua = '') {
 }
 
 function detectDeviceType(ua = '') {
-  ua = ua.toLowerCase()
+  ua = (ua || '').toLowerCase()
   if (/mobile|iphone|android(?!.*tablet)/.test(ua)) return 'mobile'
   if (/ipad|tablet/.test(ua)) return 'tablet'
   if (/smart-tv|smarttv|hbbtv/.test(ua)) return 'tv'
@@ -520,19 +493,6 @@ function pickIcon(deviceType) {
   }
 }
 
-function mapTrust(level) {
-  if (level >= 80) {
-    return { variant: 'trusted', label: 'Fiable', icon: 'bi bi-shield-check' }
-  }
-  if (level >= 50) {
-    return { variant: 'standard', label: 'Normal', icon: 'bi bi-shield' }
-  }
-  if (level >= 25) {
-    return { variant: 'watch', label: 'À surveiller', icon: 'bi bi-exclamation-triangle' }
-  }
-  return { variant: 'alert', label: 'Risque', icon: 'bi bi-bug' }
-}
-
 function mapDeviceTypeToPlatform(type) {
   switch (type) {
     case 'mobile':
@@ -543,14 +503,95 @@ function mapDeviceTypeToPlatform(type) {
       return 'tv'
     case 'bot':
       return 'bot'
-    case 'desktop':
     default:
       return 'desktop'
   }
 }
 
-function trimLabel(value) {
-  return (value || '').trim().slice(0, 60)
+/* -------------------------------------------------------------------------- */
+/* utils divers                                                               */
+/* -------------------------------------------------------------------------- */
+function ensureLocalDeviceId() {
+  const key = 'cova_device_id'
+  if (typeof localStorage === 'undefined') return ''
+  let id = localStorage.getItem(key)
+  if (!id) {
+    id = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)
+    localStorage.setItem(key, id)
+  }
+  return id
+}
+
+function detectDefaultLabel({ browser, os } = {}) {
+  const parts = []
+  if (browser) parts.push(browser)
+  if (os) parts.push(os)
+  if (!parts.length) return 'Appareil'
+  return parts.join(' · ')
+}
+
+function toBase64(str) {
+  if (typeof btoa !== 'undefined') return btoa(str)
+  return Buffer.from(str, 'utf-8').toString('base64')
+}
+
+function fromBase64(str) {
+  if (typeof atob !== 'undefined') return atob(str)
+  return Buffer.from(str, 'base64').toString('utf-8')
+}
+
+function formatDate(dateLike) {
+  if (!dateLike) return ''
+  const d = new Date(dateLike)
+  return d.toLocaleString('fr-FR', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function formatRelative(dateLike) {
+  if (!dateLike) return ''
+  const now = new Date()
+  const d = new Date(dateLike)
+  const diff = d.getTime() - now.getTime()
+  const sec = Math.round(diff / 1000)
+  const abs = Math.abs(sec)
+
+  let unit = 'second'
+  let value = sec
+  if (abs >= 60 && abs < 3600) {
+    unit = 'minute'
+    value = Math.round(sec / 60)
+  } else if (abs >= 3600 && abs < 86400) {
+    unit = 'hour'
+    value = Math.round(sec / 3600)
+  } else if (abs >= 86400 && abs < 604800) {
+    unit = 'day'
+    value = Math.round(sec / 86400)
+  } else if (abs >= 604800) {
+    unit = 'week'
+    value = Math.round(sec / 604800)
+  }
+
+  if (typeof Intl !== 'undefined' && Intl.RelativeTimeFormat) {
+    const rtf = new Intl.RelativeTimeFormat('fr-FR', { numeric: 'auto' })
+    return rtf.format(value, unit)
+  }
+  return formatDate(dateLike)
+}
+
+function mapTrust(level) {
+  if (level >= 80) return { variant: 'trusted', label: 'Fiable', icon: 'bi bi-shield-check' }
+  if (level >= 50) return { variant: 'standard', label: 'Normal', icon: 'bi bi-shield' }
+  if (level >= 25) return { variant: 'watch', label: 'À surveiller', icon: 'bi bi-exclamation-triangle' }
+  return { variant: 'alert', label: 'Risque', icon: 'bi bi-bug' }
+}
+
+function trimLabel(str) {
+  return (str || '').trim().slice(0, 60)
 }
 
 function safeGetLocal(key) {
@@ -561,29 +602,18 @@ function safeGetLocal(key) {
   }
 }
 
-function safeSetLocal(key, value) {
+function safeSetLocal(key, val) {
   try {
-    localStorage.setItem(key, value)
+    localStorage.setItem(key, val)
   } catch {
     // ignore
   }
 }
 
 function extractError(err, fallback = 'Erreur inconnue.') {
-  const response = err?.response?.data
+  const data = err?.response?.data
   const detail =
-    (Array.isArray(response?.detail) && response.detail.length && response.detail[0]) ||
-    response?.message ||
-    response?.error
-
-  if (typeof detail === 'string' && detail.trim()) {
-    return detail.trim()
-  }
-
-  if (typeof err.message === 'string' && err.message.trim()) {
-    return err.message.trim()
-  }
-
-  return fallback
+    (Array.isArray(data?.detail) && data.detail[0]) || data?.message || data?.error || err?.message
+  return detail ? String(detail) : fallback
 }
 </script>
