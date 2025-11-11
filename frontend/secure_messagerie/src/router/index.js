@@ -1,39 +1,46 @@
 // src/router/index.js
 import { createRouter, createWebHistory } from 'vue-router'
+
+// pages publiques
 import Login from '../components/Login.vue'
 import LoginTotp from '../components/LoginTotp.vue'
 import RegisterView from '../views/RegisterView.vue'
+import ResetPassword from '../components/ResetPassword.vue'
+import NewPassword from '../components/NewPassword.vue'
+import ConfirmEmailView from '@/views/ConfirmEmailView.vue'
+
+// layout / dashboard
 import Dashboard from '../components/Dashboard.vue'
 import DashboardHome from '../components/DashboardHomeEnhanced.vue'
 import Messages from '../components/MessagesRealtimeNew.vue'
 import NewConversation from '../components/NewConversation.vue'
 import ContactsView from '@/views/ContactsView.vue'
-import ResetPassword from '../components/ResetPassword.vue'
-import NewPassword from '../components/NewPassword.vue'
-import ConfirmEmailView from '@/views/ConfirmEmailView.vue'
 import DevicesView from '@/views/DevicesView.vue'
 import SettingsView from '@/views/SettingsView.vue'
 
 const routes = [
   { path: '/', redirect: '/login' },
-  { path: '/login', component: Login },
-  { path: '/register', component: RegisterView },
-  { path: '/login/totp', component: LoginTotp },
-  { path: '/reset-password', component: ResetPassword },
-  { path: '/new-password', component: NewPassword },
-  // confirmation de mail
-  { path: '/confirm/:token', component: ConfirmEmailView },
+
+  { path: '/login', name: 'login', component: Login },
+  { path: '/login/totp', name: 'login-totp', component: LoginTotp },
+  { path: '/register', name: 'register', component: RegisterView },
+  { path: '/reset-password', name: 'reset-password', component: ResetPassword },
+  { path: '/new-password', name: 'new-password', component: NewPassword },
+
+  // ✅ on accepte les 2 URLs possibles venant du mail
+  { path: '/confirm/:token', name: 'confirm-email', component: ConfirmEmailView },
+  { path: '/confirm-email/:token', name: 'confirm-email-alt', component: ConfirmEmailView },
 
   {
     path: '/dashboard',
     component: Dashboard,
     children: [
-      { path: '', component: DashboardHome },               // /dashboard
-      { path: 'messages/new', component: NewConversation }, // /dashboard/messages/new
-      { path: 'messages', component: Messages },            // /dashboard/messages
-      { path: 'contacts', component: ContactsView },        // /dashboard/contacts
-      { path: 'devices', component: DevicesView },          // /dashboard/devices
-      { path: 'settings', component: SettingsView },        // /dashboard/settings ✅
+      { path: '', name: 'dashboard-home', component: DashboardHome },
+      { path: 'messages/new', name: 'dashboard-new-conversation', component: NewConversation },
+      { path: 'messages', name: 'dashboard-messages', component: Messages },
+      { path: 'contacts', name: 'dashboard-contacts', component: ContactsView },
+      { path: 'devices', name: 'dashboard-devices', component: DevicesView },
+      { path: 'settings', name: 'dashboard-settings', component: SettingsView },
     ],
   },
 ]
@@ -45,7 +52,6 @@ const router = createRouter({
 
 // garde de navigation
 router.beforeEach((to, from, next) => {
-  // pages publiques
   const publicPages = [
     '/login',
     '/login/totp',
@@ -56,8 +62,9 @@ router.beforeEach((to, from, next) => {
 
   const isPublic =
     publicPages.includes(to.path) ||
-    // on autorise aussi /confirm/<token>
-    to.path.startsWith('/confirm/')
+    // ✅ on autorise aussi les 2 variantes
+    to.path.startsWith('/confirm/') ||
+    to.path.startsWith('/confirm-email/')
 
   const isDashboard = to.path.startsWith('/dashboard')
   const loggedIn = !!localStorage.getItem('access_token')
@@ -65,6 +72,7 @@ router.beforeEach((to, from, next) => {
   if (isDashboard && !loggedIn && !isPublic) {
     return next('/login')
   }
+
   next()
 })
 
