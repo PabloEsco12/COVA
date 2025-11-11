@@ -13,7 +13,7 @@ import ConfirmEmailView from '@/views/ConfirmEmailView.vue'
 import Dashboard from '../components/Dashboard.vue'
 import DashboardHome from '../components/DashboardHomeEnhanced.vue'
 import Messages from '../components/MessagesRealtimeNew.vue'
-import NewConversation from '../components/NewConversation.vue'
+import NewConversationForm from '@/components/messages/NewConversationForm.vue'
 import ContactsView from '@/views/ContactsView.vue'
 import DevicesView from '@/views/DevicesView.vue'
 import SettingsView from '@/views/SettingsView.vue'
@@ -36,7 +36,7 @@ const routes = [
     component: Dashboard,
     children: [
       { path: '', name: 'dashboard-home', component: DashboardHome },
-      { path: 'messages/new', name: 'dashboard-new-conversation', component: NewConversation },
+      { path: 'messages/new', name: 'dashboard-new-conversation', component: NewConversationForm },
       { path: 'messages', name: 'dashboard-messages', component: Messages },
       { path: 'contacts', name: 'dashboard-contacts', component: ContactsView },
       { path: 'devices', name: 'dashboard-devices', component: DevicesView },
