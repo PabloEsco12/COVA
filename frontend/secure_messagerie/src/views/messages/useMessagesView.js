@@ -20,9 +20,11 @@ import {
 import { emojiSections, emojiCatalog, defaultGifLibrary } from '@/utils/reactions'
 import { useMessageSearch } from './useMessageSearch'
 import { useComposerTools } from './useComposerTools'
+import { useNotificationsManager } from './useNotificationsManager'
 
 export function useMessagesView() {
   const gifLibrary = defaultGifLibrary
+  const stripDiacritics = (value = '') => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
   const conversations = ref([])
 
@@ -80,6 +82,7 @@ export function useMessagesView() {
     performMessageSearch,
     jumpToSearchResult,
   } = useMessageSearch({
+    stripDiacritics,
     normalizeMessage,
     searchConversationMessages,
     messages,
@@ -134,6 +137,27 @@ export function useMessagesView() {
 
   } = composerTools
 
+  const {
+    messageToasts,
+    browserNotificationsEnabled,
+    notificationPermissionRequestPending,
+    queueToastNotification,
+    dismissToast,
+    openToastConversation,
+    notifyNewIncomingMessage,
+    triggerBrowserNotification,
+    handleBrowserPrefStorage,
+    handleBrowserPrefBroadcast,
+    syncBrowserNotificationPreference,
+    clearNotificationTimers,
+  } = useNotificationsManager({
+    selectedConversationId,
+    selectConversation,
+    ensureMessageVisible,
+    messagePreviewText,
+    generateLocalId,
+  })
+
   const sending = ref(false)
 
   const copiedMessageId = ref(null)
@@ -158,12 +182,7 @@ export function useMessagesView() {
   const reactionPickerFor = ref(null)
   const messageMenuOpen = ref(null)
 
-  const messageToasts = ref([])
-  const toastTimers = new Map()
   const optimisticMessageIds = new Set()
-  let notificationPermissionRequestPending = false
-  const browserNotificationsEnabled = ref(readBrowserNotificationPreference())
-
 
   const socketRef = ref(null)
 
@@ -185,29 +204,6 @@ export function useMessagesView() {
   const currentUserId = ref(localStorage.getItem('user_id') || null)
   const authToken = ref(localStorage.getItem('access_token') || null)
 
-  function readBrowserNotificationPreference() {
-    try {
-      return localStorage.getItem('notif_browser') === '1'
-    } catch {
-      return false
-    }
-  }
-
-  function syncBrowserNotificationPreference() {
-    browserNotificationsEnabled.value = readBrowserNotificationPreference()
-  }
-
-  function handleBrowserPrefStorage(event) {
-    if (event?.key === 'notif_browser') {
-      syncBrowserNotificationPreference()
-    }
-  }
-
-  function handleBrowserPrefBroadcast(event) {
-    if (event?.detail && typeof event.detail.enabled === 'boolean') {
-      browserNotificationsEnabled.value = event.detail.enabled
-    }
-  }
 
   function computeInitials(label = '') {
     if (!label) return 'C'
@@ -1627,98 +1623,7 @@ export function useMessagesView() {
 
 
 
-  function queueToastNotification({ title, body, conversationId, messageId }) {
-    const toast = {
-      id: generateLocalId(),
-      title: title || 'Nouveau message',
-      body: body || '',
-      conversationId,
-      messageId,
-      createdAt: new Date(),
-    }
-    messageToasts.value = [toast, ...messageToasts.value].slice(0, 4)
-    if (toastTimers.has(toast.id)) {
-      clearTimeout(toastTimers.get(toast.id))
-    }
-    toastTimers.set(
-      toast.id,
-      setTimeout(() => {
-        dismissToast(toast.id)
-      }, 7000),
-    )
-  }
-
-
-
-  function dismissToast(id) {
-    messageToasts.value = messageToasts.value.filter((toast) => toast.id !== id)
-    if (toastTimers.has(id)) {
-      clearTimeout(toastTimers.get(id))
-      toastTimers.delete(id)
-    }
-  }
-
-
-
-  async function openToastConversation(toast) {
-    if (!toast?.conversationId) return
-    await selectConversation(toast.conversationId)
-    dismissToast(toast.id)
-    await nextTick()
-    if (toast.messageId) {
-      await ensureMessageVisible(toast.messageId)
-    }
-  }
-
-
-
-  function notifyNewIncomingMessage(message) {
-    if (!message || message.sentByMe || message.deleted || message.isSystem) return
-    const preview =
-      message.preview ||
-      (message.content ? String(message.content).slice(0, 140) : 'Nouveau message securise.')
-    const shouldToast = message.conversationId !== selectedConversationId.value
-    const browserAllowed =
-      browserNotificationsEnabled.value &&
-      typeof Notification !== 'undefined' &&
-      Notification.permission === 'granted'
-    const docHidden =
-      typeof document !== 'undefined' && (document.hidden || !document.hasFocus())
-    if (shouldToast) {
-      queueToastNotification({
-        title: message.displayName || 'Nouveau message',
-        body: preview,
-        conversationId: message.conversationId,
-        messageId: message.id,
-      })
-    }
-    const shouldBrowser = browserAllowed && (docHidden || shouldToast)
-    if (shouldBrowser) {
-      triggerBrowserNotification(message, preview)
-    }
-  }function triggerBrowserNotification(message, body) {
-    if (!browserNotificationsEnabled.value || typeof Notification === 'undefined') return
-    if (Notification.permission === 'granted') {
-      const notification = new Notification(message.displayName || 'Messagerie securisee', {
-        body,
-        tag: message.conversationId,
-      })
-      notification.onclick = () => {
-        window.focus()
-        openToastConversation({ conversationId: message.conversationId, id: message.id, messageId: message.id })
-        notification.close()
-      }
-      return
-    }
-    if (Notification.permission === 'default' && !notificationPermissionRequestPending) {
-      notificationPermissionRequestPending = true
-      Notification.requestPermission()
-        .catch(() => {})
-        .finally(() => {
-          notificationPermissionRequestPending = false
-        })
-    }
-  }function cloneComposerReference(target) {
+  function cloneComposerReference(target) {
     if (!target) return null
     return {
       id: target.id,
@@ -2095,25 +2000,6 @@ export function useMessagesView() {
 
 
 
-  watch(
-    browserNotificationsEnabled,
-    (enabled) => {
-      if (
-        enabled &&
-        typeof Notification !== 'undefined' &&
-        Notification.permission === 'default' &&
-        !notificationPermissionRequestPending
-      ) {
-        notificationPermissionRequestPending = true
-        Notification.requestPermission()
-          .catch(() => {})
-          .finally(() => {
-            notificationPermissionRequestPending = false
-          })
-      }
-    },
-    { immediate: true },
-  )
 
   onMounted(async () => {
     await loadConversations()
@@ -2130,8 +2016,7 @@ export function useMessagesView() {
 
   onBeforeUnmount(() => {
     disconnectRealtime()
-    toastTimers.forEach((timer) => clearTimeout(timer))
-    toastTimers.clear()
+    clearNotificationTimers()
     if (typeof window !== 'undefined') {
       document.removeEventListener('click', handleDocumentClick)
       document.removeEventListener('keydown', handleDocumentKeydown)
@@ -2169,25 +2054,6 @@ export function useMessagesView() {
     conversationFilter,
     conversationFilters,
     conversationForm,
-    conversationInfoError,
-    conversationMeta,
-    conversationRoles,
-    conversations,
-    conversationSearch,
-    conversationSummary,
-    copiedMessageId,
-    copyMessage,
-    copyTimer,
-    currentMembership,
-    currentUserId,
-    disconnectRealtime,
-    dismissToast,
-    displayedGifs,
-    downloadAttachment,
-    emitActiveConversation,
-    emojiSearch,
-    ensureMessageVisible,
-    ensureMeta,
     extractError,
     filteredEmojiSections,
     formatAbsolute,
@@ -2260,7 +2126,6 @@ export function useMessagesView() {
     normalizeConversation,
     normalizeMember,
     normalizeMessage,
-    normalizeSearchText,
     notificationPermissionRequestPending,
     notifyNewIncomingMessage,
     onAttachmentChange,
@@ -2281,7 +2146,6 @@ export function useMessagesView() {
     reactionBusy,
     reactionPalette,
     reactionPickerFor,
-    readBrowserNotificationPreference,
     readHeader,
     readyAttachments,
     removeAttachment,
@@ -2317,7 +2181,6 @@ export function useMessagesView() {
     suppressAutoScroll,
     syncBrowserNotificationPreference,
     syncConversationFormFromSelected,
-    toastTimers,
     toggleMessageMenu,
     togglePicker,
     togglePin,
