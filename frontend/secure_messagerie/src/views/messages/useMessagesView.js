@@ -102,6 +102,12 @@ export function useMessagesView() {
   const loadingMessages = ref(false)
 
   const messageError = ref('')
+  const deleteDialog = reactive({
+    visible: false,
+    message: null,
+    loading: false,
+    error: '',
+  })
 
   const messageInput = ref('')
   const composerTools = useComposerTools({
@@ -1377,15 +1383,36 @@ export function useMessagesView() {
 
 
 
-  async function confirmDeleteMessage(message) {
-    if (!message || !selectedConversationId.value) return
-    const proceed = window.confirm('Supprimer ce message pour tous les participants ?')
-    if (!proceed) return
+  function confirmDeleteMessage(message) {
+    if (!message) return
+    deleteDialog.message = message
+    deleteDialog.error = ''
+    deleteDialog.loading = false
+    deleteDialog.visible = true
+  }
+
+  function closeDeleteDialog() {
+    deleteDialog.visible = false
+    deleteDialog.message = null
+    deleteDialog.error = ''
+    deleteDialog.loading = false
+  }
+
+  async function performDeleteMessage() {
+    if (!deleteDialog.message || !selectedConversationId.value) return
+    deleteDialog.loading = true
+    deleteDialog.error = ''
     try {
-      const data = await deleteConversationMessage(selectedConversationId.value, message.id)
+      const data = await deleteConversationMessage(
+        selectedConversationId.value,
+        deleteDialog.message.id,
+      )
       applyMessageUpdate(normalizeMessage(data))
+      closeDeleteDialog()
     } catch (err) {
-      messageError.value = extractError(err, "Impossible de supprimer le message.")
+      deleteDialog.error = extractError(err, "Impossible de supprimer le message.")
+    } finally {
+      deleteDialog.loading = false
     }
   }
 
@@ -1847,28 +1874,21 @@ export function useMessagesView() {
   }
 
   function messagePreviewText(message) {
-
     if (!message) return ''
-
     if (message.excerpt) return message.excerpt
-
     if (message.content) return String(message.content).slice(0, 120)
-
     if (Array.isArray(message.attachments) && message.attachments.length) {
-
       return `${message.attachments.length} piece(s) jointe(s)`
-
     }
-
     if (typeof message.attachments === 'number' && message.attachments > 0) {
-
       return `${message.attachments} piece(s) jointe(s)`
-
     }
-
     return ''
-
   }
+
+  const deleteDialogPreview = computed(() =>
+    deleteDialog.message ? messagePreviewText(deleteDialog.message) : '',
+  )
 
 
 
@@ -2102,6 +2122,11 @@ export function useMessagesView() {
     gifResults,
     gifSearch,
     gifSearchAvailable,
+    deleteDialog,
+    deleteDialogPreview,
+    closeDeleteDialog,
+    performDeleteMessage,
+    downloadAttachment,
     goToNewConversation,
     handleBrowserPrefBroadcast,
     handleBrowserPrefStorage,
@@ -2117,7 +2142,6 @@ export function useMessagesView() {
     primaryParticipantPresence,
     memberPresence,
     memberPresenceText,
-    headerSubtitle,
     incrementUnreadCounter,
     initializeMeta,
     insertGif,
@@ -2190,8 +2214,6 @@ export function useMessagesView() {
     forwardPicker,
     forwardPickerInput,
     forwardPickerTargets,
-    forwardPickerInput,
-    forwardPickerTargets,
     readHeader,
     readyAttachments,
     removeAttachment,
@@ -2222,9 +2244,6 @@ export function useMessagesView() {
     startEdit,
     startForward,
     startReply,
-    initiateForward,
-    cancelForwardSelection,
-    confirmForwardTarget,
     initiateForward,
     cancelForwardSelection,
     confirmForwardTarget,
