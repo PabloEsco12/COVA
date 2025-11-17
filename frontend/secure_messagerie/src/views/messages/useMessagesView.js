@@ -24,6 +24,15 @@ import { useNotificationsManager } from './useNotificationsManager'
 import { useConversationFilters } from './useConversationFilters'
 
 export function useMessagesView() {
+  const STATUS_LABELS = {
+    available: 'Disponible',
+    online: 'En ligne',
+    busy: 'Occupé',
+    away: 'Absent',
+    dnd: 'Ne pas déranger',
+    offline: 'Hors ligne',
+  }
+
   const gifLibrary = defaultGifLibrary
   const stripDiacritics = (value = '') => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
@@ -131,7 +140,6 @@ export function useMessagesView() {
     uploadAttachmentFile,
     removeAttachment,
     clearPendingAttachments,
-
   } = composerTools
 
   const {
@@ -154,6 +162,51 @@ export function useMessagesView() {
     messagePreviewText,
     generateLocalId,
   })
+
+  const forwardPicker = reactive({
+    open: false,
+    message: null,
+    query: '',
+  })
+  const forwardPickerInput = ref(null)
+
+  const forwardPickerTargets = computed(() => {
+    const term = forwardPicker.query.trim().toLowerCase()
+    return conversations.value
+      .filter((conv) => conv.id !== selectedConversationId.value)
+      .filter((conv) => {
+        if (!term) return true
+        const name = conv.displayName?.toLowerCase() || ''
+        if (name.includes(term)) return true
+        return conv.members.some((member) =>
+          (member.displayName || member.email || '').toLowerCase().includes(term),
+        )
+      })
+      .slice(0, 12)
+  })
+
+  function initiateForward(message) {
+    if (!message) return
+    forwardPicker.message = message
+    forwardPicker.query = ''
+    forwardPicker.open = true
+    nextTick(() => {
+      forwardPickerInput.value?.focus()
+    })
+  }
+
+  function cancelForwardSelection() {
+    forwardPicker.open = false
+    forwardPicker.message = null
+    forwardPicker.query = ''
+  }
+
+  async function confirmForwardTarget(conversationId) {
+    if (!conversationId || !forwardPicker.message) return
+    await selectConversation(conversationId)
+    startForward(forwardPicker.message)
+    cancelForwardSelection()
+  }
 
   const sending = ref(false)
 
@@ -220,8 +273,10 @@ export function useMessagesView() {
     const id = member.user_id || member.id || member.member_id
     if (!id) return null
     const displayName = member.display_name || member.email || 'Membre'
+    const userId = member.user_id || member.userId || member.contact_user_id || id
     return {
       id: String(id),
+      userId: userId ? String(userId) : String(id),
       role: member.role || 'member',
       state: member.state || 'active',
       joinedAt: member.joined_at ? new Date(member.joined_at) : null,
@@ -230,6 +285,10 @@ export function useMessagesView() {
       email: member.email || '',
       avatarUrl: member.avatar_url || null,
       initials: computeInitials(displayName),
+      presence: {
+        status: member.presence_status || member.state || 'offline',
+        lastSeen: member.last_seen ? new Date(member.last_seen) : null,
+      },
     }
   }
 
@@ -281,6 +340,74 @@ export function useMessagesView() {
       .map((participant) => participant.displayName || participant.email)
       .filter(Boolean)
     return names.join(', ')
+  })
+
+  function normalizePresenceStatus(status) {
+    const value = String(status || '').toLowerCase()
+    if (['available', 'online', 'active'].includes(value)) return 'available'
+    if (['busy', 'occupied'].includes(value)) return 'busy'
+    if (value === 'away') return 'away'
+    if (['dnd', 'do_not_disturb'].includes(value)) return 'dnd'
+    return 'offline'
+  }
+
+  function memberPresence(userId) {
+    if (!userId) return { status: 'offline', label: STATUS_LABELS.offline, lastSeen: null }
+    const conv = selectedConversation.value
+    const members = conv?.members || []
+    const target =
+      members.find((member) => member.id === String(userId)) ||
+      members.find((member) => member.userId === String(userId))
+    if (!target) {
+      return { status: 'offline', label: STATUS_LABELS.offline, lastSeen: null }
+    }
+    const status = normalizePresenceStatus(target.presence?.status || target.state)
+    const lastSeen =
+      target.presence?.lastSeen || target.presence?.last_seen ? target.presence.lastSeen || target.presence.last_seen : null
+    return {
+      status,
+      label: STATUS_LABELS[status] || STATUS_LABELS.offline,
+      lastSeen: lastSeen ? new Date(lastSeen) : null,
+    }
+  }
+
+  function memberPresenceText(userId) {
+    const presence = memberPresence(userId)
+    if (presence.status === 'available') return STATUS_LABELS.available
+    if (presence.status === 'busy') return 'Occupé'
+    if (presence.status === 'away') return 'Absent'
+    if (presence.status === 'dnd') return 'Ne pas déranger'
+    if (presence.lastSeen) {
+      return `Vu ${formatTime(presence.lastSeen)}`
+    }
+    return presence.label
+  }
+
+  const primaryParticipantPresence = computed(() => {
+    const conv = selectedConversation.value
+    if (!conv) {
+      return { status: 'offline', label: STATUS_LABELS.offline, lastSeen: null }
+    }
+    const selfId = currentUserId.value ? String(currentUserId.value) : null
+    const target =
+      conv.members?.find((member) => member.id !== selfId) ||
+      conv.participants?.find((member) => member.id !== selfId)
+    if (!target) {
+      return { status: 'offline', label: STATUS_LABELS.offline, lastSeen: null }
+    }
+    return memberPresence(target.id || target.userId)
+  })
+
+  const headerSubtitle = computed(() => {
+    const conv = selectedConversation.value
+    if (!conv) return ''
+    const parts = [headerParticipants.value]
+    if (conv.type === 'direct') {
+      parts.push(primaryParticipantPresence.value.label)
+    } else if (conv.topic) {
+      parts.push(conv.topic)
+    }
+    return parts.filter(Boolean).join(' · ')
   })
 
   const currentMembership = computed(() => {
@@ -1884,6 +2011,10 @@ export function useMessagesView() {
 
 
   function handleDocumentClick() {
+    if (forwardPicker.open) {
+      cancelForwardSelection()
+      return
+    }
     if (!reactionPickerFor.value && !messageMenuOpen.value) return
     closeTransientMenus()
   }
@@ -1892,6 +2023,11 @@ export function useMessagesView() {
 
   function handleDocumentKeydown(event) {
     if (event.key !== 'Escape') return
+    if (forwardPicker.open) {
+      event.preventDefault()
+      cancelForwardSelection()
+      return
+    }
     if (!reactionPickerFor.value && !messageMenuOpen.value) return
     event.preventDefault()
     closeTransientMenus()
@@ -1977,9 +2113,15 @@ export function useMessagesView() {
     hasAttachmentInProgress,
     hasComposerContext,
     headerParticipants,
+    headerSubtitle,
+    primaryParticipantPresence,
+    memberPresence,
+    memberPresenceText,
+    headerSubtitle,
     incrementUnreadCounter,
     initializeMeta,
     insertGif,
+    initiateForward,
     inviteBusy,
     inviteForm,
     inviteRevokeBusy,
@@ -2045,6 +2187,11 @@ export function useMessagesView() {
     reactionBusy,
     reactionPalette,
     reactionPickerFor,
+    forwardPicker,
+    forwardPickerInput,
+    forwardPickerTargets,
+    forwardPickerInput,
+    forwardPickerTargets,
     readHeader,
     readyAttachments,
     removeAttachment,
@@ -2075,6 +2222,12 @@ export function useMessagesView() {
     startEdit,
     startForward,
     startReply,
+    initiateForward,
+    cancelForwardSelection,
+    confirmForwardTarget,
+    initiateForward,
+    cancelForwardSelection,
+    confirmForwardTarget,
     submitInvite,
     submitMessageEdit,
     suppressAutoScroll,

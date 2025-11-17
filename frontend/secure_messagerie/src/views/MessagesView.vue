@@ -686,6 +686,11 @@
 </div>
 </template>
 <script setup>
+import ConversationSidebar from '@/components/messages/ConversationSidebar.vue'
+import ChatHeader from '@/components/messages/ChatHeader.vue'
+import MessageList from '@/components/messages/MessageList.vue'
+import AvailabilityMenu from '@/components/messages/AvailabilityMenu.vue'
+import CustomModal from '@/components/ui/CustomModal.vue'
 import { useMessagesView } from './messages/useMessagesView'
 
 const {
