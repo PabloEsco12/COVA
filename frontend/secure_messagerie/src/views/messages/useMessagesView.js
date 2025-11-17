@@ -17,8 +17,9 @@ import {
   createConversationInvite,
   revokeConversationInvite,
 } from '@/services/conversations'
-import { fetchGifs, hasGifApiSupport } from '@/services/media'
 import { emojiSections, emojiCatalog, defaultGifLibrary } from '@/utils/reactions'
+import { useMessageSearch } from './useMessageSearch'
+import { useComposerTools } from './useComposerTools'
 
 export function useMessagesView() {
   const gifLibrary = defaultGifLibrary
@@ -43,10 +44,10 @@ export function useMessagesView() {
     { value: 'group', label: 'Groupes', icon: 'bi bi-people' },
   ]
   const conversationRoles = [
-    { value: 'owner', label: 'Propri+®taire' },
-    { value: 'moderator', label: 'Mod+®rateur' },
+    { value: 'owner', label: 'Propri+Â®taire' },
+    { value: 'moderator', label: 'Mod+Â®rateur' },
     { value: 'member', label: 'Membre' },
-    { value: 'guest', label: 'Invit+®' },
+    { value: 'guest', label: 'Invit+Â®' },
   ]
   const showConversationPanel = ref(false)
   const conversationForm = reactive({ title: '', topic: '', archived: false })
@@ -54,20 +55,13 @@ export function useMessagesView() {
   const conversationInfoError = ref('')
   const invites = ref([])
   const loadingInvites = ref(false)
-  const inviteForm = reactive({ email: '', role: 'member', expiresInHours: 72 })
+  const selectedConversationId = ref(null)
+  const messages = ref([])
+
   const inviteBusy = ref(false)
   const inviteRevokeBusy = reactive({})
   const memberBusy = reactive({})
   const leavingConversation = ref(false)
-  const attachmentInput = ref(null)
-  const pendingAttachments = ref([])
-  const attachmentError = ref('')
-  const composerState = reactive({
-    mode: 'new', // new | reply | forward | edit
-    targetMessageId: null,
-    replyTo: null,
-    forwardFrom: null,
-  })
   const pagination = reactive({
     beforeCursor: null,
     afterCursor: null,
@@ -76,31 +70,69 @@ export function useMessagesView() {
   })
   const loadingOlderMessages = ref(false)
   const suppressAutoScroll = ref(false)
-  const showSearchPanel = ref(false)
-  const messageSearch = reactive({
-    query: '',
-    results: [],
-    loading: false,
-    error: '',
-    executed: false,
+
+  const {
+    showSearchPanel,
+    messageSearch,
+    toggleSearchPanel,
+    closeSearchPanel,
+    resetSearchPanel,
+    performMessageSearch,
+    jumpToSearchResult,
+  } = useMessageSearch({
+    normalizeMessage,
+    searchConversationMessages,
+    messages,
+    selectedConversationId,
+    ensureMessageVisible,
+    selectConversation,
+    scrollToMessage,
+    extractError,
   })
 
-  watch(
-    () => messageSearch.query,
-    () => {
-      messageSearch.executed = false
-      messageSearch.error = ''
-    },
-  )
 
-  const selectedConversationId = ref(null)
-  const messages = ref([])
-
+  const inviteForm = reactive({ email: '', role: 'member', expiresInHours: 72 })
   const loadingMessages = ref(false)
 
   const messageError = ref('')
 
   const messageInput = ref('')
+  const composerTools = useComposerTools({
+    gifLibrary,
+    selectedConversationId,
+    uploadAttachment,
+    extractError,
+    messageInput,
+  })
+
+  const {
+    attachmentInput,
+    pendingAttachments,
+    attachmentError,
+    composerState,
+    showPicker,
+    pickerMode,
+    emojiSearch,
+    gifSearch,
+    gifResults,
+    loadingGifs,
+    gifError,
+    gifSearchAvailable,
+    togglePicker,
+    setPickerMode,
+    resetComposerState,
+    startReply,
+    startForward,
+    startEdit,
+    cancelComposerContext,
+    triggerAttachmentPicker,
+    onAttachmentChange,
+    queueAttachment,
+    uploadAttachmentFile,
+    removeAttachment,
+    clearPendingAttachments,
+
+  } = composerTools
 
   const sending = ref(false)
 
@@ -126,14 +158,6 @@ export function useMessagesView() {
   const reactionPickerFor = ref(null)
   const messageMenuOpen = ref(null)
 
-  const showPicker = ref(false)
-  const pickerMode = ref('emoji')
-  const emojiSearch = ref('')
-  const gifSearch = ref('')
-  const gifResults = ref(gifLibrary.slice())
-  const loadingGifs = ref(false)
-  const gifError = ref('')
-  const gifSearchAvailable = hasGifApiSupport()
   const messageToasts = ref([])
   const toastTimers = new Map()
   const optimisticMessageIds = new Set()
@@ -148,7 +172,6 @@ export function useMessagesView() {
 
 
   let copyTimer = null
-  let gifSearchTimer = null
 
 
   const route = useRoute()
@@ -253,7 +276,7 @@ export function useMessagesView() {
   }
   const conversationSummary = computed(() => {
 
-    if (loadingConversations.value) return 'Chargement+óÔé¼-ª'
+    if (loadingConversations.value) return 'Chargement+Ã³Ã”Ã©Â¼-Âª'
 
     const count = conversations.value.length
 
@@ -276,7 +299,7 @@ export function useMessagesView() {
     return [
       {
         id: 'search',
-        label: 'R+®sultats',
+        label: 'R+Â®sultats',
         items: emojiCatalog.filter((emoji) => emoji.toLowerCase().includes(term)),
       },
     ]
@@ -442,11 +465,11 @@ export function useMessagesView() {
 
       case 'connected':
 
-        return 'Canal temps r+®el actif'
+        return 'Canal temps r+Â®el actif'
 
       case 'connecting':
 
-        return 'ConnexionÔÇª'
+        return 'ConnexionÃ”Ã‡Âª'
 
       case 'error':
 
@@ -530,21 +553,6 @@ export function useMessagesView() {
       }
     },
   )
-
-  watch([showPicker, pickerMode], ([visible, mode]) => {
-    if (visible && mode === 'gif') {
-      loadGifResults(gifSearch.value)
-    }
-  })
-
-  watch(gifSearch, (term) => {
-    if (pickerMode.value !== 'gif' || !showPicker.value) return
-    if (gifSearchTimer) clearTimeout(gifSearchTimer)
-    gifSearchTimer = setTimeout(() => {
-      loadGifResults(term)
-    }, 350)
-  })
-
 
   async function loadConversations() {
     loadingConversations.value = true
@@ -842,7 +850,7 @@ export function useMessagesView() {
 
       id: String(raw.id || raw.attachment_id || generateLocalId()),
 
-      fileName: raw.file_name || raw.filename || raw.name || 'Pi+¿ce jointe',
+      fileName: raw.file_name || raw.filename || raw.name || 'Pi+Â¿ce jointe',
 
       mimeType: raw.mime_type || raw.mimeType || null,
 
@@ -1107,29 +1115,6 @@ export function useMessagesView() {
     return option ? option.label : role
   }
 
-  async function loadGifResults(query = '') {
-    if (!showPicker.value || pickerMode.value !== 'gif') {
-      return
-    }
-    if (!gifSearchAvailable) {
-      gifResults.value = gifLibrary
-      gifError.value = ''
-      return
-    }
-    loadingGifs.value = true
-    gifError.value = ''
-    try {
-      const gifs = await fetchGifs({ query, limit: 30 })
-      gifResults.value = gifs.length ? gifs : gifLibrary
-    } catch (error) {
-      gifResults.value = gifLibrary
-      gifError.value = "Impossible de charger les GIFs."
-    } finally {
-      loadingGifs.value = false
-    }
-  }
-
-
   function limitDraft() {
 
     if (messageInput.value.length > 2000) {
@@ -1149,7 +1134,7 @@ export function useMessagesView() {
       return
     }
     if (hasAttachmentInProgress.value) {
-      attachmentError.value = 'S+®lectionnez une conversation avant d\'ajouter un fichier.'
+      attachmentError.value = 'S+Â®lectionnez une conversation avant d\'ajouter un fichier.'
       return
     }
     if (pendingAttachments.value.some((entry) => entry.status === 'error')) {
@@ -1370,243 +1355,6 @@ export function useMessagesView() {
 
 
 
-  function togglePicker() {
-    showPicker.value = !showPicker.value
-    if (showPicker.value) {
-      pickerMode.value = 'emoji'
-      emojiSearch.value = ''
-      gifSearch.value = ''
-      gifError.value = ''
-    } else {
-      emojiSearch.value = ''
-      gifSearch.value = ''
-      gifError.value = ''
-      loadingGifs.value = false
-      gifResults.value = gifLibrary.slice()
-    }
-  }
-
-  function setPickerMode(mode) {
-    pickerMode.value = mode
-    showPicker.value = true
-    if (mode !== 'emoji') {
-      emojiSearch.value = ''
-    }
-    if (mode === 'gif') {
-      loadGifResults(gifSearch.value)
-    }
-  }
-
-  function resetComposerState() {
-    composerState.mode = 'new'
-    composerState.targetMessageId = null
-    composerState.replyTo = null
-    composerState.forwardFrom = null
-  }
-
-  function startReply(message) {
-    if (!message) return
-    composerState.mode = 'reply'
-    composerState.replyTo = message
-    composerState.forwardFrom = null
-    composerState.targetMessageId = null
-  }
-
-  function startForward(message) {
-    if (!message) return
-    composerState.mode = 'forward'
-    composerState.forwardFrom = message
-    composerState.replyTo = null
-    composerState.targetMessageId = null
-    if (!messageInput.value) {
-      messageInput.value = message.content || ''
-    }
-  }
-
-  function startEdit(message) {
-    if (!message) return
-    composerState.mode = 'edit'
-    composerState.targetMessageId = message.id
-    composerState.replyTo = null
-    composerState.forwardFrom = null
-    messageInput.value = message.content || ''
-    clearPendingAttachments()
-  }
-
-  function cancelComposerContext() {
-    resetComposerState()
-  }
-
-  function toggleSearchPanel() {
-    showSearchPanel.value = !showSearchPanel.value
-    if (!showSearchPanel.value) {
-      resetSearchPanel()
-    }
-  }
-
-  function closeSearchPanel() {
-    showSearchPanel.value = false
-    resetSearchPanel()
-  }
-
-  function resetSearchPanel() {
-    messageSearch.query = ''
-    messageSearch.results = []
-    messageSearch.error = ''
-    messageSearch.executed = false
-  }
-
-  function extractSearchResults(payload) {
-    if (!payload) return []
-    if (Array.isArray(payload)) return payload
-    const candidates = ['results', 'items', 'messages', 'data']
-    for (const key of candidates) {
-      const value = payload[key]
-      if (Array.isArray(value)) return value
-      if (value && Array.isArray(value.items)) return value.items
-    }
-    return []
-  }
-
-  function stripDiacritics(value) {
-    return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-  }
-
-  function normalizeSearchText(value) {
-    return stripDiacritics(String(value || '')).toLowerCase()
-  }
-
-  function searchLocalMessages(query, limit = 50) {
-    const needle = normalizeSearchText(query)
-    if (!needle) return []
-    const results = []
-    for (let i = messages.value.length - 1; i >= 0; i -= 1) {
-      const message = messages.value[i]
-      if (!message || message.deleted) continue
-      const parts = [
-        message.content,
-        message.displayName,
-        Array.isArray(message.attachments) ? message.attachments.map((att) => att.fileName).join(' ') : '',
-      ].filter(Boolean)
-      const haystack = normalizeSearchText(parts.join(' '))
-      if (haystack && haystack.includes(needle)) {
-        results.push(message)
-        if (results.length >= limit) break
-      }
-    }
-    return results.reverse()
-  }
-
-  async function performMessageSearch() {
-    if (!selectedConversationId.value) return
-    const query = messageSearch.query.trim()
-    if (!query) {
-      messageSearch.error = 'Entrez un mot-cl+®.'
-      messageSearch.results = []
-      return
-    }
-    messageSearch.loading = true
-    messageSearch.error = ''
-    try {
-      const data = await searchConversationMessages(selectedConversationId.value, { query, limit: 50 })
-      const rawResults = extractSearchResults(data)
-      if (rawResults.length) {
-        messageSearch.results = rawResults.map((entry) => normalizeMessage(entry))
-      } else {
-        const fallback = searchLocalMessages(query, 50)
-        messageSearch.results = fallback.slice()
-        if (!fallback.length) {
-          messageSearch.error = 'Aucun message trouv+®.'
-        }
-      }
-    } catch (err) {
-      messageSearch.error = extractError(err, 'Recherche impossible.')
-    } finally {
-      messageSearch.loading = false
-      messageSearch.executed = true
-    }
-  }
-
-  async function jumpToSearchResult(result) {
-    if (!result) return
-    if (result.conversationId && result.conversationId !== selectedConversationId.value) {
-      await selectConversation(result.conversationId)
-    }
-    const streamPosition = result.streamPosition ?? null
-    await ensureMessageVisible(result.id, streamPosition)
-    await nextTick()
-    scrollToMessage(result.id)
-    showSearchPanel.value = false
-    resetSearchPanel()
-  }
-
-  function triggerAttachmentPicker() {
-    attachmentError.value = ''
-    if (!selectedConversationId.value) {
-      attachmentError.value = 'S+®lectionnez une conversation avant d\'ajouter un fichier.'
-      return
-    }
-    if (attachmentInput.value) {
-      attachmentInput.value.value = ''
-      attachmentInput.value.click()
-    }
-  }
-  function onAttachmentChange(event) {
-    const files = Array.from(event.target?.files || [])
-    if (!files.length) return
-    files.forEach((file) => queueAttachment(file))
-  }
-
-  function queueAttachment(file) {
-    if (!file) return
-    const entry = reactive({
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      file,
-      status: 'uploading',
-      progress: 0,
-      descriptor: null,
-      error: '',
-    })
-    pendingAttachments.value = [...pendingAttachments.value, entry]
-    uploadAttachmentFile(entry)
-  }
-
-  async function uploadAttachmentFile(entry) {
-    if (!selectedConversationId.value) {
-      entry.status = 'error'
-      entry.error = 'Aucune conversation active.'
-      return
-    }
-    attachmentError.value = ''
-    try {
-      const descriptor = await uploadAttachment(selectedConversationId.value, entry.file, {
-        onUploadProgress: (event) => {
-          if (!event || !event.total) return
-          entry.progress = Math.min(100, Math.round((event.loaded / event.total) * 100))
-        },
-      })
-      entry.descriptor = descriptor
-      entry.status = 'ready'
-      entry.progress = 100
-    } catch (err) {
-      entry.status = 'error'
-      entry.error = extractError(err, 'Impossible de t+®l+®verser le fichier.')
-      attachmentError.value = entry.error
-    }
-  }
-
-  function removeAttachment(entryId) {
-    pendingAttachments.value = pendingAttachments.value.filter((item) => item.id !== entryId)
-  }
-
-  function clearPendingAttachments() {
-    pendingAttachments.value = []
-    attachmentError.value = ''
-  }
-
   async function confirmDeleteMessage(message) {
     if (!message || !selectedConversationId.value) return
     const proceed = window.confirm('Supprimer ce message pour tous les participants ?')
@@ -1719,7 +1467,7 @@ export function useMessagesView() {
       }
       inviteForm.email = ''
     } catch (err) {
-      conversationInfoError.value = extractError(err, "Impossible de cr+®er l'invitation.")
+      conversationInfoError.value = extractError(err, "Impossible de cr+Â®er l'invitation.")
     } finally {
       inviteBusy.value = false
     }
@@ -1733,7 +1481,7 @@ export function useMessagesView() {
       await revokeConversationInvite(selectedConversationId.value, inviteId)
       invites.value = invites.value.filter((invite) => invite.id !== inviteId)
     } catch (err) {
-      conversationInfoError.value = extractError(err, "Impossible de r+®voquer l'invitation.")
+      conversationInfoError.value = extractError(err, "Impossible de r+Â®voquer l'invitation.")
     } finally {
       delete inviteRevokeBusy[inviteId]
     }
@@ -1742,7 +1490,7 @@ export function useMessagesView() {
   function formatInviteStatus(invite) {
     if (!invite) return ''
     if (invite.acceptedAt) {
-      return `Accept+®e ${formatAbsolute(invite.acceptedAt)}`
+      return `Accept+Â®e ${formatAbsolute(invite.acceptedAt)}`
     }
     if (invite.expiresAt) {
       return `Expire ${formatAbsolute(invite.expiresAt)}`
@@ -1758,7 +1506,7 @@ export function useMessagesView() {
       const data = await updateConversationMember(selectedConversationId.value, member.id, { role })
       applyMemberPayload(data)
     } catch (err) {
-      conversationInfoError.value = extractError(err, "Impossible de mettre +á jour le membre.")
+      conversationInfoError.value = extractError(err, "Impossible de mettre +Ã¡ jour le membre.")
     } finally {
       delete memberBusy[member.id]
     }
@@ -1787,7 +1535,7 @@ export function useMessagesView() {
       const data = await updateConversationMember(selectedConversationId.value, member.id, { muted_until: null })
       applyMemberPayload(data)
     } catch (err) {
-      conversationInfoError.value = extractError(err, "Impossible de r+®tablir le membre.")
+      conversationInfoError.value = extractError(err, "Impossible de r+Â®tablir le membre.")
     } finally {
       delete memberBusy[member.id]
     }
@@ -1986,7 +1734,7 @@ export function useMessagesView() {
   function mapOptimisticAttachments(entries) {
     return entries.map((entry) => ({
       id: entry.descriptor?.id || entry.id,
-      fileName: entry.name || entry.descriptor?.file_name || 'Pi+¿ce jointe',
+      fileName: entry.name || entry.descriptor?.file_name || 'Pi+Â¿ce jointe',
       mimeType: entry.type || entry.descriptor?.mime_type || 'Fichier',
       sizeBytes: entry.size,
       downloadUrl: entry.descriptor?.download_url || null,
@@ -2084,7 +1832,7 @@ export function useMessagesView() {
 
     } catch (err) {
 
-      messageError.value = extractError(err, "Impossible de mettre +á jour l'+®pingle.")
+      messageError.value = extractError(err, "Impossible de mettre +Ã¡ jour l'+Â®pingle.")
 
     } finally {
 
@@ -2112,7 +1860,7 @@ export function useMessagesView() {
 
     } catch (err) {
 
-      console.warn('Impossible de mettre +á jour la r+®action', err)
+      console.warn('Impossible de mettre +Ã¡ jour la r+Â®action', err)
 
     } finally {
 
@@ -2209,7 +1957,7 @@ export function useMessagesView() {
 
       case 'delivered':
 
-        return 'Distribu+®'
+        return 'Distribu+Â®'
 
       case 'queued':
 
@@ -2252,14 +2000,14 @@ export function useMessagesView() {
 
 
   function messageStatusDetail(message) {
-    if (message.deleted) return 'Supprim+®'
+    if (message.deleted) return 'Supprim+Â®'
     if (!message.sentByMe) return ''
     if (message.readAt) {
       return `Lu ${formatTime(message.readAt)}`
     }
     if (message.deliveredAt) {
 
-      return `Distribu+® ${formatTime(message.deliveredAt)}`
+      return `Distribu+Â® ${formatTime(message.deliveredAt)}`
 
     }
 
@@ -2275,7 +2023,7 @@ export function useMessagesView() {
 
     if (scheme === 'plaintext') return 'Chiffrage applicatif'
 
-    return `Sch+®ma ${scheme}`
+    return `Sch+Â®ma ${scheme}`
 
   }
 
@@ -2287,7 +2035,7 @@ export function useMessagesView() {
 
     const lines = Object.entries(metadata).map(([key, value]) => `${key}: ${value}`)
 
-    return [`Sch+®ma: ${message.security?.scheme || 'n/a'}`, ...lines].join('\n')
+    return [`Sch+Â®ma: ${message.security?.scheme || 'n/a'}`, ...lines].join('\n')
 
   }
 
@@ -2382,9 +2130,6 @@ export function useMessagesView() {
 
   onBeforeUnmount(() => {
     disconnectRealtime()
-    if (gifSearchTimer) {
-      clearTimeout(gifSearchTimer)
-    }
     toastTimers.forEach((timer) => clearTimeout(timer))
     toastTimers.clear()
     if (typeof window !== 'undefined') {
@@ -2444,7 +2189,6 @@ export function useMessagesView() {
     ensureMessageVisible,
     ensureMeta,
     extractError,
-    extractSearchResults,
     filteredEmojiSections,
     formatAbsolute,
     formatFileSize,
@@ -2457,7 +2201,6 @@ export function useMessagesView() {
     gifResults,
     gifSearch,
     gifSearchAvailable,
-    gifSearchTimer,
     goToNewConversation,
     handleBrowserPrefBroadcast,
     handleBrowserPrefStorage,
@@ -2486,7 +2229,7 @@ export function useMessagesView() {
     limitDraft,
     loadConversationInvites,
     loadConversations,
-    loadGifResults,
+
     loadingConversations,
     loadingGifs,
     loadingInvites,
@@ -2555,7 +2298,6 @@ export function useMessagesView() {
     savingConversation,
     scrollToBottom,
     scrollToMessage,
-    searchLocalMessages,
     selectConversation,
     selectedConversation,
     selectedConversationId,
@@ -2570,7 +2312,6 @@ export function useMessagesView() {
     startEdit,
     startForward,
     startReply,
-    stripDiacritics,
     submitInvite,
     submitMessageEdit,
     suppressAutoScroll,
