@@ -115,12 +115,12 @@ const route = useRoute()
 
 const logoutReasons = {
   'session-expired': {
-    title: 'Votre session a expir�.',
-    hint: 'Reconnectez-vous pour reprendre vos conversations s�curis�es.',
+    title: 'Votre session a expiré.',
+    hint: 'Reconnectez-vous pour reprendre vos conversations sécurisées.',
   },
   'invalid-token': {
     title: 'Votre authentification n\'est plus valide.',
-    hint: 'Merci de vous reconnecter pour s�curiser votre acc�s.',
+    hint: 'Merci de vous reconnecter pour sécuriser votre accès.',
   },
 }
 
