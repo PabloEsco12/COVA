@@ -43,10 +43,10 @@ export function useMessagesView() {
     { value: 'group', label: 'Groupes', icon: 'bi bi-people' },
   ]
   const conversationRoles = [
-    { value: 'owner', label: 'Propri√©taire' },
-    { value: 'moderator', label: 'Mod√©rateur' },
+    { value: 'owner', label: 'Propri+Ætaire' },
+    { value: 'moderator', label: 'Mod+Ærateur' },
     { value: 'member', label: 'Membre' },
-    { value: 'guest', label: 'Invit√©' },
+    { value: 'guest', label: 'Invit+Æ' },
   ]
   const showConversationPanel = ref(false)
   const conversationForm = reactive({ title: '', topic: '', archived: false })
@@ -253,7 +253,7 @@ export function useMessagesView() {
   }
   const conversationSummary = computed(() => {
 
-    if (loadingConversations.value) return 'Chargement√¢‚Ç¨¬¶'
+    if (loadingConversations.value) return 'Chargement+Û‘Èº-™'
 
     const count = conversations.value.length
 
@@ -276,7 +276,7 @@ export function useMessagesView() {
     return [
       {
         id: 'search',
-        label: 'R√©sultats',
+        label: 'R+Æsultats',
         items: emojiCatalog.filter((emoji) => emoji.toLowerCase().includes(term)),
       },
     ]
@@ -442,11 +442,11 @@ export function useMessagesView() {
 
       case 'connected':
 
-        return 'Canal temps r√©el actif'
+        return 'Canal temps r+Æel actif'
 
       case 'connecting':
 
-        return 'Connexion‚Ä¶'
+        return 'Connexion‘«™'
 
       case 'error':
 
@@ -842,7 +842,7 @@ export function useMessagesView() {
 
       id: String(raw.id || raw.attachment_id || generateLocalId()),
 
-      fileName: raw.file_name || raw.filename || raw.name || 'Pi√®ce jointe',
+      fileName: raw.file_name || raw.filename || raw.name || 'Pi+øce jointe',
 
       mimeType: raw.mime_type || raw.mimeType || null,
 
@@ -1149,7 +1149,7 @@ export function useMessagesView() {
       return
     }
     if (hasAttachmentInProgress.value) {
-      attachmentError.value = 'S√©lectionnez une conversation avant d\'ajouter un fichier.'
+      attachmentError.value = 'S+Ælectionnez une conversation avant d\'ajouter un fichier.'
       return
     }
     if (pendingAttachments.value.some((entry) => entry.status === 'error')) {
@@ -1501,7 +1501,7 @@ export function useMessagesView() {
     if (!selectedConversationId.value) return
     const query = messageSearch.query.trim()
     if (!query) {
-      messageSearch.error = 'Entrez un mot-cl√©.'
+      messageSearch.error = 'Entrez un mot-cl+Æ.'
       messageSearch.results = []
       return
     }
@@ -1516,7 +1516,7 @@ export function useMessagesView() {
         const fallback = searchLocalMessages(query, 50)
         messageSearch.results = fallback.slice()
         if (!fallback.length) {
-          messageSearch.error = 'Aucun message trouv√©.'
+          messageSearch.error = 'Aucun message trouv+Æ.'
         }
       }
     } catch (err) {
@@ -1543,7 +1543,7 @@ export function useMessagesView() {
   function triggerAttachmentPicker() {
     attachmentError.value = ''
     if (!selectedConversationId.value) {
-      attachmentError.value = 'S√©lectionnez une conversation avant d\'ajouter un fichier.'
+      attachmentError.value = 'S+Ælectionnez une conversation avant d\'ajouter un fichier.'
       return
     }
     if (attachmentInput.value) {
@@ -1593,7 +1593,7 @@ export function useMessagesView() {
       entry.progress = 100
     } catch (err) {
       entry.status = 'error'
-      entry.error = extractError(err, 'Impossible de t√©l√©verser le fichier.')
+      entry.error = extractError(err, 'Impossible de t+Æl+Æverser le fichier.')
       attachmentError.value = entry.error
     }
   }
@@ -1719,7 +1719,7 @@ export function useMessagesView() {
       }
       inviteForm.email = ''
     } catch (err) {
-      conversationInfoError.value = extractError(err, "Impossible de cr√©er l'invitation.")
+      conversationInfoError.value = extractError(err, "Impossible de cr+Æer l'invitation.")
     } finally {
       inviteBusy.value = false
     }
@@ -1733,7 +1733,7 @@ export function useMessagesView() {
       await revokeConversationInvite(selectedConversationId.value, inviteId)
       invites.value = invites.value.filter((invite) => invite.id !== inviteId)
     } catch (err) {
-      conversationInfoError.value = extractError(err, "Impossible de r√©voquer l'invitation.")
+      conversationInfoError.value = extractError(err, "Impossible de r+Ævoquer l'invitation.")
     } finally {
       delete inviteRevokeBusy[inviteId]
     }
@@ -1742,7 +1742,7 @@ export function useMessagesView() {
   function formatInviteStatus(invite) {
     if (!invite) return ''
     if (invite.acceptedAt) {
-      return `Accept√©e ${formatAbsolute(invite.acceptedAt)}`
+      return `Accept+Æe ${formatAbsolute(invite.acceptedAt)}`
     }
     if (invite.expiresAt) {
       return `Expire ${formatAbsolute(invite.expiresAt)}`
@@ -1758,7 +1758,7 @@ export function useMessagesView() {
       const data = await updateConversationMember(selectedConversationId.value, member.id, { role })
       applyMemberPayload(data)
     } catch (err) {
-      conversationInfoError.value = extractError(err, "Impossible de mettre √† jour le membre.")
+      conversationInfoError.value = extractError(err, "Impossible de mettre +· jour le membre.")
     } finally {
       delete memberBusy[member.id]
     }
@@ -1787,7 +1787,7 @@ export function useMessagesView() {
       const data = await updateConversationMember(selectedConversationId.value, member.id, { muted_until: null })
       applyMemberPayload(data)
     } catch (err) {
-      conversationInfoError.value = extractError(err, "Impossible de r√©tablir le membre.")
+      conversationInfoError.value = extractError(err, "Impossible de r+Ætablir le membre.")
     } finally {
       delete memberBusy[member.id]
     }
@@ -1986,7 +1986,7 @@ export function useMessagesView() {
   function mapOptimisticAttachments(entries) {
     return entries.map((entry) => ({
       id: entry.descriptor?.id || entry.id,
-      fileName: entry.name || entry.descriptor?.file_name || 'Pi√®ce jointe',
+      fileName: entry.name || entry.descriptor?.file_name || 'Pi+øce jointe',
       mimeType: entry.type || entry.descriptor?.mime_type || 'Fichier',
       sizeBytes: entry.size,
       downloadUrl: entry.descriptor?.download_url || null,
@@ -2084,7 +2084,7 @@ export function useMessagesView() {
 
     } catch (err) {
 
-      messageError.value = extractError(err, "Impossible de mettre √† jour l'√©pingle.")
+      messageError.value = extractError(err, "Impossible de mettre +· jour l'+Æpingle.")
 
     } finally {
 
@@ -2112,7 +2112,7 @@ export function useMessagesView() {
 
     } catch (err) {
 
-      console.warn('Impossible de mettre √† jour la r√©action', err)
+      console.warn('Impossible de mettre +· jour la r+Æaction', err)
 
     } finally {
 
@@ -2209,7 +2209,7 @@ export function useMessagesView() {
 
       case 'delivered':
 
-        return 'Distribu√©'
+        return 'Distribu+Æ'
 
       case 'queued':
 
@@ -2252,14 +2252,14 @@ export function useMessagesView() {
 
 
   function messageStatusDetail(message) {
-    if (message.deleted) return 'Supprim√©'
+    if (message.deleted) return 'Supprim+Æ'
     if (!message.sentByMe) return ''
     if (message.readAt) {
       return `Lu ${formatTime(message.readAt)}`
     }
     if (message.deliveredAt) {
 
-      return `Distribu√© ${formatTime(message.deliveredAt)}`
+      return `Distribu+Æ ${formatTime(message.deliveredAt)}`
 
     }
 
@@ -2275,7 +2275,7 @@ export function useMessagesView() {
 
     if (scheme === 'plaintext') return 'Chiffrage applicatif'
 
-    return `Sch√©ma ${scheme}`
+    return `Sch+Æma ${scheme}`
 
   }
 
@@ -2287,7 +2287,7 @@ export function useMessagesView() {
 
     const lines = Object.entries(metadata).map(([key, value]) => `${key}: ${value}`)
 
-    return [`Sch√©ma: ${message.security?.scheme || 'n/a'}`, ...lines].join('\n')
+    return [`Sch+Æma: ${message.security?.scheme || 'n/a'}`, ...lines].join('\n')
 
   }
 
@@ -2394,6 +2394,201 @@ export function useMessagesView() {
       window.removeEventListener('cova:browser-notifications', handleBrowserPrefBroadcast)
     }
   })
-  return { myAvailability, deleteDialog, deleteDialogPreview, conversationSearch, loadingConversations, conversationError, conversationFilter, conversationFilters, conversationRoles, showConversationPanel, conversationForm, savingConversation, conversationInfoError, conversationInfoNotice, invites, loadingInvites, inviteForm, inviteBusy, inviteRevokeBusy, memberBusy, leavingConversation, pendingAttachments, attachmentError, composerState, forwardPicker, loadingOlderMessages, selectedConversationId, messages, loadingMessages, messageError, messageInput, sending, copiedMessageId, reactionPalette, reactionPickerFor, messageMenuOpen, showPicker, pickerMode, loadingGifs, gifError, gifSearchAvailable, messageToasts, callState, callControls, connectionStatus, currentUserId, initials, userId, displayName, avatarUrl, members, createdAt, conversationSummary, filteredEmojiSections, displayedGifs, selectedConversation, composerBlockedInfo, conversationOwnerSummary, target, headerSubtitle, primaryParticipantPresence, typingIndicatorText, remoteDisplayName, callStatusLabel, isConversationOwner, canManageConversation, hasAttachmentInProgress, isEditingMessage, hasComposerContext, canSend, value, pinnedMessages, sortedConversations, forwardPickerTargets, participantsLabel, replyTo, forwardFrom, selectConversation, id, body, roleLabel, memberPresence, member, status, label, memberPresenceText, onComposerInput, handleComposerBlur, message, goToNewConversation, onAvailabilityChange, togglePicker, setPickerMode, initiateForward, cancelForwardSelection, confirmForwardTarget, startReply, startEdit, cancelComposerContext, triggerAttachmentPicker, onAttachmentChange, removeAttachment, confirmDeleteMessage, closeDeleteDialog, performDeleteMessage, openConversationPanel, closeConversationPanel, leaveCurrentConversation, revokeInvite, updateMemberRole, muteMember, mutedUntil, unmuteMember, removeMember, addEmoji, insertGif, startCall, cancelOutgoingCall, hangupCall, rejectIncomingCall, acceptIncomingCall, toggleMicrophone, toggleCamera, copyMessage, toast, openToastConversation, preview, title, isPinning, isReactionPending, handlePinToggle, formatTime, formatAbsolute, formatFileSize, size, messagePreviewText, messageFormatters }
+  return {
+    activeFilterLabel,
+    addEmoji,
+    applyConversationPatch,
+    applyLocalReadReceipt,
+    applyMemberPayload,
+    applyMessageUpdate,
+    applyUnreadMeta,
+    attachmentError,
+    attachmentInput,
+    authToken,
+    browserNotificationsEnabled,
+    cancelComposerContext,
+    canManageConversation,
+    canSend,
+    clearPendingAttachments,
+    closeConversationPanel,
+    closeSearchPanel,
+    closeTransientMenus,
+    composerState,
+    computeInitials,
+    confirmDeleteMessage,
+    connectionStatus,
+    connectionStatusClass,
+    connectionStatusLabel,
+    connectRealtime,
+    conversationError,
+    conversationFilter,
+    conversationFilters,
+    conversationForm,
+    conversationInfoError,
+    conversationMeta,
+    conversationRoles,
+    conversations,
+    conversationSearch,
+    conversationSummary,
+    copiedMessageId,
+    copyMessage,
+    copyTimer,
+    currentMembership,
+    currentUserId,
+    disconnectRealtime,
+    dismissToast,
+    displayedGifs,
+    downloadAttachment,
+    emitActiveConversation,
+    emojiSearch,
+    ensureMessageVisible,
+    ensureMeta,
+    extractError,
+    extractSearchResults,
+    filteredEmojiSections,
+    formatAbsolute,
+    formatFileSize,
+    formatInviteStatus,
+    formatListTime,
+    formatTime,
+    generateLocalId,
+    gifError,
+    gifLibrary,
+    gifResults,
+    gifSearch,
+    gifSearchAvailable,
+    gifSearchTimer,
+    goToNewConversation,
+    handleBrowserPrefBroadcast,
+    handleBrowserPrefStorage,
+    handleDocumentClick,
+    handleDocumentKeydown,
+    handleIncomingRealtime,
+    handlePinToggle,
+    handleReactionSelection,
+    hasAttachmentInProgress,
+    hasComposerContext,
+    headerParticipants,
+    incrementUnreadCounter,
+    initializeMeta,
+    insertGif,
+    inviteBusy,
+    inviteForm,
+    inviteRevokeBusy,
+    invites,
+    isConversationOwner,
+    isEditingMessage,
+    isPinning,
+    isReactionPending,
+    jumpToSearchResult,
+    leaveCurrentConversation,
+    leavingConversation,
+    limitDraft,
+    loadConversationInvites,
+    loadConversations,
+    loadGifResults,
+    loadingConversations,
+    loadingGifs,
+    loadingInvites,
+    loadingMessages,
+    loadingOlderMessages,
+    loadMessages,
+    loadUnreadSummary,
+    mapAttachmentPayload,
+    mapInvite,
+    mapOptimisticAttachments,
+    mapReferencePayload,
+    markConversationAsRead,
+    memberBusy,
+    messageError,
+    messageInput,
+    messageMenuOpen,
+    messagePreviewText,
+    messages,
+    messageScroller,
+    messageSearch,
+    messageSecurityLabel,
+    messageSecurityTooltip,
+    messageStatusClass,
+    messageStatusDetail,
+    messageStatusLabel,
+    messageToasts,
+    muteMember,
+    normalizeConversation,
+    normalizeMember,
+    normalizeMessage,
+    normalizeSearchText,
+    notificationPermissionRequestPending,
+    notifyNewIncomingMessage,
+    onAttachmentChange,
+    onAvatarFailure,
+    onThreadScroll,
+    openConversationPanel,
+    openToastConversation,
+    optimisticMessageIds,
+    pagination,
+    paginationHeaderKeys,
+    pendingAttachments,
+    performMessageSearch,
+    pickerMode,
+    pinBusy,
+    pinnedMessages,
+    queueAttachment,
+    queueToastNotification,
+    reactionBusy,
+    reactionPalette,
+    reactionPickerFor,
+    readBrowserNotificationPreference,
+    readHeader,
+    readyAttachments,
+    removeAttachment,
+    removeMember,
+    removeMessageById,
+    resetComposerState,
+    resetSearchPanel,
+    resolveOptimisticMessage,
+    revokeInvite,
+    roleLabel,
+    route,
+    router,
+    saveConversationSettings,
+    savingConversation,
+    scrollToBottom,
+    scrollToMessage,
+    searchLocalMessages,
+    selectConversation,
+    selectedConversation,
+    selectedConversationId,
+    sending,
+    sendMessage,
+    setPickerMode,
+    showConversationPanel,
+    showPicker,
+    showSearchPanel,
+    socketRef,
+    sortedConversations,
+    startEdit,
+    startForward,
+    startReply,
+    stripDiacritics,
+    submitInvite,
+    submitMessageEdit,
+    suppressAutoScroll,
+    syncBrowserNotificationPreference,
+    syncConversationFormFromSelected,
+    toastTimers,
+    toggleMessageMenu,
+    togglePicker,
+    togglePin,
+    toggleReaction,
+    toggleReactionPicker,
+    toggleSearchPanel,
+    triggerAttachmentPicker,
+    unmuteMember,
+    unreadSummary,
+    updateMemberRole,
+    updatePaginationFromHeaders,
+    uploadAttachmentFile
+  }
 }
 
