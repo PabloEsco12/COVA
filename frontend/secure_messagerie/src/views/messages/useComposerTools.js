@@ -1,5 +1,6 @@
-import { onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { fetchGifs, hasGifApiSupport } from '@/services/media'
+import { emojiSections, emojiCatalog } from '@/utils/reactions'
 
 export function useComposerTools({
   gifLibrary,
@@ -205,6 +206,27 @@ export function useComposerTools({
     attachmentError.value = ''
   }
 
+  const filteredEmojiSections = computed(() => {
+    const term = emojiSearch.value.trim().toLowerCase()
+    if (!term) return emojiSections
+    const matches = emojiSections
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((emoji) => emoji.toLowerCase().includes(term)),
+      }))
+      .filter((section) => section.items.length)
+    if (matches.length) return matches
+    return [
+      {
+        id: 'search',
+        label: 'Résultats',
+        items: emojiCatalog.filter((emoji) => emoji.toLowerCase().includes(term)),
+      },
+    ]
+  })
+
+  const displayedGifs = computed(() => (gifResults.value.length ? gifResults.value : gifLibrary))
+
   return {
     attachmentInput,
     pendingAttachments,
@@ -215,6 +237,8 @@ export function useComposerTools({
     emojiSearch,
     gifSearch,
     gifResults,
+    filteredEmojiSections,
+    displayedGifs,
     loadingGifs,
     gifError,
     gifSearchAvailable,

@@ -17,10 +17,11 @@ import {
   createConversationInvite,
   revokeConversationInvite,
 } from '@/services/conversations'
-import { emojiSections, emojiCatalog, defaultGifLibrary } from '@/utils/reactions'
+import { defaultGifLibrary } from '@/utils/reactions'
 import { useMessageSearch } from './useMessageSearch'
 import { useComposerTools } from './useComposerTools'
 import { useNotificationsManager } from './useNotificationsManager'
+import { useConversationFilters } from './useConversationFilters'
 
 export function useMessagesView() {
   const gifLibrary = defaultGifLibrary
@@ -29,28 +30,22 @@ export function useMessagesView() {
   const conversations = ref([])
 
   const conversationMeta = reactive({})
-
-  const conversationSearch = ref('')
-
   const loadingConversations = ref(true)
-
   const conversationError = ref('')
-
   const unreadSummary = ref({ total: 0, conversations: [] })
-
-  const conversationFilter = ref('all')
-  const conversationFilters = [
-    { value: 'all', label: 'Toutes', icon: 'bi bi-inbox' },
-    { value: 'unread', label: 'Non lues', icon: 'bi bi-envelope-open' },
-    { value: 'direct', label: 'Direct', icon: 'bi bi-person' },
-    { value: 'group', label: 'Groupes', icon: 'bi bi-people' },
-  ]
-  const conversationRoles = [
-    { value: 'owner', label: 'Propri+®taire' },
-    { value: 'moderator', label: 'Mod+®rateur' },
-    { value: 'member', label: 'Membre' },
-    { value: 'guest', label: 'Invit+®' },
-  ]
+  const {
+    conversationSearch,
+    conversationFilter,
+    conversationFilters,
+    conversationRoles,
+    conversationSummary,
+    sortedConversations,
+    activeFilterLabel,
+  } = useConversationFilters({
+    conversations,
+    conversationMeta,
+    loadingConversations,
+  })
   const showConversationPanel = ref(false)
   const conversationForm = reactive({ title: '', topic: '', archived: false })
   const savingConversation = ref(false)
@@ -118,6 +113,8 @@ export function useMessagesView() {
     emojiSearch,
     gifSearch,
     gifResults,
+    filteredEmojiSections,
+    displayedGifs,
     loadingGifs,
     gifError,
     gifSearchAvailable,
@@ -270,48 +267,6 @@ export function useMessagesView() {
       avatarUrl: payload.avatar_url || null,
     }
   }
-  const conversationSummary = computed(() => {
-
-    if (loadingConversations.value) return 'Chargement+óÔé¼-ª'
-
-    const count = conversations.value.length
-
-    return count ? `${count} conversation${count > 1 ? 's' : ''}` : 'Aucune conversation'
-
-  })
-
-
-
-  const filteredEmojiSections = computed(() => {
-    const term = emojiSearch.value.trim().toLowerCase()
-    if (!term) return emojiSections
-    const matches = emojiSections
-      .map((section) => ({
-        ...section,
-        items: section.items.filter((emoji) => emoji.toLowerCase().includes(term)),
-      }))
-      .filter((section) => section.items.length)
-    if (matches.length) return matches
-    return [
-      {
-        id: 'search',
-        label: 'R+®sultats',
-        items: emojiCatalog.filter((emoji) => emoji.toLowerCase().includes(term)),
-      },
-    ]
-  })
-
-  const displayedGifs = computed(() => (gifResults.value.length ? gifResults.value : gifLibrary))
-
-
-  const activeFilterLabel = computed(() => {
-
-    const option = conversationFilters.find((filter) => filter.value === conversationFilter.value)
-
-    return option ? option.label : 'Toutes'
-
-  })
-
 
 
   const selectedConversation = computed(() => {
@@ -366,62 +321,6 @@ export function useMessagesView() {
   })
 
 
-
-  const sortedConversations = computed(() => {
-
-    const term = conversationSearch.value.trim().toLowerCase()
-
-    const list = conversations.value.map((conv) => {
-
-      const meta = conversationMeta[conv.id] || {}
-
-      return {
-
-        ...conv,
-
-        unreadCount: meta.unreadCount || 0,
-
-        lastPreview: meta.lastPreview || '',
-
-        lastActivity: meta.lastActivity || conv.createdAt,
-
-        avatarUrl: meta.avatarUrl ?? conv.avatarUrl ?? null,
-
-      }
-
-    })
-
-    let filtered = list
-
-    if (conversationFilter.value === 'unread') {
-
-      filtered = filtered.filter((conv) => conv.unreadCount > 0)
-
-    } else if (conversationFilter.value === 'direct') {
-
-      filtered = filtered.filter((conv) => conv.participants.length <= 1)
-
-    } else if (conversationFilter.value === 'group') {
-
-      filtered = filtered.filter((conv) => conv.participants.length > 1)
-
-    }
-
-    if (term) {
-
-      filtered = filtered.filter(
-
-        (conv) =>
-
-          conv.displayName.toLowerCase().includes(term) || (conv.lastPreview || '').toLowerCase().includes(term),
-
-      )
-
-    }
-
-    return filtered.sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity))
-
-  })
 
 
 
