@@ -60,7 +60,11 @@
                 {{ callFormatter('formatTime', message.createdAt) }}
               </time>
             </div>
-            <div v-if="!message.deleted && !message.isSystem" class="msg-bubble__toolbar" @click.stop>
+            <div
+              v-if="!message.deleted && !message.isSystem"
+              :class="['msg-bubble__toolbar', message.sentByMe ? 'msg-bubble__toolbar--right' : 'msg-bubble__toolbar--left']"
+              @click.stop
+            >
               <button
                 type="button"
                 class="icon-btn subtle"
@@ -81,7 +85,11 @@
               </button>
               <div
                 v-if="reactionPickerFor === message.id"
-                class="msg-popover msg-popover--reactions"
+                :class="[
+                  'msg-popover',
+                  'msg-popover--reactions',
+                  message.sentByMe ? 'msg-popover--left' : 'msg-popover--right',
+                ]"
                 role="menu"
                 aria-label="Choisir une réaction"
               >
@@ -98,7 +106,11 @@
               </div>
               <div
                 v-if="messageMenuOpen === message.id"
-                class="msg-popover msg-popover--menu"
+                :class="[
+                  'msg-popover',
+                  'msg-popover--menu',
+                  message.sentByMe ? 'msg-popover--left' : 'msg-popover--right',
+                ]"
                 role="menu"
                 aria-label="Actions du message"
               >

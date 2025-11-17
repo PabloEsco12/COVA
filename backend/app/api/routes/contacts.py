@@ -36,6 +36,9 @@ def _to_contact_out(link) -> ContactOut:
         department = profile_data.get("department")
         phone_number = profile_data.get("phone_number")
         status_message = profile_data.get("status_message")
+    awaiting_my_response = (
+        link.status == ContactStatus.PENDING and not getattr(link, "initiated_by_owner", False)
+    )
     return ContactOut(
         id=link.id,
         contact_user_id=link.contact_id,
@@ -50,6 +53,7 @@ def _to_contact_out(link) -> ContactOut:
         alias=link.alias,
         created_at=link.created_at,
         updated_at=link.updated_at,
+        awaiting_my_response=awaiting_my_response,
     )
 
 

@@ -22,6 +22,7 @@ from .services.conversation_service import ConversationService
 from .services.security_service import SecurityService
 from .services.device_service import DeviceService
 from .services.attachment_service import AttachmentService
+from .services.organization_service import OrganizationService
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
@@ -73,6 +74,7 @@ __all__ = [
     "get_conversation_service",
     "get_security_service",
     "get_device_service",
+    "get_organization_service",
 ]
 
 
@@ -110,7 +112,9 @@ async def get_auth_service(db: AsyncSession = Depends(get_session)) -> AuthServi
 async def get_contact_service(db: AsyncSession = Depends(get_session)) -> ContactService:
     audit = AuditService(db)
     notifications = NotificationService(db)
-    return ContactService(db, audit_service=audit, notification_service=notifications)
+    redis = await get_redis()
+    realtime = RealtimeBroker(redis)
+    return ContactService(db, audit_service=audit, notification_service=notifications, realtime_broker=realtime)
 
 
 async def get_conversation_service(db: AsyncSession = Depends(get_session)) -> ConversationService:
@@ -136,3 +140,8 @@ async def get_security_service(db: AsyncSession = Depends(get_session)) -> Secur
 async def get_device_service(db: AsyncSession = Depends(get_session)) -> DeviceService:
     audit = AuditService(db)
     return DeviceService(db, audit_service=audit)
+
+
+async def get_organization_service(db: AsyncSession = Depends(get_session)) -> OrganizationService:
+    audit = AuditService(db)
+    return OrganizationService(db, audit_service=audit)

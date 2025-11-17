@@ -1,6 +1,12 @@
 import { api } from '@/utils/api'
+import { broadcastProfileUpdate } from '@/utils/profile'
 
 const SESSION_STORAGE_KEY = 'securechat.session'
+
+function emitSessionEvent(name, detail = {}) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(name, { detail }))
+}
 
 function persistLegacyKeys(session) {
   try {
@@ -41,6 +47,8 @@ export function persistSession(session) {
   } catch (err) {
     console.warn('Unable to persist session payload', err)
   }
+  const token = session?.tokens?.access_token || null
+  emitSessionEvent('cova:session-update', { token })
   return session
 }
 
@@ -68,6 +76,7 @@ export function clearSession() {
   } catch (err) {
     console.warn('Unable to clear session storage', err)
   }
+  emitSessionEvent('cova:session-clear')
 }
 
 export async function registerAccount({ email, password, displayName }) {
@@ -100,9 +109,14 @@ export async function refreshSession(refreshToken) {
 
 export async function logout(refreshToken) {
   const token = refreshToken ?? localStorage.getItem('refresh_token')
-  if (!token) return
-  await api.post('/auth/logout', { refresh_token: token })
-  clearSession()
+  try {
+    if (token) {
+      await api.post('/auth/logout', { refresh_token: token })
+    }
+    await setPresenceStatus('Hors ligne', 'offline')
+  } finally {
+    clearSession()
+  }
 }
 
 export async function resendConfirmationEmail(email) {
@@ -110,8 +124,12 @@ export async function resendConfirmationEmail(email) {
 }
 
 export async function logoutAll() {
-  await api.post('/auth/logout-all')
-  clearSession()
+  try {
+    await api.post('/auth/logout-all')
+    await setPresenceStatus('Hors ligne', 'offline')
+  } finally {
+    clearSession()
+  }
 }
 
 export function getCurrentUserFromCache() {
@@ -124,5 +142,53 @@ export function getAccessToken() {
     return localStorage.getItem('access_token')
   } catch {
     return null
+  }
+}
+
+function decodeJwtPayload(token) {
+  if (!token) return null
+  try {
+    const [, payload = ''] = token.split('.')
+    if (!payload) return null
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = normalized.padEnd(normalized.length + (4 - (normalized.length % 4)) % 4, '=')
+    const decoded = atob(padded)
+    return JSON.parse(decoded)
+  } catch {
+    return null
+  }
+}
+
+export function isAccessTokenExpired(token = null) {
+  const value = token || getAccessToken()
+  if (!value) return true
+  const payload = decodeJwtPayload(value)
+  if (!payload?.exp) return false
+  const now = Math.floor(Date.now() / 1000)
+  // Petite marge de sécurité de 30s
+  return payload.exp <= now - 30
+}
+
+export function hasStoredSession() {
+  try {
+    return Boolean(
+      localStorage.getItem(SESSION_STORAGE_KEY) ||
+        localStorage.getItem('access_token') ||
+        localStorage.getItem('refresh_token'),
+    )
+  } catch {
+    return false
+  }
+}
+
+export async function setPresenceStatus(message, statusCode) {
+  try {
+    await api.put('/me/profile', { status_message: message || null })
+    broadcastProfileUpdate({
+      status_message: message || '',
+      status_code: statusCode || '',
+    })
+  } catch (err) {
+    console.warn('Unable to update presence status', err)
   }
 }

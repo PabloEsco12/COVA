@@ -136,8 +136,10 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { backendBase } from '@/utils/api'
+import { normalizeAvatarUrl } from '@/utils/profile'
 
 import ContactsToolbar from './ContactsToolbar.vue'
 import ContactSection from './ContactSection.vue'
@@ -194,10 +196,15 @@ const busyMap = reactive({})
 const router = useRouter()
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const emailIsValid = computed(() => emailRegex.test(addEmail.value))
-const emailExists = computed(() =>
-  contacts.value.some((c) => c.email.toLowerCase() === addEmail.value.toLowerCase()),
-)
+const normalizedEmail = computed(() => (addEmail.value || '').trim())
+const normalizedEmailLower = computed(() => normalizedEmail.value.toLowerCase())
+const emailIsValid = computed(() => emailRegex.test(normalizedEmail.value))
+const existingContact = computed(() => {
+  const target = normalizedEmailLower.value
+  if (!target) return null
+  return contacts.value.find((c) => (c.email || '').toLowerCase() === target) || null
+})
+const emailExists = computed(() => !!existingContact.value)
 
 const statusOrder = {
   accepted: 0,
@@ -212,6 +219,24 @@ const counts = computed(() => ({
   total: contacts.value.length,
 }))
 
+function emitPendingContactCount(value) {
+  if (typeof window === 'undefined') return
+  const normalized = Math.max(0, Number(value) || 0)
+  window.dispatchEvent(
+    new CustomEvent('cova:contacts-pending', {
+      detail: { pending: normalized },
+    }),
+  )
+}
+
+watch(
+  () => counts.value.pending,
+  (value) => {
+    emitPendingContactCount(value)
+  },
+  { immediate: true },
+)
+
 const filterChips = computed(() => [
   { value: 'all', label: 'Tous', count: counts.value.total },
   { value: 'accepted', label: 'Actifs', count: counts.value.accepted },
@@ -221,7 +246,10 @@ const filterChips = computed(() => [
 
 const normalizedContacts = computed(() => {
   return contacts.value
-    .slice()
+    .map((contact) => ({
+      ...contact,
+      avatar_url: normalizeAvatarUrl(contact.avatar_url || null, { baseUrl: backendBase }),
+    }))
     .sort((a, b) => {
       const statusDiff = statusOrder[a.status] - statusOrder[b.status]
       if (statusDiff !== 0) return statusDiff
@@ -320,7 +348,7 @@ function secondaryLabel(contact) {
 
 function initials(contact) {
   const label = displayName(contact)
-  const parts = label.split(/\s+/).filter(Boolean)
+  const parts = label.split(/\\s+/).filter(Boolean)
   const letters = parts.slice(0, 2).map((word) => word[0])
   return letters.join('').toUpperCase() || label.slice(0, 2).toUpperCase()
 }
@@ -408,14 +436,30 @@ async function submitAdd() {
     modalError.value = 'Veuillez saisir une adresse e-mail valide.'
     return
   }
-  if (emailExists.value) {
-    modalError.value = 'Ce contact figure déjà dans votre liste.'
+  const duplicate = existingContact.value
+  if (duplicate) {
+    if (duplicate.status === 'pending') {
+      if (duplicate.awaiting_my_response) {
+        modalError.value = 'Ce contact attend votre réponse dans les demandes en attente.'
+      } else {
+        modalSuccess.value = "Demande envoyée : le contact sera visible après confirmation."
+      }
+    } else if (duplicate.status === 'accepted') {
+      modalError.value = 'Ce contact figure déjà dans votre liste.'
+    } else {
+      modalError.value = 'Ce contact est déjà en cours de traitement.'
+    }
+    highlightContactId.value = duplicate.id
+    setTimeout(() => {
+      highlightContactId.value = null
+    }, 3000)
     return
   }
   submitting.value = true
+  const targetEmail = normalizedEmail.value
   try {
     const contact = await createContact({
-      email: addEmail.value,
+      email: targetEmail,
       alias: addAlias.value || null,
     })
     contacts.value.push(contact)
@@ -429,7 +473,7 @@ async function submitAdd() {
     if (error?.response?.status === 404) {
       modalError.value = 'Aucun utilisateur trouvé avec cette adresse e-mail.'
     } else if (error?.response?.status === 409) {
-      modalError.value = 'Le contact existe déjà.'
+      modalSuccess.value = "Demande envoyée : le contact sera visible après confirmation."
     } else {
       modalError.value =
         error?.response?.data?.detail || "Impossible d'ajouter ce contact pour le moment."
@@ -573,3 +617,4 @@ onMounted(async () => {
 </script>
 
 <style scoped src="@/assets/styles/contacts.css"></style>
+

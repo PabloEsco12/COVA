@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <aside class="msg-nav">
     <header class="msg-nav__header">
       <div>
@@ -59,6 +59,11 @@
               @error="$emit('avatar-error', c.id)"
             />
             <span v-else>{{ c.initials }}</span>
+            <span
+              class="presence-indicator"
+              :class="`presence-${c.presenceStatus || 'offline'}`"
+              :title="c.presenceLabel || 'Statut indisponible'"
+            ></span>
           </span>
 
           <span class="msg-item__body">

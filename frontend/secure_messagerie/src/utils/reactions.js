@@ -1,0 +1,112 @@
+const EMOJI_SECTIONS = [
+  {
+    id: 'popular',
+    label: 'Favoris',
+    items: ['\u{1F44D}', '\u{1F60A}', '\u{1F603}', '\u{1F60D}', '\u{1F389}', '\u{1F680}', '\u{1F37A}'],
+  },
+  {
+    id: 'smileys',
+    label: 'Smileys',
+    items: [
+      '\u{1F600}',
+      '\u{1F603}',
+      '\u{1F604}',
+      '\u{1F601}',
+      '\u{1F606}',
+      '\u{1F60E}',
+      '\u{1F60A}',
+      '\u{1F642}',
+      '\u{1F917}',
+      '\u{1F607}',
+      '\u{1F914}',
+      '\u{1F928}',
+      '\u{1F610}',
+      '\u{1F612}',
+      '\u{1F61B}',
+      '\u{1F61D}',
+    ],
+  },
+  {
+    id: 'gestures',
+    label: 'Gestes',
+    items: [
+      '\u{1F44D}',
+      '\u{1F44C}',
+      '\u{1F64F}',
+      '\u{1F450}',
+      '\u{270A}',
+      '\u{270C}',
+      '\u{1F64B}',
+      '\u{1F64C}',
+      '\u{1F485}',
+      '\u{1F44F}',
+    ],
+  },
+  {
+    id: 'nature',
+    label: 'Nature',
+    items: [
+      '\u{1F31F}',
+      '\u{1F33B}',
+      '\u{1F331}',
+      '\u{1F344}',
+      '\u{1F33C}',
+      '\u{1F340}',
+      '\u{1F98B}',
+      '\u{1F41E}',
+      '\u{1F43E}',
+    ],
+  },
+  {
+    id: 'food',
+    label: 'Cuisine',
+    items: [
+      '\u{1F347}',
+      '\u{1F349}',
+      '\u{1F34B}',
+      '\u{1F355}',
+      '\u{1F354}',
+      '\u{1F32D}',
+      '\u{1F32E}',
+      '\u{1F957}',
+      '\u{1F368}',
+      '\u{2615}',
+    ],
+  },
+  {
+    id: 'activities',
+    label: 'Loisirs',
+    items: [
+      '\u{26BD}',
+      '\u{1F3C0}',
+      '\u{1F3D3}',
+      '\u{1F3B8}',
+      '\u{1F3B6}',
+      '\u{1F3AE}',
+      '\u{1F3A8}',
+      '\u{1F3C6}',
+      '\u{1F3CA}',
+      '\u{1F3C8}',
+    ],
+  },
+]
+
+const DEFAULT_GIF_LIBRARY = [
+  { label: 'Bravo', url: 'https://media.giphy.com/media/111ebonMs90YLu/giphy.gif' },
+  { label: 'Fete', url: 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif' },
+  { label: 'Pouce', url: 'https://media.giphy.com/media/OkJat1YNdoD3W/giphy.gif' },
+  { label: 'Applaudissements', url: 'https://media.giphy.com/media/5GoVLqeAOo6PK/giphy.gif' },
+  { label: 'Celebration', url: 'https://media.giphy.com/media/26gssIytJvy1b1THO/giphy.gif' },
+  { label: 'LOL', url: 'https://media.giphy.com/media/l46CkATpdyLwLI7vi/giphy.gif' },
+  { label: 'Amour', url: 'https://media.giphy.com/media/xT0xeJpnrWC4XWblEk/giphy.gif' },
+  { label: 'ThumbsUp', url: 'https://media.giphy.com/media/l2SpQXcg3dYgP2QbS/giphy.gif' },
+  { label: 'Party', url: 'https://media.giphy.com/media/3o6Zt481isNVuQI1l6/giphy.gif' },
+  { label: 'Confetti', url: 'https://media.giphy.com/media/26u4hLUL3xFqj2iUU/giphy.gif' },
+  { label: 'Wow', url: 'https://media.giphy.com/media/xT5LMHxhOfscxPfIfm/giphy.gif' },
+  { label: 'HappyDance', url: 'https://media.giphy.com/media/Ju7l5y9osyymQ/giphy.gif' },
+]
+
+export const emojiSections = Object.freeze(EMOJI_SECTIONS)
+export const emojiCatalog = Object.freeze(emojiSections.flatMap((section) => section.items))
+export const defaultGifLibrary = Object.freeze(DEFAULT_GIF_LIBRARY)
+

@@ -37,7 +37,7 @@
         <button v-if="recoveryCodes.length" class="btn btn-outline-secondary" @click="openRecoveryModal">
           <i class="bi bi-key me-1"></i>Afficher les codes de récupération
         </button>
-        <button class="btn btn-outline-danger" @click="deactivateTotp" :disabled="loadingTotp">
+        <button class="btn btn-outline-danger" @click="openDeactivateTotpModal" :disabled="loadingTotp">
           <span v-if="loadingTotp" class="spinner-border spinner-border-sm me-1"></span>
           Désactiver la double authentification
         </button>
@@ -178,6 +178,34 @@
         <button class="btn btn-primary" @click="closeRecoveryModal">J'ai sauvegardé mes codes</button>
       </template>
     </CustomModal>
+
+    <CustomModal v-model="showDeactivateTotpModal">
+      <template #title>
+        <i class="bi bi-shield-exclamation me-2"></i>Désactiver la double authentification
+      </template>
+
+      <p class="mb-3">
+        Avant de désactiver TOTP, assurez-vous d'avoir une méthode de secours. Vos prochaines connexions
+        redeviendront protégées uniquement par le mot de passe.
+      </p>
+      <ul class="text-muted small ps-3 mb-3">
+        <li>Les codes de récupération associés seront invalidés.</li>
+        <li>Vous pourrez réactiver TOTP à tout moment depuis cette page.</li>
+      </ul>
+      <div v-if="deactivateTotpError" class="alert alert-danger">
+        {{ deactivateTotpError }}
+      </div>
+
+      <template #footer>
+        <button class="btn btn-outline-secondary" @click="closeDeactivateTotpModal" :disabled="loadingTotp">
+          Annuler
+        </button>
+        <button class="btn btn-danger" @click="confirmDeactivateTotp" :disabled="loadingTotp">
+          <span v-if="loadingTotp" class="spinner-border spinner-border-sm me-1"></span>
+          <span v-else>Désactiver</span>
+        </button>
+      </template>
+    </CustomModal>
   </div>
 </template>
 
@@ -199,6 +227,8 @@ const totpError = ref('')
 const totpSuccess = ref('')
 const recoveryCodes = ref([])
 const showRecoveryModal = ref(false)
+const showDeactivateTotpModal = ref(false)
+const deactivateTotpError = ref('')
 const loadingTotp = ref(false)
 
 const oldPassword = ref('')
@@ -253,19 +283,38 @@ function resetPasswordFields() {
   pwdModalOk.value = true
 }
 
+function openDeactivateTotpModal() {
+  deactivateTotpError.value = ''
+  showDeactivateTotpModal.value = true
+}
+
+function closeDeactivateTotpModal() {
+  if (loadingTotp.value) return
+  deactivateTotpError.value = ''
+  showDeactivateTotpModal.value = false
+}
+
 async function changePassword() {
   pwdModalMsg.value = ''
   pwdMsg.value = ''
-  if (!oldPassword.value || !newPassword.value || newPassword.value !== newPassword2.value) {
+  const current = String(oldPassword.value || '')
+  const nextPwd = String(newPassword.value || '')
+  const confirmPwd = String(newPassword2.value || '')
+  if (!current.length || !nextPwd.length || !confirmPwd.length) {
     pwdModalOk.value = false
-    pwdModalMsg.value = 'Vérifiez les champs renseignés'
+    pwdModalMsg.value = 'Veuillez remplir tous les champs.'
+    return
+  }
+  if (nextPwd !== confirmPwd) {
+    pwdModalOk.value = false
+    pwdModalMsg.value = 'La confirmation ne correspond pas.'
     return
   }
   savingPwd.value = true
   try {
     await api.put('/me/password', {
-      old_password: oldPassword.value,
-      new_password: newPassword.value,
+      old_password: current,
+      new_password: nextPwd,
     })
     pwdOk.value = true
     pwdMsg.value = 'Mot de passe mis à jour'
@@ -333,8 +382,8 @@ async function confirmTotp() {
   }
 }
 
-async function deactivateTotp() {
-  if (!window.confirm('Souhaitez-vous désactiver la double authentification ?')) return
+async function confirmDeactivateTotp() {
+  deactivateTotpError.value = ''
   totpError.value = ''
   totpSuccess.value = ''
   loadingTotp.value = true
@@ -348,10 +397,13 @@ async function deactivateTotp() {
     totpCode.value = ''
     recoveryCodes.value = []
     totpStep.value = 1
+    showDeactivateTotpModal.value = false
     await fetchSecurity()
   } catch (e) {
     const detail = e.response?.data?.detail || e.response?.data?.error || e.message
-    totpError.value = detail || 'Impossible de désactiver la double authentification pour le moment.'
+    const message = detail || 'Impossible de désactiver la double authentification pour le moment.'
+    deactivateTotpError.value = message
+    totpError.value = message
   } finally {
     loadingTotp.value = false
   }
@@ -413,3 +465,4 @@ async function copyToClipboard(value) {
 </script>
 
 <style scoped src="@/assets/styles/settings.css"></style>
+

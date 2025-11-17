@@ -6,7 +6,7 @@ services:
     container_name: securechat_db
     env_file: .env.docker
     ports:
-    - "5543:5432"
+      - "5543:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
@@ -14,6 +14,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    labels:
+      - "autoheal=true"
     restart: unless-stopped
 
   redis:
@@ -68,7 +70,7 @@ services:
     volumes:
       - ./backend:/app
     ports:
-      - "8000:8000"
+      - "18000:8000"
     entrypoint: >
       sh -c "
         /wait-for-it.sh db:5432 --timeout=60 --strict &&
@@ -76,6 +78,20 @@ services:
         python -m alembic -c /app/alembic.ini upgrade head &&
         uvicorn app.main:app --host 0.0.0.0 --port 8000 ${UVICORN_RELOAD:+--reload}
       "
+    # Healthcheck simple: vérifie que le port 8000 répond
+    # (Utilise Python standard library, pas besoin de curl dans l'image)
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import socket; s=socket.create_connection(('localhost', 8000), 2); s.close()\""
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    labels:
+      - "autoheal=true"
     restart: unless-stopped
 
   worker:
@@ -99,7 +115,7 @@ services:
       sh -c "
         /wait-for-it.sh db:5432 --timeout=60 --strict &&
         /wait-for-it.sh redis:6379 --timeout=60 --strict &&
-        python -m app_v2.workers.notification_worker
+        python -m app.workers.notification_worker
       "
     restart: unless-stopped
 
@@ -113,10 +129,33 @@ services:
     ports:
       - "5176:5176"
     environment:
-      - VITE_API_URL=http://localhost:8000/api
+      - VITE_API_URL=http://localhost:18000/api
     restart: unless-stopped
+
+  # UI de monitoring (Uptime Kuma)
+  uptime-kuma:
+    image: louislam/uptime-kuma:latest
+    container_name: uptime_kuma
+    volumes:
+      - uptime_kuma_data:/app/data
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+
+  # Auto-heal (redémarre les conteneurs unhealthy avec le label autoheal=true)
+  autoheal:
+    image: willfarrell/autoheal
+    container_name: autoheal
+    restart: unless-stopped
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=all
+      - AUTOHEAL_INTERVAL=30
+      - AUTOHEAL_START_PERIOD=60
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   db_data:
   redis_data:
   minio_data:
+  uptime_kuma_data:

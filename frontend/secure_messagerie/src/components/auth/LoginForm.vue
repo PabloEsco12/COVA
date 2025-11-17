@@ -1,4 +1,4 @@
-<!-- src/components/auth/LoginForm.vue -->
+﻿<!-- src/components/auth/LoginForm.vue -->
 <template>
   <section class="auth-card">
     <div class="auth-card__brand">
@@ -96,9 +96,10 @@
 
 <script setup>
 import { ref, onMounted, watch } from 'vue'
-import { api } from '@/utils/api'
-import { loginWithPassword } from '@/services/auth'
+import { api, backendBase } from '@/utils/api'
+import { clearSession, getAccessToken, isAccessTokenExpired, loginWithPassword, setPresenceStatus } from '@/services/auth'
 import { useRouter, useRoute } from 'vue-router'
+import { normalizeAvatarUrl } from '@/utils/profile'
 
 const email = ref('')
 const password = ref('')
@@ -112,10 +113,26 @@ const resendError = ref('')
 const router = useRouter()
 const route = useRoute()
 
+const logoutReasons = {
+  'session-expired': {
+    title: 'Votre session a expir�.',
+    hint: 'Reconnectez-vous pour reprendre vos conversations s�curis�es.',
+  },
+  'invalid-token': {
+    title: 'Votre authentification n\'est plus valide.',
+    hint: 'Merci de vous reconnecter pour s�curiser votre acc�s.',
+  },
+}
+
 onMounted(() => {
-  // si déjà connecté -> dashboard
-  if (localStorage.getItem('access_token')) {
-    router.push('/dashboard')
+  const token = getAccessToken()
+  if (token) {
+    if (isAccessTokenExpired(token)) {
+      clearSession()
+    } else {
+      router.push('/dashboard')
+      return
+    }
   }
 })
 
@@ -126,6 +143,7 @@ watch(
     const reasonValue = Array.isArray(reason) ? reason[0] : reason
     applyLogoutReason(reasonValue)
     clearReasonQuery()
+    clearSession()
   },
   { immediate: true },
 )
@@ -135,16 +153,6 @@ function setError(message, hint = '') {
   errorHint.value = hint
 }
 
-const logoutReasons = {
-  'session-expired': {
-    title: 'Votre session a expiré.',
-    hint: 'Reconnectez-vous pour reprendre vos conversations sécurisées.',
-  },
-  'invalid-token': {
-    title: 'Votre authentification n’est plus valide.',
-    hint: 'Merci de vous reconnecter pour sécuriser votre accès.',
-  },
-}
 
 function applyLogoutReason(reason) {
   const payload = logoutReasons[reason]
@@ -185,11 +193,19 @@ async function handleLogin() {
       localStorage.removeItem('pseudo')
     }
 
-    if (profile?.avatar_url) {
-      localStorage.setItem('avatar_url', profile.avatar_url)
+    const normalizedAvatar = normalizeAvatarUrl(profile?.avatar_url, {
+      baseUrl: backendBase,
+      cacheBust: true,
+    })
+    if (normalizedAvatar) {
+      localStorage.setItem('avatar_url', normalizedAvatar)
     } else {
       localStorage.removeItem('avatar_url')
     }
+
+    try {
+      await setPresenceStatus('Disponible', 'available')
+    } catch {}
 
     router.push('/dashboard')
   } catch (err) {

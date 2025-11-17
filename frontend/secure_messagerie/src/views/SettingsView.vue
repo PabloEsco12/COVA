@@ -37,6 +37,10 @@
 
     <hr class="my-5" />
 
+    <hr class="my-5" />
+
+    <OrganizationAdministratorsCard class="mb-4" />
+
     <!-- zone dangereuse -->
     <DangerZone />
   </div>
@@ -49,6 +53,7 @@ import SecurityCard from '@/components/settings/SecurityCard.vue'
 import NotificationsCard from '@/components/settings/NotificationsCard.vue'
 import AvatarCard from '@/components/settings/AvatarCard.vue'
 import DangerZone from '@/components/settings/DangerZone.vue'
+import OrganizationAdministratorsCard from '@/components/settings/OrganizationAdministratorsCard.vue'
 
 /**
  * Ces 3 infos servent à l’avatar (initiales) donc on les garde au niveau de la vue.

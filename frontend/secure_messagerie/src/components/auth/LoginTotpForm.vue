@@ -60,8 +60,10 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
-import { loginWithPassword } from '@/services/auth'
+import { loginWithPassword, setPresenceStatus } from '@/services/auth'
 import { useRouter } from 'vue-router'
+import { backendBase } from '@/utils/api'
+import { normalizeAvatarUrl } from '@/utils/profile'
 
 const code = ref('')
 const error = ref('')
@@ -121,11 +123,19 @@ async function handleTotp() {
     } else {
       localStorage.removeItem('pseudo')
     }
-    if (profile?.avatar_url) {
-      localStorage.setItem('avatar_url', profile.avatar_url)
+    const normalizedAvatar = normalizeAvatarUrl(profile?.avatar_url, {
+      baseUrl: backendBase,
+      cacheBust: true,
+    })
+    if (normalizedAvatar) {
+      localStorage.setItem('avatar_url', normalizedAvatar)
     } else {
       localStorage.removeItem('avatar_url')
     }
+
+    try {
+      await setPresenceStatus('Disponible', 'available')
+    } catch {}
 
     sessionStorage.removeItem(pendingKey)
     router.replace('/dashboard')

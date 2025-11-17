@@ -26,7 +26,7 @@
         />
       </div>
       <div class="col-md-6">
-        <label class="form-label">Departement / Equipe</label>
+        <label class="form-label">Département / Équipe</label>
         <input
           v-model.trim="formDepartment"
           class="form-control"
@@ -37,7 +37,7 @@
 
     <div class="row g-2 mt-2">
       <div class="col-md-6">
-        <label class="form-label">Numero de telephone securise</label>
+        <label class="form-label">Numéro de téléphone sécurisé</label>
         <input v-model.trim="formPhone" class="form-control" placeholder="+32 ..." />
       </div>
       <div class="col-md-6">
@@ -50,7 +50,7 @@
 
     <div class="row g-2 mt-2">
       <div class="col-md-6">
-        <label class="form-label">Langue preferee</label>
+        <label class="form-label">Langue préférée</label>
         <select v-model="formLocale" class="form-select">
           <option v-for="loc in localeOptions" :key="loc.value" :value="loc.value">
             {{ loc.label }}
@@ -58,7 +58,7 @@
         </select>
       </div>
       <div class="col-md-6">
-        <label class="form-label">Message d'etat</label>
+        <label class="form-label">Message d'état</label>
         <input
           v-model.trim="formStatus"
           class="form-control"
@@ -68,7 +68,7 @@
     </div>
 
     <div class="mt-3">
-      <label class="form-label">Cle publique PGP (optionnel)</label>
+      <label class="form-label">Clé publique PGP (optionnel)</label>
       <textarea
         v-model.trim="formPgp"
         class="form-control"
@@ -95,7 +95,8 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { api } from '@/utils/api'
+import { api, backendBase } from '@/utils/api'
+import { broadcastProfileUpdate, normalizeAvatarUrl } from '@/utils/profile'
 
 const emit = defineEmits(['profile-loaded', 'profile-updated'])
 
@@ -145,11 +146,18 @@ function applyProfileResponse(data) {
   formTimezone.value = data.timezone || DEFAULT_TIMEZONE
 
   // on signale au parent (pour l’avatar par ex.)
-  emit('profile-loaded', {
+  const normalizedAvatar = normalizeAvatarUrl(data.avatar_url, {
+    baseUrl: backendBase,
+    cacheBust: true,
+  })
+  const payload = {
     email: data.email || '',
     display_name: data.display_name || '',
-    avatar_url: data.avatar_url ? `${data.avatar_url}?v=${Date.now()}` : null,
-  })
+    avatar_url: normalizedAvatar,
+    status_message: data.status_message || '',
+  }
+  emit('profile-loaded', payload)
+  broadcastProfileUpdate(payload)
 }
 
 async function fetchProfile() {
@@ -190,11 +198,18 @@ async function saveProfile() {
     applyProfileResponse(res.data)
     profileOk.value = true
     profileMsg.value = 'Profil mis a jour'
-    emit('profile-updated', {
+    const normalizedAvatar = normalizeAvatarUrl(res.data.avatar_url, {
+      baseUrl: backendBase,
+      cacheBust: true,
+    })
+    const payloadUpdate = {
       email: res.data.email,
       display_name: res.data.display_name,
-      avatar_url: res.data.avatar_url ? `${res.data.avatar_url}?v=${Date.now()}` : null,
-    })
+      avatar_url: normalizedAvatar,
+      status_message: res.data.status_message || '',
+    }
+    emit('profile-updated', payloadUpdate)
+    broadcastProfileUpdate(payloadUpdate)
   } catch (e) {
     profileOk.value = false
     profileMsg.value =
@@ -205,5 +220,6 @@ async function saveProfile() {
     savingProfile.value = false
   }
 }
+
 </script>
 <style scoped src="@/assets/styles/settings.css"></style>

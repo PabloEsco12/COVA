@@ -6,6 +6,7 @@ from .notification_service import NotificationService
 from .device_service import DeviceService
 from .security_service import SecurityService
 from .attachment_service import AttachmentService
+from .organization_service import OrganizationService
 
 __all__ = [
     'AuthService',
@@ -16,5 +17,6 @@ __all__ = [
     'DeviceService',
     'SecurityService',
     'AttachmentService',
+    'OrganizationService',
 ]
 

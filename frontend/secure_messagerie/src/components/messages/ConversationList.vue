@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="conv-list-wrap">
     <!-- En-tête -->
     <div class="d-flex align-items-center mb-3">

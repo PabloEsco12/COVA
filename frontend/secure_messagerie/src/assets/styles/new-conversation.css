@@ -105,19 +105,24 @@
 .selected-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.45rem;
+  padding: 0.65rem;
+  border-radius: 16px;
+  background: rgba(209, 232, 255, 0.4);
+  border: 1px dashed rgba(59, 130, 246, 0.45);
 }
 
 .chip {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  background: rgba(13, 110, 253, 0.12);
-  color: #0d4ad4;
+  background: linear-gradient(120deg, #1d4ed8, #60a5fa);
+  color: #fff;
   border-radius: 999px;
-  padding: 0.25rem 0.75rem;
+  padding: 0.3rem 0.85rem;
   font-size: 0.82rem;
   font-weight: 600;
+  box-shadow: 0 8px 18px rgba(30, 64, 175, 0.2);
 }
 
 .chip__close {
@@ -127,6 +132,12 @@
   padding: 0;
   display: inline-flex;
   align-items: center;
+  opacity: 0.85;
+  transition: opacity 0.15s ease;
+}
+
+.chip__close:hover {
+  opacity: 1;
 }
 
 .contact-list {
@@ -139,21 +150,42 @@
 }
 
 .contact-row {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 0.8rem;
-  padding: 0.75rem 0.95rem;
-  border-bottom: 1px solid rgba(215, 223, 238, 0.6);
+  gap: 0.85rem;
+  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  border: 1px solid transparent;
   cursor: pointer;
-  transition: background 0.1s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.2s ease;
+  margin-bottom: 0.45rem;
 }
 
 .contact-row:last-child {
-  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.contact-row:hover {
+  background: rgba(226, 232, 240, 0.5);
 }
 
 .contact-row.active {
-  background: rgba(13, 110, 253, 0.1);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(191, 219, 254, 0.45));
+  border-color: rgba(59, 130, 246, 0.65);
+  box-shadow: 0 12px 28px rgba(59, 130, 246, 0.18);
+}
+
+.contact-row.active::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  border: 2px solid rgba(59, 130, 246, 0.45);
+  pointer-events: none;
 }
 
 .contact-row__body {

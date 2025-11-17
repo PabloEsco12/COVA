@@ -37,6 +37,7 @@ class ContactOut(BaseModel):
     alias: str | None
     created_at: datetime
     updated_at: datetime
+    awaiting_my_response: bool = False
 
     class Config:
         from_attributes = True

@@ -30,7 +30,11 @@
             Chiffré
           </span>
         </div>
-        <small class="text-muted">{{ isOnline ? 'Connexion sécurisée' : 'Hors ligne' }}</small>
+        <p class="profile-status-line mb-1">
+          <span class="status-dot" :class="`status-${userStatusCode}`"></span>
+          <span>{{ userStatusLabel }}</span>
+        </p>
+        <small class="text-muted">{{ isOnline ? 'Connexion sécurisée' : 'Connexion instable' }}</small>
       </div>
     </section>
 
@@ -58,7 +62,15 @@
             <i :class="link.icon"></i>
           </div>
           <div class="quick-link__body">
-            <span class="quick-link__label">{{ link.label }}</span>
+            <span class="quick-link__label">
+              {{ link.label }}
+              <span
+                v-if="link.badge"
+                :class="['quick-link__badge', link.badgeVariant ? `quick-link__badge--${link.badgeVariant}` : null]"
+              >
+                {{ link.badge }}
+              </span>
+            </span>
             <small class="quick-link__hint">{{ link.hint }}</small>
           </div>
           <i class="bi bi-arrow-right-short quick-link__chevron"></i>
@@ -66,42 +78,37 @@
       </div>
     </section>
 
-    <section class="sidebar-agenda mb-4">
-      <div class="agenda-header">
+    <section class="sidebar-insights mb-4">
+      <div class="insights-header">
         <div>
-          <p class="agenda-eyebrow">Aujourd'hui</p>
-          <h5 class="agenda-date">{{ formattedToday }}</h5>
-          <small class="agenda-time">{{ formattedTime }}</small>
+          <p class="insights-eyebrow">Vue sécurité</p>
+          <h5 class="mb-0">{{ formattedToday }}</h5>
+          <small class="text-muted">{{ formattedTime }}</small>
         </div>
-        <button class="btn btn-outline-light btn-sm agenda-add" @click="goToCalendar">
-          <i class="bi bi-calendar-plus"></i>
-        </button>
-      </div>
-      <div class="mini-calendar mt-3">
         <button
-          v-for="(day, index) in calendarDays"
-          :key="day.dateKey"
-          :class="['mini-calendar__day', { active: index === selectedCalendarIndex }]"
-          @click="selectCalendarDay(index)"
+          class="btn btn-outline-light btn-sm"
+          :disabled="insightsRefreshing"
+          @click="refreshInsights"
         >
-          <span>{{ day.weekday }}</span>
-          <strong>{{ day.day }}</strong>
+          <span v-if="insightsRefreshing" class="spinner-border spinner-border-sm me-1"></span>
+          Rafraîchir
         </button>
       </div>
-      <div class="agenda-list mt-3">
-        <div
-          v-for="item in agendaItems"
-          :key="item.id"
-          class="agenda-item"
-        >
-          <div class="agenda-item__time">{{ item.time }}</div>
-          <div class="agenda-item__body">
-            <p class="agenda-item__title">{{ item.title }}</p>
-            <small class="text-muted">{{ item.meta }}</small>
+      <div class="insights-grid mt-3">
+        <article v-for="card in insightCards" :key="card.id" class="insight-card">
+          <div class="insight-icon" :class="`variant-${card.variant}`">
+            <i :class="card.icon"></i>
           </div>
-          <i :class="['agenda-item__icon', item.icon]"></i>
-        </div>
-        <p v-if="!agendaItems.length" class="text-muted small mb-0">Aucun rappel pour cette journée.</p>
+          <div class="insight-body">
+            <p class="insight-label mb-1">{{ card.label }}</p>
+            <p class="insight-value mb-1">{{ card.value }}</p>
+            <small class="text-muted">{{ card.hint }}</small>
+          </div>
+        </article>
+      </div>
+      <div v-if="lastAuditText" class="insight-activity mt-3">
+        <i class="bi bi-activity me-2"></i>
+        <span>{{ lastAuditText }}</span>
       </div>
     </section>
 
@@ -182,6 +189,16 @@
 import { ref, onMounted, onBeforeUnmount, defineProps, toRefs, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api, backendBase } from '@/utils/api'
+import { computeAvatarInitials, normalizeAvatarUrl } from '@/utils/profile'
+
+const STATUS_LABELS = {
+  available: 'Disponible',
+  away: 'Absent',
+  meeting: 'En réunion',
+  busy: 'Occupé',
+  dnd: 'Ne pas déranger',
+  offline: 'Hors ligne',
+}
 
 const props = defineProps({
   isDark: Boolean
@@ -192,6 +209,9 @@ const router = useRouter()
 
 const userId = Number(localStorage.getItem('user_id') || 0)
 const unreadCount = ref(0)
+const pendingContacts = ref(readPendingContactsFromCache())
+const statusMessage = ref(readStatusMessageFromCache())
+const statusCodeHint = ref(readStatusCodeFromCache())
 const unreadByConversation = ref({})
 const activeConversationId = ref(null)
 const pseudo = ref('Utilisateur')
@@ -203,10 +223,14 @@ const securitySettings = ref({
 })
 const lastAuditLog = ref(null)
 const nowClock = ref(new Date())
-const selectedCalendarIndex = ref(0)
 let clockTimer = null
 
-const initials = computed(() => (pseudo.value ? pseudo.value.charAt(0).toUpperCase() : 'U'))
+const initials = computed(() =>
+  computeAvatarInitials({
+    displayName: pseudo.value,
+    fallback: 'C',
+  }),
+)
 const lastAuditText = computed(() => {
   if (!lastAuditLog.value) return ''
   const { timestamp, ip } = lastAuditLog.value
@@ -221,48 +245,38 @@ const quickLinks = computed(() => [
   {
     to: '/dashboard/messages',
     label: 'Messages',
-    hint: unreadCount.value > 0 ? `${unreadCount.value} non lus` : 'Flux sécurisé',
+    hint: unreadCount.value > 0 ? `${unreadCount.value} non lus` : 'Flux s\u00e9curis\u00e9',
     icon: 'bi bi-chat-dots-fill',
   },
   {
     to: '/dashboard/contacts',
     label: 'Contacts',
-    hint: 'Équipe & partenaires',
+    hint:
+      pendingContacts.value > 0
+        ? `${pendingContacts.value} demande${pendingContacts.value > 1 ? 's' : ''} en attente`
+        : '\u00c9quipe & partenaires',
     icon: 'bi bi-person-lines-fill',
+    badge:
+      pendingContacts.value > 0
+        ? pendingContacts.value > 99
+          ? '99+'
+          : String(pendingContacts.value)
+        : null,
+    badgeVariant: pendingContacts.value > 0 ? 'warning' : null,
   },
   {
     to: '/dashboard/devices',
     label: 'Appareils',
-    hint: 'Sessions approuvées',
+    hint: 'Sessions approuv\u00e9es',
     icon: 'bi bi-laptop',
   },
   {
     to: '/dashboard/settings',
-    label: 'Paramètres',
-    hint: 'Sécurité & alertes',
+    label: 'Param\u00e8tres',
+    hint: 'S\u00e9curit\u00e9 & alertes',
     icon: 'bi bi-gear-fill',
   },
 ])
-
-const calendarDays = computed(() => {
-  const days = []
-  const anchor = new Date(nowClock.value)
-  anchor.setHours(12, 0, 0, 0)
-  for (let offset = 0; offset < 5; offset += 1) {
-    const date = new Date(anchor)
-    date.setDate(anchor.getDate() + offset)
-    days.push({
-      offset,
-      dateKey: date.toISOString().slice(0, 10),
-      day: date.getDate(),
-      weekday: date
-        .toLocaleDateString('fr-FR', { weekday: 'short' })
-        .replace('.', '')
-        .replace(/^\w/, (c) => c.toUpperCase()),
-    })
-  }
-  return days
-})
 
 const formattedToday = computed(() =>
   nowClock.value.toLocaleDateString('fr-FR', { weekday: 'long', month: 'long', day: 'numeric' }),
@@ -271,28 +285,161 @@ const formattedTime = computed(() =>
   nowClock.value.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
 )
 
-const agendaCatalog = [
-  { id: 1, offset: 0, time: '09:30', title: 'Briefing sécurité', meta: 'Salle Ops', icon: 'bi bi-shield-lock-fill' },
-  { id: 2, offset: 0, time: '16:15', title: 'Revue incidents', meta: 'SOC - Canal incidents', icon: 'bi bi-activity' },
-  { id: 3, offset: 1, time: '14:00', title: 'Comité conformité', meta: 'Visio COVA', icon: 'bi bi-people-fill' },
-  { id: 4, offset: 2, time: '11:00', title: 'Onboarding invité', meta: 'Contacts sécurisés', icon: 'bi bi-person-plus-fill' },
-  { id: 5, offset: 3, time: '08:45', title: 'Audit hebdomadaire', meta: 'Rapport exporté', icon: 'bi bi-clipboard-check-fill' },
-]
-
-const agendaItems = computed(() => {
-  const current = calendarDays.value[selectedCalendarIndex.value]
-  if (!current) return []
-  return agendaCatalog.filter((item) => item.offset === current.offset)
+const numberFormatter = typeof Intl !== 'undefined' ? new Intl.NumberFormat('fr-FR') : null
+const activeConversationsCount = computed(() => Object.keys(unreadByConversation.value || {}).length)
+const insightsRefreshing = ref(false)
+const userStatusCode = computed(() => deriveStatusCode(statusMessage.value, statusCodeHint.value))
+const userStatusLabel = computed(() => {
+  const message = (statusMessage.value || '').trim()
+  if (message) return message
+  return STATUS_LABELS[userStatusCode.value] || STATUS_LABELS.available
 })
 
-watch(calendarDays, (days) => {
-  if (!days.length) {
-    selectedCalendarIndex.value = 0
-    return
+function normalizePendingCount(value) {
+  const parsed = Math.floor(Number(value) || 0)
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 0
   }
-  if (selectedCalendarIndex.value >= days.length) {
-    selectedCalendarIndex.value = 0
+  return parsed
+}
+
+function readPendingContactsFromCache() {
+  if (typeof window === 'undefined') return 0
+  try {
+    const raw = window.localStorage.getItem('pending_contacts')
+    return normalizePendingCount(raw)
+  } catch {
+    return 0
   }
+}
+
+function readStatusMessageFromCache() {
+  if (typeof window === 'undefined') return ''
+  try {
+    return window.localStorage.getItem('status_message') || ''
+  } catch {
+    return ''
+  }
+}
+
+function readStatusCodeFromCache() {
+  if (typeof window === 'undefined') return 'available'
+  try {
+    return window.localStorage.getItem('status_code') || 'available'
+  } catch {
+    return 'available'
+  }
+}
+
+function normalizeStatusText(value) {
+  return value
+    ? value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim()
+    : ''
+}
+
+function deriveStatusCode(message, fallback = 'available') {
+  const normalized = normalizeStatusText(message)
+  if (!normalized) return fallback || 'available'
+  if (normalized === 'disponible') return 'available'
+  if (normalized === 'absent') return 'away'
+  if (normalized === 'en reunion') return 'meeting'
+  if (normalized === 'occupe') return 'busy'
+  if (normalized === 'ne pas deranger') return 'dnd'
+  if (normalized === 'hors ligne' || normalized === 'horsligne') return 'offline'
+  return fallback || 'available'
+}
+
+function updateStatusMessage(value, { persist = false, code } = {}) {
+  statusMessage.value = value || ''
+  const derived = code || deriveStatusCode(statusMessage.value, statusCodeHint.value)
+  statusCodeHint.value = derived
+  if (persist) {
+    cacheStatusPayload(statusMessage.value, derived)
+  }
+}
+
+function cacheStatusPayload(message, code) {
+  if (typeof window === 'undefined') return
+  try {
+    if (message) {
+      window.localStorage.setItem('status_message', message)
+    } else {
+      window.localStorage.removeItem('status_message')
+    }
+    if (code) {
+      window.localStorage.setItem('status_code', code)
+    } else {
+      window.localStorage.removeItem('status_code')
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function applyPendingContacts(value, { persist = true } = {}) {
+  const normalized = normalizePendingCount(value)
+  pendingContacts.value = normalized
+  if (!persist || typeof window === 'undefined') return
+  try {
+    if (normalized > 0) {
+      window.localStorage.setItem('pending_contacts', String(normalized))
+    } else {
+      window.localStorage.removeItem('pending_contacts')
+    }
+  } catch {
+    /* ignore storage failures */
+  }
+}
+
+function formatStatNumber(value) {
+  const safe = Number(value) || 0
+  if (!numberFormatter) return String(safe)
+  return numberFormatter.format(safe)
+}
+
+const insightCards = computed(() => {
+  const totalUnread = Number(unreadCount.value) || 0
+  const activeConvs = activeConversationsCount.value
+  const totpActive = !!securitySettings.value.totpEnabled
+  const online = !!isOnline.value
+  return [
+    {
+      id: 'inbox',
+      label: 'Messages non lus',
+      value: formatStatNumber(totalUnread),
+      hint: totalUnread ? 'Traitez vos priorités confidentielles' : 'Vous êtes à jour',
+      icon: 'bi bi-chat-dots-fill',
+      variant: totalUnread ? 'warning' : 'success',
+    },
+    {
+      id: 'conversations',
+      label: 'Conversations suivies',
+      value: formatStatNumber(activeConvs),
+      hint: activeConvs ? 'Conversations avec activité récente' : 'Démarrez un échange sécurisé',
+      icon: 'bi bi-people-fill',
+      variant: activeConvs ? 'info' : 'muted',
+    },
+    {
+      id: 'security',
+      label: 'Protection',
+      value: totpActive ? 'MFA actif' : 'MFA inactif',
+      hint: totpActive ? 'Codes requis à chaque connexion' : 'Activez TOTP pour verrouiller votre compte',
+      icon: 'bi bi-shield-lock-fill',
+      variant: totpActive ? 'success' : 'danger',
+    },
+    {
+      id: 'connection',
+      label: 'Connexion',
+      value: online ? 'En ligne' : 'Hors ligne',
+      hint: online ? 'Canal chiffré opérationnel' : 'Certaines alertes seront différées',
+      icon: online ? 'bi bi-wifi' : 'bi bi-wifi-off',
+      variant: online ? 'info' : 'muted',
+    },
+  ]
 })
 
 const updateNetworkStatus = () => {
@@ -309,16 +456,8 @@ const inviteContact = () => {
   router.push({ path: '/dashboard/contacts', query: { add: '1' } })
 }
 
-const goToCalendar = () => {
-  router.push({ path: '/dashboard/messages', query: { view: 'agenda' } })
-}
-
 const goToSecurity = () => {
   router.push({ path: '/dashboard/settings', query: { section: 'security' } })
-}
-
-const selectCalendarDay = (index) => {
-  selectedCalendarIndex.value = index
 }
 
 const onAvatarError = () => {
@@ -333,7 +472,7 @@ const onAvatarError = () => {
 const computeUnreadTotal = map =>
   Object.values(map || {}).reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0)
 
-function setUnreadMap(map) {
+function setUnreadMap(map, { persist = true } = {}) {
   const normalized = {}
   if (map && typeof map === 'object') {
     for (const [key, rawValue] of Object.entries(map)) {
@@ -344,6 +483,11 @@ function setUnreadMap(map) {
   }
   unreadByConversation.value = normalized
   unreadCount.value = computeUnreadTotal(normalized)
+  if (persist) {
+    try {
+      localStorage.setItem('unread_counts', JSON.stringify(normalized))
+    } catch {}
+  }
 }
 
 function applyUnreadSummary(summary) {
@@ -362,10 +506,31 @@ async function loadUnreadSummary() {
   } catch (error) {
     try {
       const raw = JSON.parse(localStorage.getItem('unread_counts') || '{}') || {}
-      setUnreadMap(raw)
+      setUnreadMap(raw, { persist: false })
     } catch {
-      setUnreadMap({})
+      setUnreadMap({}, { persist: false })
     }
+  }
+}
+
+async function loadPendingContactsSummary() {
+  try {
+    const res = await api.get(`/contacts`, { params: { status: 'pending' } })
+    const list = Array.isArray(res.data) ? res.data : []
+    applyPendingContacts(list.length)
+  } catch {
+    applyPendingContacts(readPendingContactsFromCache(), { persist: false })
+  }
+}
+
+async function loadProfileStatus() {
+  try {
+    const res = await api.get(`/me/profile`)
+    const next = res.data?.status_message || ''
+    const code = deriveStatusCode(next, statusCodeHint.value)
+    updateStatusMessage(next, { persist: true, code })
+  } catch {
+    /* ignore */
   }
 }
 
@@ -385,21 +550,11 @@ function clearUnread(convId) {
   const id = Number(convId)
   if (!id) return
   const key = String(id)
-if (!unreadByConversation.value[key]) return
+  if (!unreadByConversation.value[key]) return
   const map = { ...unreadByConversation.value }
   delete map[key]
   setUnreadMap(map)
 }
-
-watch(calendarDays, (days) => {
-  if (!days.length) {
-    selectedCalendarIndex.value = 0
-    return
-  }
-  if (selectedCalendarIndex.value >= days.length) {
-    selectedCalendarIndex.value = 0
-  }
-})
 
 function handleUnreadEvent(event) {
   applyUnreadSummary(event?.detail || {})
@@ -408,6 +563,122 @@ function handleUnreadEvent(event) {
 function handleActiveConversationEvent(event) {
   const convId = Number(event?.detail?.convId ?? 0)
   activeConversationId.value = convId > 0 ? convId : null
+}
+
+function handleUnreadStorage(event) {
+  if (event?.key !== 'unread_counts') return
+  try {
+    const map = event.newValue ? JSON.parse(event.newValue) || {} : {}
+    setUnreadMap(map, { persist: false })
+  } catch {
+    setUnreadMap({}, { persist: false })
+  }
+}
+
+function handleStatusStorage(event) {
+  if (!event) return
+  if (event.key === 'status_message') {
+    const derived = deriveStatusCode(event.newValue || '', statusCodeHint.value)
+    updateStatusMessage(event.newValue || '', { persist: false, code: derived })
+  } else if (event.key === 'status_code') {
+    statusCodeHint.value = event.newValue || 'available'
+  }
+}
+
+function handlePendingContactsEvent(event) {
+  const detail = event?.detail || {}
+  if (Object.prototype.hasOwnProperty.call(detail, 'pending')) {
+    applyPendingContacts(detail.pending)
+    return
+  }
+  if (Object.prototype.hasOwnProperty.call(detail, 'delta')) {
+    applyPendingContacts(pendingContacts.value + Number(detail.delta || 0))
+    return
+  }
+  if (detail.refresh) {
+    loadPendingContactsSummary()
+  }
+}
+
+function handlePendingContactsStorage(event) {
+  if (event?.key !== 'pending_contacts') return
+  applyPendingContacts(event.newValue, { persist: false })
+}
+
+function handleProfileUpdateEvent(event) {
+  const payload = event?.detail || {}
+  if (Object.prototype.hasOwnProperty.call(payload, 'display_name')) {
+    const next = (payload.display_name || '').trim()
+    pseudo.value = next || 'Utilisateur'
+    try {
+      if (next) {
+        localStorage.setItem('pseudo', next)
+      } else {
+        localStorage.removeItem('pseudo')
+      }
+    } catch {}
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'avatar_url')) {
+    const nextAvatar = normalizeAvatarUrl(payload.avatar_url || null, { baseUrl: backendBase })
+    avatarUrl.value = nextAvatar
+    try {
+      if (nextAvatar) {
+        localStorage.setItem('avatar_url', nextAvatar)
+      } else {
+        localStorage.removeItem('avatar_url')
+      }
+    } catch {}
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'status_message')) {
+    updateStatusMessage(payload.status_message || '', {
+      persist: true,
+      code: payload.status_code || undefined,
+    })
+  }
+}
+
+async function fetchSecuritySnapshot() {
+  try {
+    const securityRes = await api.get(`/me/security`)
+    securitySettings.value = {
+      totpEnabled: !!securityRes.data?.totp_enabled,
+      notificationLogin: !!securityRes.data?.notification_login,
+    }
+  } catch {
+    securitySettings.value = {
+      totpEnabled: false,
+      notificationLogin: false,
+    }
+  }
+}
+
+async function fetchAuditPreview() {
+  try {
+    const auditRes = await api.get(`/me/audit`)
+    if (Array.isArray(auditRes.data) && auditRes.data.length > 0) {
+      lastAuditLog.value = auditRes.data[0]
+    } else {
+      lastAuditLog.value = null
+    }
+  } catch {
+    lastAuditLog.value = null
+  }
+}
+
+async function refreshInsights() {
+  if (insightsRefreshing.value) return
+  insightsRefreshing.value = true
+  try {
+    await Promise.allSettled([
+      loadUnreadSummary(),
+      loadPendingContactsSummary(),
+      loadProfileStatus(),
+      fetchSecuritySnapshot(),
+      fetchAuditPreview(),
+    ])
+  } finally {
+    insightsRefreshing.value = false
+  }
 }
 
 
@@ -422,7 +693,7 @@ function handleActiveConversationEvent(event) {
 
 onMounted(async () => {
   pseudo.value = localStorage.getItem('pseudo') || 'Utilisateur'
-  avatarUrl.value = localStorage.getItem('avatar_url') || null
+  avatarUrl.value = normalizeAvatarUrl(localStorage.getItem('avatar_url'), { baseUrl: backendBase })
   clockTimer = setInterval(() => {
     nowClock.value = new Date()
   }, 60000)
@@ -432,9 +703,14 @@ onMounted(async () => {
     window.addEventListener('offline', updateNetworkStatus)
     window.addEventListener('cova:unread', handleUnreadEvent)
     window.addEventListener('cova:active-conversation', handleActiveConversationEvent)
+    window.addEventListener('cova:profile-update', handleProfileUpdateEvent)
+    window.addEventListener('storage', handleUnreadStorage)
+    window.addEventListener('storage', handlePendingContactsStorage)
+    window.addEventListener('storage', handleStatusStorage)
+    window.addEventListener('cova:contacts-pending', handlePendingContactsEvent)
   }
 
-  await loadUnreadSummary()
+  await Promise.all([loadUnreadSummary(), loadPendingContactsSummary(), loadProfileStatus()])
 
   const token = localStorage.getItem('access_token')
   if (!token) {
@@ -447,38 +723,24 @@ onMounted(async () => {
       pseudo.value = profileRes.data.pseudo
       localStorage.setItem('pseudo', profileRes.data.pseudo)
     }
-    const apiAvatar =
+    const apiAvatar = normalizeAvatarUrl(
       profileRes.data?.avatar_url ||
-      (profileRes.data?.avatar ? `${backendBase}/static/avatars/${profileRes.data.avatar}` : null)
+        (profileRes.data?.avatar ? `/static/avatars/${profileRes.data.avatar}` : null),
+      { baseUrl: backendBase },
+    )
     if (apiAvatar) {
       avatarUrl.value = apiAvatar
       localStorage.setItem('avatar_url', apiAvatar)
+    } else {
+      avatarUrl.value = null
+      localStorage.removeItem('avatar_url')
     }
   } catch (e) {
     // ignore
   }
 
-  try {
-    const securityRes = await api.get(`/me/security`)
-    securitySettings.value = {
-      totpEnabled: !!securityRes.data?.totp_enabled,
-      notificationLogin: !!securityRes.data?.notification_login
-    }
-  } catch (e) {
-    securitySettings.value = {
-      totpEnabled: false,
-      notificationLogin: false
-    }
-  }
-
-  try {
-    const auditRes = await api.get(`/me/audit`)
-    if (Array.isArray(auditRes.data) && auditRes.data.length > 0) {
-      lastAuditLog.value = auditRes.data[0]
-    }
-  } catch (e) {
-    lastAuditLog.value = null
-  }
+  await fetchSecuritySnapshot()
+  await fetchAuditPreview()
 })
 
 onBeforeUnmount(() => {
@@ -491,6 +753,11 @@ onBeforeUnmount(() => {
     window.removeEventListener('offline', updateNetworkStatus)
     window.removeEventListener('cova:unread', handleUnreadEvent)
     window.removeEventListener('cova:active-conversation', handleActiveConversationEvent)
+    window.removeEventListener('cova:profile-update', handleProfileUpdateEvent)
+    window.removeEventListener('storage', handleUnreadStorage)
+    window.removeEventListener('storage', handlePendingContactsStorage)
+    window.removeEventListener('storage', handleStatusStorage)
+    window.removeEventListener('cova:contacts-pending', handlePendingContactsEvent)
   }
 })
 
@@ -550,13 +817,14 @@ function formatRelativeTime(dateString) {
   width: clamp(200px, 19vw, 240px);
   min-width: 200px;
   position: sticky;
-  top: 0;
-  height: 100vh;
+  top: 1.5rem;
+  height: calc(100vh - 3rem);
   overflow-y: auto;
   padding: 1.4rem 1.2rem;
   border-right: 1px solid rgba(255, 255, 255, 0.05);
   transition: background 0.35s ease, color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
-  box-shadow: 18px 0 38px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.15);
+  border-radius: 28px;
 }
 
 .sidebar::-webkit-scrollbar {
@@ -642,6 +910,46 @@ function formatRelativeTime(dateString) {
 
 .profile-avatar {
   margin-right: 0.85rem;
+}
+
+.profile-status-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: #0f172a;
+}
+
+.sidebar-dark .profile-status-line {
+  color: #e2e8f0;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-dot.status-available {
+  background: #22c55e;
+}
+
+.status-dot.status-away {
+  background: #facc15;
+}
+
+.status-dot.status-meeting {
+  background: #fb923c;
+}
+
+.status-dot.status-busy,
+.status-dot.status-dnd {
+  background: #f87171;
+}
+
+.status-dot.status-offline {
+  background: #94a3b8;
 }
 
 .avatar-fallback {
@@ -802,7 +1110,34 @@ function formatRelativeTime(dateString) {
 
 .quick-link__label {
   font-weight: 600;
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.quick-link__badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.12);
+  color: #0f172a;
+  line-height: 1.1;
+}
+
+.sidebar-dark .quick-link__badge {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.quick-link__badge--warning {
+  background: rgba(249, 115, 22, 0.25);
+  color: #f97316;
+}
+
+.sidebar-dark .quick-link__badge--warning {
+  background: rgba(251, 191, 36, 0.25);
+  color: #facc15;
 }
 
 .quick-link__hint {
@@ -815,116 +1150,116 @@ function formatRelativeTime(dateString) {
   color: rgba(148, 163, 184, 0.9);
 }
 
-.sidebar-agenda {
+.sidebar-insights {
   border-radius: 20px;
-  padding: 1rem;
-  background: linear-gradient(135deg, rgba(14, 116, 144, 0.25), rgba(37, 99, 235, 0.35));
+  padding: 1.1rem;
+  background: linear-gradient(145deg, rgba(15, 118, 243, 0.15), rgba(67, 56, 202, 0.3));
   color: #fff;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.35);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.35);
 }
 
-.sidebar-light .sidebar-agenda {
+.sidebar-light .sidebar-insights {
   color: #0f172a;
-  background: linear-gradient(135deg, rgba(148, 187, 233, 0.4), rgba(238, 242, 255, 0.95));
-  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.1);
+  background: linear-gradient(145deg, rgba(226, 232, 240, 0.9), rgba(191, 219, 254, 0.85));
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1);
 }
 
-.agenda-header {
+.insights-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 
-.agenda-eyebrow {
+.insights-eyebrow {
   text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 0.7rem;
-  margin-bottom: 0.2rem;
+  letter-spacing: 0.14em;
+  font-size: 0.65rem;
   opacity: 0.8;
+  margin-bottom: 0.15rem;
 }
 
-.agenda-date {
-  margin: 0;
-  font-weight: 700;
-}
-
-.agenda-time {
-  font-size: 0.85rem;
-  opacity: 0.9;
-}
-
-.agenda-add {
-  border-color: rgba(255, 255, 255, 0.5);
-  color: inherit;
-}
-
-.sidebar-light .agenda-add {
-  border-color: rgba(15, 23, 42, 0.2);
-}
-
-.mini-calendar {
+.insights-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(52px, 1fr));
-  gap: 0.4rem;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
 }
 
-.mini-calendar__day {
-  border: none;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.15);
-  color: inherit;
-  padding: 0.35rem 0.4rem;
-  text-align: center;
-  font-size: 0.8rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  transition: background 0.2s ease, color 0.2s ease;
-}
-
-.mini-calendar__day strong {
-  font-size: 1.1rem;
-}
-
-.mini-calendar__day.active {
-  background: rgba(255, 255, 255, 0.3);
-  color: #0f172a;
-}
-
-.agenda-list {
+.insight-card {
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.08);
-  padding: 0.75rem;
+  padding: 0.85rem;
+  background: rgba(15, 23, 42, 0.15);
   display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
+  align-items: center;
+  gap: 0.75rem;
+  backdrop-filter: blur(6px);
 }
 
-.sidebar-light .agenda-list {
+.sidebar-light .insight-card {
   background: rgba(15, 23, 42, 0.05);
 }
 
-.agenda-item {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+.insight-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: inline-flex;
   align-items: center;
-  gap: 0.65rem;
-}
-
-.agenda-item__time {
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-
-.agenda-item__title {
-  margin: 0;
-  font-weight: 600;
-}
-
-.agenda-item__icon {
+  justify-content: center;
   font-size: 1.1rem;
-  opacity: 0.85;
+}
+
+.insight-icon.variant-success {
+  background: rgba(34, 197, 94, 0.18);
+  color: #22c55e;
+}
+
+.insight-icon.variant-warning {
+  background: rgba(249, 115, 22, 0.2);
+  color: #fb923c;
+}
+
+.insight-icon.variant-info {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+.insight-icon.variant-danger {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.insight-icon.variant-muted {
+  background: rgba(148, 163, 184, 0.25);
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.insight-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.8;
+}
+
+.insight-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.insight-activity {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.85rem;
+  background: rgba(15, 23, 42, 0.18);
+  border-radius: 999px;
+  padding: 0.4rem 0.85rem;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-light .insight-activity {
+  background: rgba(15, 23, 42, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
 }
 
 .security-item .label {
@@ -1044,5 +1379,6 @@ function formatRelativeTime(dateString) {
   width: 100%;
 }
 </style>
+
 
 

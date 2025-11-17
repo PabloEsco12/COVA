@@ -1,4 +1,4 @@
-<!-- src/components/messages/ChatHeader.vue -->
+﻿<!-- src/components/messages/ChatHeader.vue -->
 <template>
   <header class="msg-main__header" role="banner" aria-label="En-tête de conversation">
     <div class="msg-main__identity">
@@ -11,10 +11,22 @@
       >
         <i class="bi bi-arrow-left"></i>
       </button>
-      <span v-if="showAvatar" class="msg-main__avatar">
+      <button
+        v-if="showAvatar"
+        type="button"
+        class="msg-main__avatar msg-main__avatar-btn"
+        @click="$emit('info')"
+        aria-label="Afficher les informations du participant"
+      >
         <img v-if="avatarUrl" :src="avatarUrl" alt="" />
         <span v-else>{{ avatarInitialsComputed }}</span>
-      </span>
+        <span
+          v-if="participantStatus"
+          class="presence-indicator"
+          :class="`presence-${participantStatus}`"
+          :title="participantStatusLabel || 'Statut du participant'"
+        ></span>
+      </button>
       <div>
         <h3>{{ title || 'Messagerie' }}</h3>
         <p class="msg-main__meta">
@@ -102,6 +114,8 @@ const props = defineProps({
   showCall: { type: Boolean, default: true },
   showVideo: { type: Boolean, default: true },
   status: { type: String, default: 'idle' },
+  participantStatus: { type: String, default: '' },
+  participantStatusLabel: { type: String, default: '' },
 })
 
 const emit = defineEmits(['refresh', 'back', 'info', 'call', 'video'])

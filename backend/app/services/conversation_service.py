@@ -13,6 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models import (
+    ContactLink,
+    ContactStatus,
     Conversation,
     ConversationInvite,
     ConversationMember,
@@ -132,7 +134,11 @@ class ConversationService:
     ) -> Conversation:
         membership = await self._get_membership(conversation_id, actor.id)
         self._require_owner(membership)
-        conversation = await self.session.get(Conversation, conversation_id)
+        conversation = await self.session.get(
+            Conversation,
+            conversation_id,
+            options=(selectinload(Conversation.members),),
+        )
         if conversation is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.")
 
@@ -169,10 +175,17 @@ class ConversationService:
         membership = await self._get_membership(conversation_id, user.id)
         if membership.role == ConversationMemberRole.OWNER:
             if not await self._has_other_active_owner(conversation_id, exclude_user_id=user.id):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Cannot leave as the last owner of the conversation.",
-                )
+                replacement = await self._promote_fallback_owner(conversation_id, exclude_user_id=user.id)
+                if replacement is None:
+                    # No other active members remain; allow the conversation to end without an owner.
+                    pass
+                else:
+                    await self._log(
+                        user,
+                        "conversation.transfer_owner",
+                        resource_id=str(conversation_id),
+                        metadata={"replacement_user_id": str(replacement.user_id)},
+                    )
         membership.state = MembershipState.LEFT
         membership.muted_until = None
         await self.session.flush()
@@ -436,7 +449,10 @@ class ConversationService:
                 (MessageDelivery.member_id == ConversationMember.id)
                 & (MessageDelivery.state != MessageDeliveryState.READ),
             )
-            .where(ConversationMember.user_id == user.id)
+            .where(
+                ConversationMember.user_id == user.id,
+                ConversationMember.state == MembershipState.ACTIVE,
+            )
             .group_by(ConversationMember.conversation_id)
         )
         result = await self.session.execute(stmt)
@@ -505,6 +521,53 @@ class ConversationService:
         }
         return items, meta
 
+    async def search_messages(
+        self,
+        conversation_id: uuid.UUID,
+        *,
+        user: UserAccount,
+        query: str,
+        limit: int = 50,
+    ) -> list[dict]:
+        term = (query or "").strip()
+        if not term:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Un terme de recherche est requis.")
+        membership = await self._get_membership(conversation_id, user.id)
+        ts_query = func.plainto_tsquery("simple", term)
+        text_vector = func.to_tsvector(
+            "simple",
+            func.coalesce(func.convert_from(Message.ciphertext, "UTF8"), ""),
+        )
+        stmt = (
+            select(Message)
+            .where(Message.conversation_id == conversation_id)
+            .where(Message.deleted_at.is_(None))
+            .where(text_vector.op("@@")(ts_query))
+            .order_by(Message.created_at.desc())
+            .limit(max(1, min(limit, 200)))
+            .options(
+                selectinload(Message.author).selectinload(UserAccount.profile),
+                selectinload(Message.deliveries),
+                selectinload(Message.reactions),
+                selectinload(Message.pins),
+                selectinload(Message.attachments),
+                selectinload(Message.reply_to)
+                .selectinload(Message.author)
+                .selectinload(UserAccount.profile),
+                selectinload(Message.reply_to).selectinload(Message.attachments),
+                selectinload(Message.forwarded_from)
+                .selectinload(Message.author)
+                .selectinload(UserAccount.profile),
+                selectinload(Message.forwarded_from).selectinload(Message.attachments),
+            )
+        )
+        result = await self.session.execute(stmt)
+        rows = result.scalars().all()
+        payloads: list[dict] = []
+        for message in rows:
+            payloads.append(await self.serialize_message(message, viewer_membership=membership))
+        return payloads
+
     async def post_message(
         self,
         conversation_id: uuid.UUID,
@@ -521,6 +584,22 @@ class ConversationService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.")
         if self._get_metadata(conversation).get("archived"):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Conversation is archived.")
+        block_states = {}
+        if conversation.type == ConversationType.DIRECT:
+            block_states = await self.get_block_states(author, [conversation])
+            state = block_states.get(conversation.id, {})
+            if state.get("blocked_by_me") or state.get("blocked_by_other"):
+                reason = "blocked_by_other" if state.get("blocked_by_other") else "blocked_by_you"
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "code": "conversation_blocked",
+                        "reason": reason,
+                        "blocked_by_you": bool(state.get("blocked_by_me")),
+                        "blocked_by_other": bool(state.get("blocked_by_other")),
+                    },
+                )
+
         attachment_descriptors: list[AttachmentDescriptor] = []
         if attachment_tokens:
             if not self.attachment_decoder:
@@ -562,27 +641,41 @@ class ConversationService:
         self.session.add(message)
         await self.session.flush()
 
-        delivery_members_stmt = select(ConversationMember.id).where(ConversationMember.conversation_id == conversation_id)
+        delivery_members_stmt = select(ConversationMember.id, ConversationMember.user_id).where(
+            ConversationMember.conversation_id == conversation_id
+        )
         result_members = await self.session.execute(delivery_members_stmt)
-        member_ids = result_members.scalars().all()
-        deliveries = [
-            MessageDelivery(
-                message_id=message.id,
-                member_id=member_id,
-                state=MessageDeliveryState.DELIVERED if member_id == membership.id else MessageDeliveryState.QUEUED,
-                delivered_at=datetime.now(timezone.utc) if member_id == membership.id else None,
-            )
-            for member_id in member_ids
-        ]
+        members_info = result_members.all()
+        member_ids = [row.id for row in members_info]
+        member_user_ids = [row.user_id for row in members_info]
+        now = datetime.now(timezone.utc)
+        deliveries: list[MessageDelivery] = []
+        for member_id in member_ids:
+            if member_id == membership.id:
+                deliveries.append(
+                    MessageDelivery(
+                        message_id=message.id,
+                        member_id=member_id,
+                        state=MessageDeliveryState.READ,
+                        delivered_at=now,
+                        read_at=now,
+                    )
+                )
+            else:
+                deliveries.append(
+                    MessageDelivery(
+                        message_id=message.id,
+                        member_id=member_id,
+                        state=MessageDeliveryState.QUEUED,
+                        delivered_at=None,
+                    )
+                )
         self.session.add_all(deliveries)
         await self.session.flush()
         await self._persist_attachments(message, attachment_descriptors)
-        await self.session.refresh(
-            message,
-            attribute_names=["reactions", "pins", "deliveries", "attachments"],
-        )
+        hydrated = await self._load_message(message.id)
 
-        payload = await self.serialize_message(message, viewer_membership=membership)
+        payload = await self.serialize_message(hydrated, viewer_membership=membership)
 
         await self._log(author, "conversation.message", resource_id=str(message.id), metadata={"conversation": str(conversation_id)})
         if self.realtime:
@@ -593,7 +686,13 @@ class ConversationService:
                     **payload,
                 },
             )
-        return message, payload
+            await self._push_message_notifications(
+                conversation_id=str(conversation_id),
+                payload=payload,
+                author_id=str(author.id),
+                member_user_ids=[str(uid) for uid in member_user_ids],
+            )
+        return hydrated, payload
 
     async def edit_message(
         self,
@@ -721,14 +820,34 @@ class ConversationService:
             payload["pinned_at"] = pin.pinned_at.isoformat() if pin.pinned_at else None
             payload["pinned_by"] = str(pin.pinned_by) if pin.pinned_by else None
 
-        if viewer_membership:
-            delivery = self._match_delivery(message, viewer_membership.id)
+        viewer_member_id = viewer_membership.id if viewer_membership else None
+        if viewer_member_id:
+            delivery = self._match_delivery(message, viewer_member_id)
             if delivery is None:
-                delivery = await self._fetch_delivery(message.id, viewer_membership.id)
+                delivery = await self._fetch_delivery(message.id, viewer_member_id)
             if delivery:
                 payload["delivery_state"] = delivery.state.value
                 payload["delivered_at"] = delivery.delivered_at.isoformat() if delivery.delivered_at else None
                 payload["read_at"] = delivery.read_at.isoformat() if delivery.read_at else None
+
+        deliveries = getattr(message, "deliveries", None)
+        if deliveries is None:
+            stmt = select(MessageDelivery).where(MessageDelivery.message_id == message.id)
+            result = await self.session.execute(stmt)
+            deliveries = result.scalars().all()
+        summary = {"total": 0, "delivered": 0, "read": 0, "pending": 0}
+        for delivery in deliveries or []:
+            if viewer_member_id and delivery.member_id == viewer_member_id:
+                continue
+            summary["total"] += 1
+            if delivery.state == MessageDeliveryState.READ:
+                summary["read"] += 1
+                summary["delivered"] += 1
+            elif delivery.state == MessageDeliveryState.DELIVERED:
+                summary["delivered"] += 1
+            else:
+                summary["pending"] += 1
+        payload["delivery_summary"] = summary
 
         attachments = getattr(message, "attachments", None) or []
         payload["attachments"] = [self._serialize_attachment(attachment) for attachment in attachments]
@@ -854,9 +973,15 @@ class ConversationService:
         *,
         active_only: bool = True,
     ) -> ConversationMember:
-        stmt = select(ConversationMember).where(
-            ConversationMember.conversation_id == conversation_id,
-            ConversationMember.user_id == user_id,
+        stmt = (
+            select(ConversationMember)
+            .where(
+                ConversationMember.conversation_id == conversation_id,
+                ConversationMember.user_id == user_id,
+            )
+            .options(
+                selectinload(ConversationMember.user).selectinload(UserAccount.profile),
+            )
         )
         if active_only:
             stmt = stmt.where(ConversationMember.state == MembershipState.ACTIVE)
@@ -943,6 +1068,61 @@ class ConversationService:
             return bytes(message.ciphertext).decode("utf-8", errors="ignore")
         return str(message.ciphertext or "")
 
+    async def get_block_states(
+        self,
+        viewer: UserAccount,
+        conversations: list[Conversation],
+    ) -> dict[uuid.UUID, dict[str, bool]]:
+        states: dict[uuid.UUID, dict[str, bool]] = {
+            conv.id: {"blocked_by_me": False, "blocked_by_other": False} for conv in conversations
+        }
+        if not conversations:
+            return states
+
+        viewer_id = viewer.id
+        direct_conv_ids = [conv.id for conv in conversations if conv.type == ConversationType.DIRECT]
+        if not direct_conv_ids:
+            return states
+
+        stmt = (
+            select(ConversationMember.conversation_id, ConversationMember.user_id)
+            .where(ConversationMember.conversation_id.in_(direct_conv_ids))
+            .where(ConversationMember.user_id != viewer_id)
+            .where(ConversationMember.state == MembershipState.ACTIVE)
+        )
+        result = await self.session.execute(stmt)
+        direct_pairs: dict[uuid.UUID, uuid.UUID] = {}
+        for conv_id, other_user_id in result.all():
+            direct_pairs.setdefault(conv_id, other_user_id)
+
+        if not direct_pairs:
+            return states
+
+        other_ids = list({user_id for user_id in direct_pairs.values()})
+        viewer_stmt = select(ContactLink).where(
+            ContactLink.owner_id == viewer_id,
+            ContactLink.contact_id.in_(other_ids),
+        )
+        viewer_rows = await self.session.execute(viewer_stmt)
+        viewer_links = {link.contact_id: link for link in viewer_rows.scalars().all()}
+
+        reciprocal_stmt = select(ContactLink).where(
+            ContactLink.owner_id.in_(other_ids),
+            ContactLink.contact_id == viewer_id,
+        )
+        reciprocal_rows = await self.session.execute(reciprocal_stmt)
+        reciprocal_links = {link.owner_id: link for link in reciprocal_rows.scalars().all()}
+
+        for conv_id, other_id in direct_pairs.items():
+            viewer_link = viewer_links.get(other_id)
+            reciprocal_link = reciprocal_links.get(other_id)
+            states[conv_id] = {
+                "blocked_by_me": bool(viewer_link and viewer_link.status == ContactStatus.BLOCKED),
+                "blocked_by_other": bool(reciprocal_link and reciprocal_link.status == ContactStatus.BLOCKED),
+            }
+
+        return states
+
     async def _broadcast_message_update(self, message: Message) -> None:
         if not self.realtime:
             return
@@ -954,6 +1134,41 @@ class ConversationService:
                 **payload,
             },
         )
+
+    async def _push_message_notifications(
+        self,
+        *,
+        conversation_id: str,
+        payload: dict,
+        author_id: str,
+        member_user_ids: list[str],
+    ) -> None:
+        if not self.realtime or not member_user_ids:
+            return
+        preview = (payload.get("content") or "").strip()
+        if not preview and payload.get("attachments"):
+            preview = "Message contenant des pièces jointes."
+        created_at = payload.get("created_at") or datetime.now(timezone.utc).isoformat()
+        message_id = payload.get("id")
+        data = {
+            "type": "message.received",
+            "conversation_id": conversation_id,
+            "message_id": message_id,
+            "preview": preview,
+            "sender": payload.get("author_display_name") or "Participant",
+            "created_at": created_at,
+            "author_id": author_id,
+        }
+        for user_id in member_user_ids:
+            if user_id == author_id:
+                continue
+            await self.realtime.publish_user_event(
+                user_id,
+                {
+                    "event": "notification",
+                    "payload": data,
+                },
+            )
 
     def _get_metadata(self, conversation: Conversation) -> dict:
         return dict(conversation.extra_metadata or {})
@@ -971,6 +1186,28 @@ class ConversationService:
         if conversation is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation introuvable.")
         return conversation
+
+    async def _promote_fallback_owner(
+        self, conversation_id: uuid.UUID, *, exclude_user_id: uuid.UUID | None
+    ) -> ConversationMember | None:
+        stmt = (
+            select(ConversationMember)
+            .where(
+                ConversationMember.conversation_id == conversation_id,
+                ConversationMember.state == MembershipState.ACTIVE,
+                ConversationMember.role != ConversationMemberRole.OWNER,
+            )
+            .order_by(ConversationMember.joined_at.asc())
+        )
+        if exclude_user_id:
+            stmt = stmt.where(ConversationMember.user_id != exclude_user_id)
+        result = await self.session.execute(stmt)
+        candidate = result.scalars().first()
+        if candidate is None:
+            return None
+        candidate.role = ConversationMemberRole.OWNER
+        await self.session.flush()
+        return candidate
 
     async def _has_other_active_owner(self, conversation_id: uuid.UUID, *, exclude_user_id: uuid.UUID | None) -> bool:
         stmt = (

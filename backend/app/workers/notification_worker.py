@@ -241,9 +241,15 @@ class NotificationWorker:
                       </tr>
                       <tr>
                         <td style="padding:10px 32px 26px;text-align:center;">
-                          <a href="{frontend_link}" style="display:inline-block;background:linear-gradient(135deg,#1959c2,#4b7bdc);color:#fff;padding:14px 32px;border-radius:14px;font-weight:600;text-decoration:none;box-shadow:0 12px 30px rgba(25,89,194,0.28);">
-                            Confirmer mon adresse e-mail
-                          </a>
+                          <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+                            <tr>
+                              <td bgcolor="#1b4ed0" style="border-radius:16px;background:linear-gradient(135deg,#1959c2,#4b7bdc);box-shadow:0 12px 30px rgba(25,89,194,0.28);">
+                                <a href="{frontend_link}" style="display:inline-block;color:#ffffff;font-weight:600;text-decoration:none;padding:14px 32px;font-size:1rem;letter-spacing:0.02em;">
+                                  Confirmer mon adresse e-mail
+                                </a>
+                              </td>
+                            </tr>
+                          </table>
                         </td>
                       </tr>
                       <tr>
@@ -352,9 +358,15 @@ class NotificationWorker:
                       </tr>
                       <tr>
                         <td style="padding:10px 32px 26px;text-align:center;">
-                          <a href="{frontend_link}" style="display:inline-block;background:linear-gradient(135deg,#1959c2,#4b7bdc);color:#fff;padding:14px 32px;border-radius:14px;font-weight:600;text-decoration:none;box-shadow:0 12px 30px rgba(25,89,194,0.28);">
-                            Choisir un nouveau mot de passe
-                          </a>
+                          <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+                            <tr>
+                              <td bgcolor="#1b4ed0" style="border-radius:16px;background:linear-gradient(135deg,#1959c2,#4b7bdc);box-shadow:0 12px 30px rgba(25,89,194,0.28);">
+                                <a href="{frontend_link}" style="display:inline-block;color:#ffffff;font-weight:600;text-decoration:none;padding:14px 32px;font-size:1rem;letter-spacing:0.02em;">
+                                  Choisir un nouveau mot de passe
+                                </a>
+                              </td>
+                            </tr>
+                          </table>
                         </td>
                       </tr>
                       <tr>

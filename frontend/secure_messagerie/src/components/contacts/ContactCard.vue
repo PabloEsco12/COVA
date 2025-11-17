@@ -73,28 +73,42 @@
       <div class="contact-actions">
         <!-- pending -->
         <template v-if="contact.status === 'pending'">
-          <button
-            class="btn btn-success btn-sm"
-            :disabled="busy"
-            @click="$emit('set-status', { contact, status: 'accepted' })"
-          >
-            <span v-if="busy" class="spinner-border spinner-border-sm me-1"></span>
-            Accepter
-          </button>
-          <button
-            class="btn btn-outline-secondary btn-sm"
-            :disabled="busy"
-            @click="$emit('set-status', { contact, status: 'blocked' })"
-          >
-            Bloquer
-          </button>
-          <button
-            class="btn btn-outline-danger btn-sm"
-            :disabled="busy"
-            @click="$emit('prompt-delete', contact)"
-          >
-            Refuser
-          </button>
+          <template v-if="awaitingMyResponse">
+            <button
+              class="btn btn-success btn-sm"
+              :disabled="busy"
+              @click="$emit('set-status', { contact, status: 'accepted' })"
+            >
+              <span v-if="busy" class="spinner-border spinner-border-sm me-1"></span>
+              Accepter
+            </button>
+            <button
+              class="btn btn-outline-secondary btn-sm"
+              :disabled="busy"
+              @click="$emit('set-status', { contact, status: 'blocked' })"
+            >
+              Bloquer
+            </button>
+            <button
+              class="btn btn-outline-danger btn-sm"
+              :disabled="busy"
+              @click="$emit('prompt-delete', contact)"
+            >
+              Refuser
+            </button>
+          </template>
+          <template v-else>
+            <div class="text-muted small flex-grow-1 me-2">
+              Demande envoyée : le contact sera visible après confirmation.
+            </div>
+            <button
+              class="btn btn-outline-danger btn-sm"
+              :disabled="busy"
+              @click="$emit('prompt-delete', contact)"
+            >
+              Annuler
+            </button>
+          </template>
         </template>
 
         <!-- accepted -->
@@ -228,12 +242,14 @@ const initials = computed(() => {
   return letters.join('').toUpperCase() || label.slice(0, 2).toUpperCase()
 })
 
+const awaitingMyResponse = computed(() => !!props.contact.awaiting_my_response)
+
 const statusLabel = computed(() => {
   switch (props.contact.status) {
     case 'accepted':
       return 'Contact actif'
     case 'pending':
-      return 'En attente'
+      return awaitingMyResponse.value ? 'Demande à traiter' : 'En attente de confirmation'
     case 'blocked':
       return 'Bloqué'
     default:

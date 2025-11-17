@@ -8,6 +8,7 @@ import 'bootstrap-icons/font/bootstrap-icons.css'
 import '@/assets/custom.css'
 import 'animate.css/animate.min.css'
 import axios from 'axios'
+import '@/services/browserNotificationsBridge'
 
 // Normalize API base URLs from env and rewrite any legacy hardcoded URLs
 const __apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/$/, '')

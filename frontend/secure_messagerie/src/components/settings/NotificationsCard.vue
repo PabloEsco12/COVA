@@ -4,7 +4,7 @@
       <div>
         <h4 class="mb-1">Notifications</h4>
         <p class="text-muted small mb-0">
-          Configurez la facon dont SecureChat vous alerte des activites sensibles.
+          Configurez la façon dont SecureChat vous alerte des activités sensibles.
         </p>
       </div>
       <i class="bi bi-bell text-secondary fs-4"></i>
@@ -16,7 +16,7 @@
         <div class="me-3">
           <h5 class="h6 mb-1">Alertes de connexion par e-mail</h5>
           <p class="text-muted small mb-2">
-            Recevez un resume securise a chaque authentification reussie.
+            Recevez un résumé sécurisé à chaque authentification réussie.
           </p>
         </div>
         <div class="form-check form-switch">
@@ -25,7 +25,7 @@
             type="checkbox"
             id="notifLogin"
             v-model="notifLogin"
-            @change="saveSecurity"
+            @change="onNotifLoginToggle"
             :disabled="!preferencesLoaded"
           />
         </div>
@@ -42,7 +42,7 @@
           />
         </div>
         <div class="col-md-6">
-          <label for="quietEnd" class="form-label small text-muted mb-1">Plage silencieuse (a)</label>
+          <label for="quietEnd" class="form-label small text-muted mb-1">Plage silencieuse (à)</label>
           <input
             id="quietEnd"
             type="time"
@@ -71,7 +71,7 @@
         </button>
       </div>
       <p class="text-muted small mt-2 mb-0">
-        Les alertes critiques restent envoyees immediatement, meme pendant la plage silencieuse.
+        Les alertes critiques restent envoyées immédiatement, même pendant la plage silencieuse.
       </p>
       <div
         v-if="emailPrefMsg"
@@ -85,9 +85,9 @@
     <div class="border rounded-3 p-3">
       <div class="d-flex justify-content-between align-items-start">
         <div class="me-3">
-          <h5 class="h6 mb-1">Notifications navigateur en temps reel</h5>
+          <h5 class="h6 mb-1">Notifications navigateur en temps réel</h5>
           <p class="text-muted small mb-2">
-            Soyez prevenu instantanement lorsqu'un message confidentiel arrive.
+            Soyez prévenu instantanément lorsqu'un message confidentiel arrive.
           </p>
         </div>
         <div class="form-check form-switch">
@@ -115,7 +115,7 @@
           Votre navigateur ne prend pas en charge les notifications push.
         </p>
         <p v-else-if="browserPermission === 'denied'" class="text-danger small mb-0">
-          Autorisez SecureChat depuis les parametres de votre navigateur pour recevoir les alertes.
+          Autorisez SecureChat depuis les paramètres de votre navigateur pour recevoir les alertes.
         </p>
         <p v-else-if="browserPermission === 'default'" class="text-muted small mb-0">
           Nous vous demanderons l'autorisation lors de l'activation.
@@ -159,7 +159,7 @@
 import { ref, onMounted } from 'vue'
 import { api } from '@/utils/api'
 
-const notifLogin = ref(false)
+const notifLogin = ref(readStoredLoginAlertPref())
 const secMsg = ref('')
 const secMsgType = ref('info')
 const emailQuietStart = ref('')
@@ -181,8 +181,23 @@ const DEFAULT_TIMEZONE = 'Europe/Brussels'
 
 onMounted(async () => {
   initBrowserDefaults()
-  await fetchNotificationPreferences()
+  await Promise.allSettled([fetchNotificationPreferences(), fetchSecuritySettings()])
+  preferencesLoaded.value = true
 })
+
+function readStoredLoginAlertPref() {
+  try {
+    return localStorage.getItem('notify_login') === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeStoredLoginAlertPref(enabled) {
+  try {
+    localStorage.setItem('notify_login', enabled ? '1' : '0')
+  } catch {}
+}
 
 function readStoredBrowserPref() {
   try {
@@ -264,12 +279,21 @@ async function fetchNotificationPreferences() {
     const remotePushEnabled = pushPref ? !!pushPref.is_enabled : false
     pushServerAllowed.value = remotePushEnabled
     writeStoredBrowserPref(remotePushEnabled)
-    preferencesLoaded.value = true
   } catch (e) {
     pushServerAllowed.value = true
-    preferencesLoaded.value = true
   } finally {
     refreshBrowserToggle()
+  }
+}
+
+async function fetchSecuritySettings() {
+  try {
+    const res = await api.get('/me/security')
+    const enabled = !!res.data?.notification_login
+    notifLogin.value = enabled
+    writeStoredLoginAlertPref(enabled)
+  } catch {
+    notifLogin.value = readStoredLoginAlertPref()
   }
 }
 
@@ -376,10 +400,20 @@ async function sendLoginAlertTest() {
   }
 }
 
-async function saveSecurity() {
+function onNotifLoginToggle(event) {
+  if (!preferencesLoaded.value) return
+  const checked = Boolean(event?.target?.checked ?? notifLogin.value)
+  const previousValue = !checked
+  notifLogin.value = checked
+  saveSecurity({ previousValue })
+}
+
+async function saveSecurity({ previousValue } = {}) {
   try {
     const res = await api.put('/me/security', { notification_login: notifLogin.value })
-    notifLogin.value = !!res.data.notification_login
+    const confirmed = !!res.data.notification_login
+    notifLogin.value = confirmed
+    writeStoredLoginAlertPref(confirmed)
     if (preferencesLoaded.value) {
       await updateEmailPreference({ silent: true, allowPartial: true })
     }
@@ -389,7 +423,10 @@ async function saveSecurity() {
       secMsg.value = ''
     }, 1800)
   } catch (e) {
-    notifLogin.value = !notifLogin.value
+    const fallback =
+      typeof previousValue === 'boolean' ? previousValue : !notifLogin.value
+    notifLogin.value = fallback
+    writeStoredLoginAlertPref(fallback)
     secMsgType.value = 'error'
     secMsg.value = e?.response?.data?.detail || "Impossible d'enregistrer vos alertes. Reessayez."
   }

@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -31,7 +31,9 @@ class ContactLink(Base):
     status: Mapped[ContactStatus] = mapped_column(
         Enum(ContactStatus, name="contact_status"), nullable=False, default=ContactStatus.PENDING
     )
+    initiated_by_owner: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     alias: Mapped[str | None] = mapped_column(String(120))
+    is_hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )

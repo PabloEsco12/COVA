@@ -59,7 +59,7 @@ async def confirm_email(token: str, service: AuthService = Depends(get_auth_serv
     user = await service.confirm_email(token)
     await service.session.commit()
     return ConfirmEmailResponse(
-        message="Email confirmed successfully.",
+        message="Confirmation de mail réussie.",
         user=UserOut.model_validate(user, from_attributes=True),
     )
 

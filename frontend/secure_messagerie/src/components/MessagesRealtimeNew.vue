@@ -226,7 +226,10 @@
               </div>
               <button type="button" class="btn btn-link p-0" @click="jumpToSearchResult(result)">Afficher</button>
             </li>
-            <li v-if="!messageSearch.loading && !messageSearch.results.length && messageSearch.query" class="text-muted small">
+            <li
+              v-if="messageSearch.executed && !messageSearch.loading && !messageSearch.results.length"
+              class="text-muted small"
+            >
               Aucun message trouvé.
             </li>
           </ul>
@@ -822,73 +825,10 @@ import {
   revokeConversationInvite,
 } from '@/services/conversations'
 import { fetchGifs, hasGifApiSupport } from '@/services/media'
+import { emojiSections, emojiCatalog, defaultGifLibrary } from '@/utils/reactions'
 
 
-const emojiSections = [
-  {
-    id: 'trending',
-    label: 'Émojis populaires',
-    items: ['👍','✨','🎉','🔥','👏','😊','😍','🤝','🤔','🙏'],
-  },
-  {
-    id: 'smileys',
-    label: 'Smileys & émotions',
-    items: [
-      '😀','😄','😅','😂','🥰','😍','😎','🤩','😇','🤓','🙂','🙃','😉','🤗','🤔','😬','😢','😭','😡','😤','🤯','😴','😳','🥱','😐',
-    ],
-  },
-  {
-    id: 'gestures',
-    label: 'Gestes & personnes',
-    items: ['🤝','👍','👎','👏','🙌','🙏','👊','🤛','🤞','✌','🤘','🤟','👋','👌','🖖','👊','✊','🤏','🤲'],
-  },
-  {
-    id: 'nature',
-    label: 'Animaux & nature',
-    items: ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔','🐧','🐦','🐤'],
-  },
-  {
-    id: 'food',
-    label: 'Cuisine & boissons',
-    items: ['🍏','🍎','🍊','🍉','🍓','🍇','🍒','🍑','🍍','🍏','🍅','🥑','🥦','🥕','🌽','🍔','🍕','🌭','🍟'],
-  },
-  {
-    id: 'activities',
-    label: 'Loisirs & voyages',
-    items: ['⚽','🏀','🏈','⚾','🎾','🏐','🏉','🎱','🏓','🏸','🥅','🎣','🎿','🏂','🏋','🤸','🤼','🤽','🚴'],
-  },
-]
-const emojiCatalog = emojiSections.flatMap((section) => section.items)
-
-const gifLibrary = [
-
-  { label: 'Bravo', url: 'https://media.giphy.com/media/111ebonMs90YLu/giphy.gif' },
-
-  { label: 'Fête', url: 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif' },
-
-  { label: 'Pouce', url: 'https://media.giphy.com/media/OkJat1YNdoD3W/giphy.gif' },
-
-  { label: 'Applaudissements', url: 'https://media.giphy.com/media/5GoVLqeAOo6PK/giphy.gif' },
-
-  { label: 'Celebration', url: 'https://media.giphy.com/media/26gssIytJvy1b1THO/giphy.gif' },
-
-  { label: 'LOL', url: 'https://media.giphy.com/media/l46CkATpdyLwLI7vi/giphy.gif' },
-
-  { label: 'Love', url: 'https://media.giphy.com/media/xT0xeJpnrWC4XWblEk/giphy.gif' },
-
-  { label: 'ThumbsUp', url: 'https://media.giphy.com/media/l2SpQXcg3dYgP2QbS/giphy.gif' },
-
-  { label: 'Party', url: 'https://media.giphy.com/media/3o6Zt481isNVuQI1l6/giphy.gif' },
-
-  { label: 'Confetti', url: 'https://media.giphy.com/media/26u4hLUL3xFqj2iUU/giphy.gif' },
-
-  { label: 'Wow', url: 'https://media.giphy.com/media/xT5LMHxhOfscxPfIfm/giphy.gif' },
-
-  { label: 'Happy Dance', url: 'https://media.giphy.com/media/Ju7l5y9osyymQ/giphy.gif' },
-
-]
-
-
+const gifLibrary = defaultGifLibrary
 
 const conversations = ref([])
 
@@ -949,7 +889,16 @@ const messageSearch = reactive({
   results: [],
   loading: false,
   error: '',
+  executed: false,
 })
+
+watch(
+  () => messageSearch.query,
+  () => {
+    messageSearch.executed = false
+    messageSearch.error = ''
+  },
+)
 
 const selectedConversationId = ref(null)
 const messages = ref([])
@@ -964,7 +913,18 @@ const sending = ref(false)
 
 const copiedMessageId = ref(null)
 
-const reactionPalette = ['\u{1F44D}', '\u{2705}', '\u{1F525}', '\u{26A0}', '\u{1F4A1}']
+const reactionPalette = [
+  '\u{1F44D}',
+  '\u{2764}\u{FE0F}',
+  '\u{1F389}',
+  '\u{1F44F}',
+  '\u{1F525}',
+  '\u{1F604}',
+  '\u{1F64F}',
+  '\u{1F440}',
+  '\u{1F680}',
+  '\u{2757}',
+]
 
 const pinBusy = reactive({})
 
@@ -1848,25 +1808,36 @@ async function selectConversation(convId) {
 
 async function markConversationAsRead(convId, ids = []) {
   if (!convId) return
-
   const meta = ensureMeta(convId)
-
-  meta.unreadCount = 0
-
-  const body = ids && ids.length ? { message_ids: ids } : {}
-
-  try {
-
-    await api.post(`/conversations/${convId}/read`, body)
-
-  } catch (err) {
-
-    console.warn('Unable to synchroniser la lecture', err)
-
+  const uniqueIds = Array.isArray(ids) ? Array.from(new Set(ids.filter(Boolean))) : []
+  if (uniqueIds.length) {
+    const decrement = Math.min(uniqueIds.length, meta.unreadCount || 0)
+    meta.unreadCount = Math.max((meta.unreadCount || 0) - decrement, 0)
+  } else {
+    meta.unreadCount = 0
   }
-
+  const body = uniqueIds.length ? { message_ids: uniqueIds } : {}
+  applyLocalReadReceipt(convId, uniqueIds)
+  try {
+    await api.post(`/conversations/${convId}/read`, body)
+  } catch (err) {
+    console.warn('Unable to synchroniser la lecture', err)
+  }
   await loadUnreadSummary()
+}
 
+function applyLocalReadReceipt(convId, ids = []) {
+  const targetIds =
+    Array.isArray(ids) && ids.length ? new Set(ids.map((id) => String(id))) : null
+  const now = new Date()
+  messages.value.forEach((message) => {
+    if (String(message.conversationId) !== String(convId)) return
+    if (message.sentByMe || message.deleted) return
+    if (targetIds && !targetIds.has(String(message.id))) return
+    if (message.deliveryState === 'read') return
+    message.deliveryState = 'read'
+    message.readAt = now
+  })
 }
 
 
@@ -2289,6 +2260,48 @@ function resetSearchPanel() {
   messageSearch.query = ''
   messageSearch.results = []
   messageSearch.error = ''
+  messageSearch.executed = false
+}
+
+function extractSearchResults(payload) {
+  if (!payload) return []
+  if (Array.isArray(payload)) return payload
+  const candidates = ['results', 'items', 'messages', 'data']
+  for (const key of candidates) {
+    const value = payload[key]
+    if (Array.isArray(value)) return value
+    if (value && Array.isArray(value.items)) return value.items
+  }
+  return []
+}
+
+function stripDiacritics(value) {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+}
+
+function normalizeSearchText(value) {
+  return stripDiacritics(String(value || '')).toLowerCase()
+}
+
+function searchLocalMessages(query, limit = 50) {
+  const needle = normalizeSearchText(query)
+  if (!needle) return []
+  const results = []
+  for (let i = messages.value.length - 1; i >= 0; i -= 1) {
+    const message = messages.value[i]
+    if (!message || message.deleted) continue
+    const parts = [
+      message.content,
+      message.displayName,
+      Array.isArray(message.attachments) ? message.attachments.map((att) => att.fileName).join(' ') : '',
+    ].filter(Boolean)
+    const haystack = normalizeSearchText(parts.join(' '))
+    if (haystack && haystack.includes(needle)) {
+      results.push(message)
+      if (results.length >= limit) break
+    }
+  }
+  return results.reverse()
 }
 
 async function performMessageSearch() {
@@ -2303,11 +2316,21 @@ async function performMessageSearch() {
   messageSearch.error = ''
   try {
     const data = await searchConversationMessages(selectedConversationId.value, { query, limit: 50 })
-    messageSearch.results = Array.isArray(data) ? data.map(normalizeMessage) : []
+    const rawResults = extractSearchResults(data)
+    if (rawResults.length) {
+      messageSearch.results = rawResults.map((entry) => normalizeMessage(entry))
+    } else {
+      const fallback = searchLocalMessages(query, 50)
+      messageSearch.results = fallback.slice()
+      if (!fallback.length) {
+        messageSearch.error = 'Aucun message trouvé.'
+      }
+    }
   } catch (err) {
     messageSearch.error = extractError(err, 'Recherche impossible.')
   } finally {
     messageSearch.loading = false
+    messageSearch.executed = true
   }
 }
 

@@ -35,6 +35,12 @@ class RealtimeBroker:
         channel = f"conversation:{conversation_id}"
         await self.redis.publish(channel, json.dumps(payload))
 
+    async def publish_user_event(self, user_id: str, payload: dict) -> None:
+        if not self.redis:
+            return
+        channel = f"user:{user_id}:events"
+        await self.redis.publish(channel, json.dumps(payload))
+
     async def subscribe(self, channel: str) -> AsyncIterator[dict[str, Any]]:
         if not self.redis:
             raise RuntimeError("Realtime broker not configured")

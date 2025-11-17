@@ -26,6 +26,7 @@ class ConversationMemberOut(BaseModel):
     display_name: str | None = None
     email: EmailStr | None = None
     avatar_url: str | None = None
+    status_message: str | None = None
 
     class Config:
         from_attributes = True
@@ -45,6 +46,8 @@ class ConversationOut(BaseModel):
     created_at: datetime
     archived: bool = False
     members: List[ConversationMemberOut]
+    blocked_by_viewer: bool = False
+    blocked_by_other: bool = False
 
     class Config:
         from_attributes = True

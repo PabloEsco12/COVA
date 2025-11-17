@@ -20,10 +20,12 @@ from ...dependencies import (
     get_current_user,
     get_db,
     get_device_service,
+    get_organization_service,
     get_security_service,
 )
 from ...schemas.audit import AuditLogEntry
 from ...schemas.device import DeviceListResponse, DeviceOut, DeviceRegisterRequest
+from ...schemas.organization import OrganizationMembershipInfo, OrganizationSummary
 from ...schemas.overview import (
     ConversationSummary,
     OverviewProfile,
@@ -32,12 +34,20 @@ from ...schemas.overview import (
     OverviewStats,
 )
 from ...schemas.security import SecuritySettingsOut, SecuritySettingsUpdate
-from ...schemas.user import AccountDeleteRequest, AvatarResponse, MeProfileOut, MeProfileUpdate, MeSummaryOut
+from ...schemas.user import (
+    AccountDeleteRequest,
+    AvatarResponse,
+    MeProfileOut,
+    MeProfileUpdate,
+    MeSummaryOut,
+    PasswordUpdateRequest,
+)
 from ...services.audit_service import AuditService
 from ...services.conversation_service import ConversationService
 from ...services.device_service import DeviceService
+from ...services.organization_service import OrganizationService
 from ...services.security_service import SecurityService
-from ...core.security import verify_password
+from ...core.security import get_password_hash, verify_password
 from app.models import (
     ContactLink,
     ContactStatus,
@@ -467,6 +477,7 @@ async def get_overview(
     conversation_service: ConversationService = Depends(get_conversation_service),
     security: SecurityService = Depends(get_security_service),
     device_service: DeviceService = Depends(get_device_service),
+    organization_service: OrganizationService = Depends(get_organization_service),
 ) -> OverviewResponse:
     profile = _build_profile_response(current_user)
     contacts_total, contacts_pending = await _count_contact_stats(db, current_user.id)
@@ -507,12 +518,38 @@ async def get_overview(
         status_message=profile.status_message,
     )
 
+    organization_out = None
+    try:
+        membership = await organization_service.get_membership_for_user(current_user.id)
+        member_count, admin_count = await organization_service.get_member_counts(membership.organization_id)
+        org = membership.organization
+        organization_out = OrganizationSummary(
+            id=org.id,
+            name=org.name,
+            slug=org.slug,
+            created_at=org.created_at,
+            member_count=member_count,
+            admin_count=admin_count,
+            membership=OrganizationMembershipInfo(
+                id=membership.id,
+                role=membership.role,
+                joined_at=membership.joined_at,
+                is_admin=organization_service.is_admin_role(membership.role),
+                can_manage_admins=organization_service.can_manage_admins(membership),
+            ),
+        )
+    except HTTPException as exc:
+        if exc.status_code not in (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND):
+            raise
+        organization_out = None
+
     return OverviewResponse(
         profile=profile_out,
         stats=stats,
         security=security_out,
         recent_conversations=conversation_summaries,
         generated_at=datetime.now(timezone.utc),
+        organization=organization_out,
     )
 
 
@@ -580,6 +617,28 @@ async def delete_account(
 
     _remove_avatar_file(avatar_url)
 
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put("/password", status_code=status.HTTP_204_NO_CONTENT)
+async def update_password(
+    payload: PasswordUpdateRequest,
+    current_user: UserAccount = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    audit: AuditService = Depends(get_audit_service),
+) -> Response:
+    if not payload.old_password or not payload.new_password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Les mots de passe sont requis.")
+    if not verify_password(payload.old_password, current_user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Mot de passe actuel incorrect.")
+    if payload.old_password == payload.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le nouveau mot de passe doit être différent de l'actuel.",
+        )
+    current_user.hashed_password = get_password_hash(payload.new_password)
+    await audit.record("user.password.update", user_id=str(current_user.id))
+    await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

@@ -1,5 +1,6 @@
 // src/router/index.js
 import { createRouter, createWebHistory } from 'vue-router'
+import { clearSession, getAccessToken, hasStoredSession, isAccessTokenExpired } from '@/services/auth'
 
 // pages publiques
 import LoginView from '@/views/LoginView.vue'
@@ -67,9 +68,16 @@ router.beforeEach((to, from, next) => {
     to.path.startsWith('/confirm-email/')
 
   const isDashboard = to.path.startsWith('/dashboard')
-  const loggedIn = !!localStorage.getItem('access_token')
+  const loggedIn = hasStoredSession()
+  const token = getAccessToken()
+  const expired = loggedIn && (!token || isAccessTokenExpired(token))
 
-  if (isDashboard && !loggedIn && !isPublic) {
+  if (expired) {
+    clearSession()
+    if (!isPublic) {
+      return next({ path: '/login', query: { reason: 'session-expired' } })
+    }
+  } else if (isDashboard && !loggedIn && !isPublic) {
     return next('/login')
   }
 

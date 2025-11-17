@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +29,7 @@ class AuditService:
         user_agent: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
+        details = jsonable_encoder(metadata) if metadata is not None else None
         log = AuditLog(
             organization_id=organization_id,
             user_id=user_id,
@@ -36,7 +38,7 @@ class AuditService:
             resource_id=resource_id,
             ip_address=ip_address,
             user_agent=user_agent,
-            details=metadata,
+            details=details,
             created_at=datetime.now(timezone.utc),
         )
         self.session.add(log)

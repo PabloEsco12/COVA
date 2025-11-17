@@ -46,7 +46,8 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { api } from '@/utils/api'
+import { api, backendBase } from '@/utils/api'
+import { computeAvatarInitials, normalizeAvatarUrl, broadcastProfileUpdate } from '@/utils/profile'
 
 const props = defineProps({
   email: {
@@ -67,26 +68,24 @@ const emit = defineEmits(['avatar-updated'])
 const loadingAvatar = ref(false)
 const avatarMsg = ref('')
 const avatarOk = ref(false)
-const localAvatarUrl = ref(props.avatarUrl)
+const localAvatarUrl = ref(
+  normalizeAvatarUrl(props.avatarUrl, { baseUrl: backendBase, cacheBust: false }),
+)
 
 watch(
   () => props.avatarUrl,
   (val) => {
-    localAvatarUrl.value = val
+    localAvatarUrl.value = normalizeAvatarUrl(val, { baseUrl: backendBase, cacheBust: false })
   },
 )
 
-const avatarInitials = computed(() => {
-  const base = (props.displayName || '').trim() || (props.email || '').trim()
-  if (!base) return 'SC'
-  const parts = base
-    .replace(/[_\-@.]+/g, ' ')
-    .split(/\s+/)
-    .filter(Boolean)
-  const initials = (parts[0]?.[0] || '') + (parts[1]?.[0] || '')
-  const candidate = initials || parts[0]?.slice(0, 2) || base[0]
-  return candidate.toUpperCase()
-})
+const avatarInitials = computed(() =>
+  computeAvatarInitials({
+    displayName: props.displayName,
+    email: props.email,
+    fallback: 'CV',
+  }),
+)
 
 async function uploadAvatar(event) {
   const file = event.target.files?.[0]
@@ -104,16 +103,17 @@ async function uploadAvatar(event) {
     const res = await api.post('/me/avatar', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
-    const url = res.data.avatar_url ? `${res.data.avatar_url}?v=${Date.now()}` : null
+    const url = normalizeAvatarUrl(res.data.avatar_url, {
+      baseUrl: backendBase,
+      cacheBust: true,
+    })
     localAvatarUrl.value = url
-    if (url) {
-      localStorage.setItem('avatar_url', url)
-    } else {
-      localStorage.removeItem('avatar_url')
-    }
     avatarOk.value = true
     avatarMsg.value = 'Avatar mis a jour.'
     emit('avatar-updated', url)
+    broadcastProfileUpdate({
+      avatar_url: url,
+    })
   } catch (e) {
     avatarOk.value = false
     avatarMsg.value =
@@ -133,10 +133,10 @@ async function deleteAvatar() {
   try {
     await api.delete('/me/avatar')
     localAvatarUrl.value = null
-    localStorage.removeItem('avatar_url')
     avatarOk.value = true
     avatarMsg.value = 'Avatar supprime.'
     emit('avatar-updated', null)
+    broadcastProfileUpdate({ avatar_url: null })
   } catch (e) {
     avatarOk.value = false
     avatarMsg.value =

@@ -1,5 +1,6 @@
 // src/composables/useRealtime.js
 import { ref, onBeforeUnmount, onMounted, watch } from 'vue'
+import { buildWsUrl } from '@/utils/realtime'
 
 /**
  * WebSocket avec auto-reconnexion (exponential backoff), heartbeat et handlers d'événements.
@@ -36,18 +37,11 @@ export function useRealtime(initialConversationId, handlers = {}) {
   const maxDelay = 30000
   const backoffStep = ref(0)
 
-  // ex: VITE_WS_BASE=wss://api.cova.be/ws
-  const urlBase = import.meta.env.VITE_WS_BASE || 'ws://localhost:8000/ws'
-
   function makeUrl() {
     if (!conversationId.value) return null
     const token = localStorage.getItem('access_token') || ''
-    const qs = new URLSearchParams({
-      token,
-      conv: String(conversationId.value),
-    })
-    // => wss://.../ws/conversations?token=...&conv=...
-    return `${urlBase}/conversations?${qs.toString()}`
+    if (!token) return null
+    return buildWsUrl(`conversations/${conversationId.value}`, { token })
   }
 
   function scheduleReconnect() {
@@ -81,7 +75,10 @@ export function useRealtime(initialConversationId, handlers = {}) {
 
   function connect() {
     const url = makeUrl()
-    if (!url) return
+    if (!url) {
+      disconnect()
+      return
+    }
 
     // Nettoie au cas où
     disconnect(false)

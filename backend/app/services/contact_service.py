@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 from app.models import ContactLink, ContactStatus, NotificationChannel, UserAccount
 from .audit_service import AuditService
 from .notification_service import NotificationService
+from ..core.redis import RealtimeBroker
 
 
 class ContactService:
@@ -23,16 +24,18 @@ class ContactService:
         *,
         audit_service: AuditService | None = None,
         notification_service: NotificationService | None = None,
+        realtime_broker: RealtimeBroker | None = None,
     ) -> None:
         self.session = session
         self.audit = audit_service
         self.notifications = notification_service
+        self.realtime = realtime_broker
 
     async def list_contacts(self, owner: UserAccount, status: ContactStatus | None = None) -> list[ContactLink]:
         stmt = (
             select(ContactLink)
             .options(selectinload(ContactLink.contact).selectinload(UserAccount.profile))
-            .where(ContactLink.owner_id == owner.id)
+            .where(ContactLink.owner_id == owner.id, ContactLink.is_hidden.is_(False))
         )
         if status is not None:
             stmt = stmt.where(ContactLink.status == status)
@@ -61,11 +64,15 @@ class ContactService:
             contact_id=target.id,
             status=ContactStatus.PENDING,
             alias=self._normalize_alias(alias),
+            initiated_by_owner=True,
+            is_hidden=False,
         )
         reciprocal_link = ContactLink(
             owner_id=target.id,
             contact_id=owner.id,
             status=ContactStatus.PENDING,
+            initiated_by_owner=False,
+            is_hidden=False,
         )
         self.session.add_all([owner_link, reciprocal_link])
         await self.session.flush()
@@ -85,17 +92,98 @@ class ContactService:
                     "contact_link_id": str(reciprocal_link.id),
                 },
             )
+        await self._notify_user_event(
+            target.id,
+            {
+                "type": "contact.request",
+                "title": "Nouvelle demande de contact",
+                "body": f"{owner.email} souhaite collaborer.",
+                "contact_id": str(reciprocal_link.id),
+                "from_email": owner.email,
+                "from_display_name": owner.profile.display_name if owner.profile else None,
+            },
+        )
         return await self._get_contact(owner.id, owner_link.id)
 
     async def update_status(self, owner: UserAccount, contact_id: uuid.UUID, status_value: ContactStatus) -> ContactLink:
         contact = await self._get_contact(owner.id, contact_id)
-        reciprocal = await self._get_contact(contact.contact_id, owner.id, raise_not_found=False)
+        reciprocal = await self._get_contact_between(contact.contact_id, owner.id)
 
         contact.status = status_value
+        if status_value != ContactStatus.BLOCKED:
+            contact.is_hidden = False
         if reciprocal:
-            reciprocal.status = status_value
+            if status_value == ContactStatus.BLOCKED:
+                reciprocal.status = ContactStatus.BLOCKED
+                reciprocal.is_hidden = True
+                await self._notify_user_event(
+                    contact.contact_id,
+                    {
+                        "type": "contact.blocked",
+                        "title": "Contact bloqué",
+                        "body": f"{owner.email} a bloqué cette conversation.",
+                        "contact_id": str(reciprocal.id) if reciprocal else None,
+                        "blocked_by": str(owner.id),
+                        "blocked_by_email": owner.email,
+                    },
+                )
+                await self._notify_user_event(
+                    owner.id,
+                    {
+                        "type": "contact.blocked",
+                        "title": "Contact bloqué",
+                        "body": f"Vous avez bloqué {contact.contact.email}.",
+                        "contact_id": str(contact.id),
+                        "blocked_target": str(contact.contact_id),
+                        "blocked_target_email": contact.contact.email if contact.contact else None,
+                    },
+                )
+            else:
+                reciprocal.status = status_value
+                reciprocal.is_hidden = False
+                await self._notify_user_event(
+                    contact.contact_id,
+                    {
+                        "type": "contact.unblocked",
+                        "title": "Contact débloqué",
+                        "body": f"{owner.email} a réactivé la conversation.",
+                        "contact_id": str(reciprocal.id) if reciprocal else None,
+                        "unblocked_by": str(owner.id),
+                        "unblocked_by_email": owner.email,
+                    },
+                )
+                await self._notify_user_event(
+                    owner.id,
+                    {
+                        "type": "contact.unblocked",
+                        "title": "Contact débloqué",
+                        "body": f"Vous avez réactivé la conversation avec {contact.contact.email}.",
+                        "contact_id": str(contact.id),
+                        "unblocked_target": str(contact.contact_id),
+                        "unblocked_target_email": contact.contact.email if contact.contact else None,
+                    },
+                )
         await self.session.flush()
         await self._log(owner, "contacts.status", resource_id=str(contact.id), metadata={"status": status_value.value})
+        if status_value == ContactStatus.ACCEPTED:
+            await self._notify_user_event(
+                contact.contact_id,
+                {
+                    "type": "contact.accepted",
+                    "title": "Contact confirmé",
+                    "body": f"{owner.email} a accepté votre invitation.",
+                    "contact_id": str(reciprocal.id) if reciprocal else None,
+                },
+            )
+            await self._notify_user_event(
+                owner.id,
+                {
+                    "type": "contact.accepted",
+                    "title": "Contact confirmé",
+                    "body": f"{contact.contact.email} est désormais disponible.",
+                    "contact_id": str(contact.id),
+                },
+            )
         return contact
 
     async def update_alias(self, owner: UserAccount, contact_id: uuid.UUID, alias: str | None) -> ContactLink:
@@ -117,7 +205,9 @@ class ContactService:
         await self.session.execute(reciprocal_stmt)
         await self._log(owner, "contacts.delete", resource_id=str(contact.id))
 
-    async def _get_contact(self, owner_id: uuid.UUID, contact_id: uuid.UUID, raise_not_found: bool = True) -> ContactLink | None:
+    async def _get_contact(
+        self, owner_id: uuid.UUID, contact_id: uuid.UUID, raise_not_found: bool = True
+    ) -> ContactLink | None:
         stmt = (
             select(ContactLink)
             .options(selectinload(ContactLink.contact).selectinload(UserAccount.profile))
@@ -128,6 +218,17 @@ class ContactService:
         if contact is None and raise_not_found:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
         return contact
+
+    async def _get_contact_between(
+        self, owner_id: uuid.UUID, target_user_id: uuid.UUID
+    ) -> ContactLink | None:
+        stmt = (
+            select(ContactLink)
+            .options(selectinload(ContactLink.contact).selectinload(UserAccount.profile))
+            .where(ContactLink.owner_id == owner_id, ContactLink.contact_id == target_user_id)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
 
     @staticmethod
     def _normalize_alias(value: str | None) -> str | None:
@@ -145,3 +246,14 @@ class ContactService:
                 resource_id=resource_id,
                 metadata=metadata,
             )
+
+    async def _notify_user_event(self, user_id: uuid.UUID, payload: dict) -> None:
+        if not self.realtime:
+            return
+        await self.realtime.publish_user_event(
+            str(user_id),
+            {
+                "event": "notification",
+                "payload": payload,
+            },
+        )

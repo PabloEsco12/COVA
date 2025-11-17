@@ -9,6 +9,7 @@ from typing import List
 from pydantic import BaseModel
 
 from app.models import ConversationType
+from .organization import OrganizationSummary
 
 
 class OverviewProfile(BaseModel):
@@ -54,4 +55,5 @@ class OverviewResponse(BaseModel):
     security: OverviewSecurity
     recent_conversations: List[ConversationSummary]
     generated_at: datetime
+    organization: OrganizationSummary | None = None
 

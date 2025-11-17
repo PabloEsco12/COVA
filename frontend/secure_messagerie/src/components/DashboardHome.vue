@@ -4,8 +4,9 @@
       <div class="col-lg-8">
         <div class="card p-5 shadow-lg text-center animate__animated animate__fadeIn">
           <h2 class="mb-2 display-5 fw-bold">Bienvenue {{ pseudo }} ??</h2>
-          <div v-if="avatarUrl" class="mb-3">
-            <img :src="avatarUrl" alt="Avatar" class="avatar-lg" @error="onAvatarError" />
+          <div class="mb-3">
+            <img v-if="avatarUrl" :src="avatarUrl" alt="Avatar" class="avatar-lg" @error="onAvatarError" />
+            <div v-else class="avatar-lg avatar-placeholder">{{ avatarInitials }}</div>
           </div>
           <p class="lead mb-4">
             Messagerie sécurisée, simple et rapide.<br />
@@ -48,16 +49,27 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { api } from '@/utils/api'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
+import { api, backendBase } from '@/utils/api'
+import { computeAvatarInitials, normalizeAvatarUrl } from '@/utils/profile'
 
 const apiOk = ref(false)
 const pseudo = ref('Utilisateur')
-const avatarUrl = ref(null)
+const avatarUrl = ref(normalizeAvatarUrl(localStorage.getItem('avatar_url'), { baseUrl: backendBase }))
+const avatarInitials = computed(() =>
+  computeAvatarInitials({
+    displayName: pseudo.value,
+    fallback: 'C',
+  }),
+)
 
 onMounted(async () => {
   pseudo.value = localStorage.getItem('pseudo') || 'Utilisateur'
-  avatarUrl.value = localStorage.getItem('avatar_url') || null
+  avatarUrl.value = normalizeAvatarUrl(localStorage.getItem('avatar_url'), { baseUrl: backendBase })
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('cova:profile-update', handleProfileUpdate)
+  }
 
   try {
     await api.get('/ping')
@@ -70,9 +82,21 @@ onMounted(async () => {
   if (token) {
     try {
       const res = await api.get('/me/profile')
-      if (res.data?.avatar_url) {
-        avatarUrl.value = res.data.avatar_url
-        localStorage.setItem('avatar_url', res.data.avatar_url)
+      if (res.data?.display_name) {
+        pseudo.value = res.data.display_name
+        localStorage.setItem('pseudo', res.data.display_name)
+      }
+      if (Object.prototype.hasOwnProperty.call(res.data, 'avatar_url')) {
+        const normalized = normalizeAvatarUrl(res.data.avatar_url, {
+          baseUrl: backendBase,
+          cacheBust: true,
+        })
+        avatarUrl.value = normalized
+        if (normalized) {
+          localStorage.setItem('avatar_url', normalized)
+        } else {
+          localStorage.removeItem('avatar_url')
+        }
       }
     } catch (e) {
       // ignore
@@ -80,9 +104,41 @@ onMounted(async () => {
   }
 })
 
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('cova:profile-update', handleProfileUpdate)
+  }
+})
+
 function onAvatarError() {
   try { localStorage.removeItem('avatar_url') } catch {}
   avatarUrl.value = null
+}
+
+function handleProfileUpdate(event) {
+  const payload = event?.detail || {}
+  if (Object.prototype.hasOwnProperty.call(payload, 'display_name')) {
+    const next = (payload.display_name || '').trim()
+    pseudo.value = next || 'Utilisateur'
+    try {
+      if (next) {
+        localStorage.setItem('pseudo', next)
+      } else {
+        localStorage.removeItem('pseudo')
+      }
+    } catch {}
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'avatar_url')) {
+    const nextAvatar = normalizeAvatarUrl(payload.avatar_url || null, { baseUrl: backendBase })
+    avatarUrl.value = nextAvatar
+    try {
+      if (nextAvatar) {
+        localStorage.setItem('avatar_url', nextAvatar)
+      } else {
+        localStorage.removeItem('avatar_url')
+      }
+    } catch {}
+  }
 }
 </script>
 
@@ -93,5 +149,14 @@ function onAvatarError() {
   border-radius: 50%;
   object-fit: cover;
   box-shadow: 0 2px 8px #0002;
+}
+.avatar-placeholder {
+  background: linear-gradient(135deg, #0d6efd, #6f42c1);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  text-transform: uppercase;
 }
 </style>

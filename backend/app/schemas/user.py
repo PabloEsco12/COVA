@@ -71,3 +71,8 @@ class AvatarResponse(BaseModel):
 
 class AccountDeleteRequest(BaseModel):
     password: str
+
+
+class PasswordUpdateRequest(BaseModel):
+    old_password: str
+    new_password: str

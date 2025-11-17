@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import uuid
 
-from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -37,6 +37,9 @@ def _member_to_schema(link) -> ConversationMemberOut:
     user = getattr(link, "user", None)
     profile = getattr(user, "profile", None) if user else None
     display_name = None
+    status_message = None
+    if profile and profile.profile_data:
+        status_message = profile.profile_data.get("status_message")
     if profile and profile.display_name:
         display_name = profile.display_name
     elif user and user.email:
@@ -50,12 +53,14 @@ def _member_to_schema(link) -> ConversationMemberOut:
         display_name=display_name,
         email=getattr(user, "email", None) if user else None,
         avatar_url=getattr(profile, "avatar_url", None) if profile else None,
+        status_message=status_message,
     )
 
 
-def _conversation_to_schema(conversation) -> ConversationOut:
+def _conversation_to_schema(conversation, *, block_state: dict | None = None) -> ConversationOut:
     members = [_member_to_schema(member) for member in conversation.members]
     metadata = dict(conversation.extra_metadata or {})
+    blocked_view = block_state or {}
     return ConversationOut(
         id=conversation.id,
         title=conversation.title,
@@ -64,11 +69,28 @@ def _conversation_to_schema(conversation) -> ConversationOut:
         created_at=conversation.created_at,
         archived=bool(metadata.get("archived", False)),
         members=members,
+        blocked_by_viewer=bool(blocked_view.get("blocked_by_me")),
+        blocked_by_other=bool(blocked_view.get("blocked_by_other")),
     )
 
 
 def _invite_to_schema(invite) -> ConversationInviteOut:
     return ConversationInviteOut.model_validate(invite, from_attributes=True)
+
+
+async def _fetch_conversation_with_members(session: AsyncSession, conversation_id: uuid.UUID) -> Conversation:
+    stmt = (
+        select(Conversation)
+        .options(
+            selectinload(Conversation.members).selectinload(ConversationMember.user).selectinload(UserAccount.profile)
+        )
+        .where(Conversation.id == conversation_id)
+    )
+    result = await session.execute(stmt)
+    conversation = result.scalar_one_or_none()
+    if conversation is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation introuvable.")
+    return conversation
 
 
 @router.get("/", response_model=list[ConversationOut])
@@ -77,7 +99,8 @@ async def list_conversations(
     service: ConversationService = Depends(get_conversation_service),
 ) -> list[ConversationOut]:
     conversations = await service.list_conversations(current_user)
-    return [_conversation_to_schema(conv) for conv in conversations]
+    block_states = await service.get_block_states(current_user, conversations)
+    return [_conversation_to_schema(conv, block_state=block_states.get(conv.id)) for conv in conversations]
 
 
 @router.post("/", response_model=ConversationOut, status_code=status.HTTP_201_CREATED)
@@ -85,7 +108,7 @@ async def create_conversation(
     payload: ConversationCreateRequest,
     current_user: UserAccount = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
-) -> ConversationOut:
+    ) -> ConversationOut:
     conversation = await service.create_conversation(
         owner=current_user,
         title=payload.title,
@@ -93,18 +116,9 @@ async def create_conversation(
         conv_type=payload.type,
     )
     await service.session.commit()
-    await service.session.refresh(conversation)
-
-    stmt = (
-        select(Conversation)
-        .options(
-            selectinload(Conversation.members).selectinload(ConversationMember.user).selectinload(UserAccount.profile)
-        )
-        .where(Conversation.id == conversation.id)
-    )
-    result = await service.session.execute(stmt)
-    hydrated = result.scalar_one()
-    return _conversation_to_schema(hydrated)
+    hydrated = await _fetch_conversation_with_members(service.session, conversation.id)
+    block_state = (await service.get_block_states(current_user, [hydrated])).get(hydrated.id)
+    return _conversation_to_schema(hydrated, block_state=block_state)
 
 
 @router.patch("/{conversation_id}", response_model=ConversationOut)
@@ -113,7 +127,7 @@ async def update_conversation(
     payload: ConversationUpdateRequest,
     current_user: UserAccount = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
-) -> ConversationOut:
+    ) -> ConversationOut:
     conversation = await service.update_conversation(
         conversation_id=conversation_id,
         actor=current_user,
@@ -122,8 +136,9 @@ async def update_conversation(
         archived=payload.archived,
     )
     await service.session.commit()
-    await service.session.refresh(conversation)
-    return _conversation_to_schema(conversation)
+    hydrated = await _fetch_conversation_with_members(service.session, conversation.id)
+    block_state = (await service.get_block_states(current_user, [hydrated])).get(hydrated.id)
+    return _conversation_to_schema(hydrated, block_state=block_state)
 
 
 @router.get("/{conversation_id}/messages", response_model=list[MessageOut])
@@ -140,6 +155,23 @@ async def list_messages(
         data = await service.serialize_message(message, viewer_membership=membership)
         payloads.append(MessageOut(**data))
     return payloads
+
+
+@router.get("/{conversation_id}/messages/search", response_model=list[MessageOut])
+async def search_conversation_messages(
+    conversation_id: uuid.UUID,
+    q: str = Query(..., min_length=1, description="Terme � rechercher"),
+    limit: int = Query(50, ge=1, le=200),
+    current_user: UserAccount = Depends(get_current_user),
+    service: ConversationService = Depends(get_conversation_service),
+) -> list[MessageOut]:
+    results = await service.search_messages(
+        conversation_id=conversation_id,
+        user=current_user,
+        query=q,
+        limit=limit,
+    )
+    return [MessageOut(**item) for item in results]
 
 
 @router.post("/{conversation_id}/messages", response_model=MessageOut, status_code=status.HTTP_201_CREATED)
@@ -384,5 +416,6 @@ async def accept_invite(
 ) -> ConversationOut:
     conversation = await service.accept_invite(token=token, user=current_user)
     await service.session.commit()
-    await service.session.refresh(conversation)
-    return _conversation_to_schema(conversation)
+    hydrated = await _fetch_conversation_with_members(service.session, conversation.id)
+    block_state = (await service.get_block_states(current_user, [hydrated])).get(hydrated.id)
+    return _conversation_to_schema(hydrated, block_state=block_state)

@@ -1,112 +1,113 @@
 // src/services/messages.js
 import { api } from '@/utils/api'
 
-/**
- * Normalise une réponse censée être un tableau.
- * @param {*} data
- * @returns {Array<any>}
- */
 function asArray(data) {
   return Array.isArray(data) ? data : []
 }
 
-/** ****************************************************************************
- * CONVERSATIONS
- **************************************************************************** */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-/**
- * Liste les conversations.
- * @param {Object} [params]
- * @returns {Promise<Array<any>>}
- */
+function coerceUuid(value) {
+  if (!value) return null
+  const candidate = String(value).trim()
+  return UUID_PATTERN.test(candidate) ? candidate : null
+}
+
+function normalizeAttachmentRefs(raw) {
+  if (!raw) return []
+  const list = Array.isArray(raw) ? raw : [raw]
+  return list
+    .map((entry) => {
+      if (!entry) return null
+      if (typeof entry === 'string') {
+        return { upload_token: entry }
+      }
+      if (typeof entry === 'object' && entry.upload_token) {
+        return { upload_token: entry.upload_token }
+      }
+      return null
+    })
+    .filter(Boolean)
+}
+
+function normalizeMessagePayload(input = {}) {
+  const payload = typeof input === 'string' ? { content: input } : { ...input }
+  const body = {
+    content: typeof payload.content === 'string' ? payload.content : '',
+    message_type: payload.message_type || payload.type || 'text',
+  }
+  const attachments = normalizeAttachmentRefs(payload.attachments || payload.attachment_tokens)
+  if (attachments.length) {
+    body.attachments = attachments
+  }
+  const replyId = coerceUuid(payload.reply_to_message_id || payload.reply_to)
+  if (replyId) {
+    body.reply_to_message_id = replyId
+  }
+  const forwardId = coerceUuid(payload.forward_message_id || payload.forward_from)
+  if (forwardId) {
+    body.forward_message_id = forwardId
+  }
+  return body
+}
+
+function normalizeContentPayload(value) {
+  if (typeof value === 'string') {
+    return { content: value }
+  }
+  if (value && typeof value === 'object' && typeof value.content === 'string') {
+    return { content: value.content }
+  }
+  return { content: '' }
+}
+
 export async function listConversations(params = {}) {
-  const { data } = await api.get('/conversations/', { params })
+  const { data } = await api.get('/conversations', { params })
   return asArray(data)
 }
 
-/**
- * Crée une conversation.
- * @param {Object} payload
- *  - selon ton backend: { titre } ou { title }, { participants|participant_ids }, { type|is_group }
- * @returns {Promise<any>}
- */
 export async function createConversation(payload) {
-  const { data } = await api.post('/conversations/', payload)
+  const { data } = await api.post('/conversations', payload)
   return data
 }
 
-/** Aliases “fetch*” pour compat compat */
 export async function fetchConversations(params = {}) {
   return listConversations(params)
 }
 
-/** ****************************************************************************
- * MESSAGES
- **************************************************************************** */
-
-/**
- * Récupère les messages d’une conversation.
- * @param {string|number} conversationId
- * @param {Object} [params] - ex: { limit, before, after }
- * @returns {Promise<Array<any>>}
- */
 export async function getConversationMessages(conversationId, params = {}) {
   const cid = encodeURIComponent(conversationId)
-  const { data } = await api.get(`/conversations/${cid}/messages/`, { params })
+  const { data } = await api.get(`/conversations/${cid}/messages`, { params })
   return asArray(data)
 }
 
-/** Alias “fetchMessages” */
 export async function fetchMessages(conversationId, params = {}) {
   return getConversationMessages(conversationId, params)
 }
 
-/**
- * Envoie un message dans une conversation.
- * @param {string|number} conversationId
- * @param {string} content - attendu par ton API: `contenu_chiffre`
- * @returns {Promise<any>}
- */
-export async function sendMessage(conversationId, content) {
+export async function sendMessage(conversationId, payload) {
   const cid = encodeURIComponent(conversationId)
-  const { data } = await api.post(`/conversations/${cid}/messages/`, {
-    contenu_chiffre: content,
-  })
+  const body = normalizeMessagePayload(payload)
+  const { data } = await api.post(`/conversations/${cid}/messages`, body)
   return data
 }
 
-/** Alias “sendConversationMessage” */
-export async function sendConversationMessage(conversationId, content) {
-  return sendMessage(conversationId, content)
+export async function sendConversationMessage(conversationId, payload) {
+  return sendMessage(conversationId, payload)
 }
 
-/**
- * Met à jour un message existant.
- * @param {string|number} conversationId
- * @param {string|number} messageId
- * @param {string} content
- * @returns {Promise<any>}
- */
-export async function updateMessage(conversationId, messageId, content) {
+export async function updateMessage(conversationId, messageId, payload) {
   const cid = encodeURIComponent(conversationId)
   const mid = encodeURIComponent(messageId)
-  const { data } = await api.put(`/conversations/${cid}/messages/${mid}`, {
-    contenu_chiffre: content,
-  })
+  const body = normalizeContentPayload(payload)
+  const { data } = await api.put(`/conversations/${cid}/messages/${mid}`, body)
   return data
 }
 
-/** Alias “editConversationMessage” */
-export async function editConversationMessage(conversationId, messageId, content) {
-  return updateMessage(conversationId, messageId, content)
+export async function editConversationMessage(conversationId, messageId, payload) {
+  return updateMessage(conversationId, messageId, payload)
 }
 
-/**
- * Supprime un message.
- * @param {string|number} conversationId
- * @param {string|number} messageId
- * @returns {Promise<boolean>}
- */
 export async function deleteMessage(conversationId, messageId) {
   const cid = encodeURIComponent(conversationId)
   const mid = encodeURIComponent(messageId)
@@ -114,7 +115,16 @@ export async function deleteMessage(conversationId, messageId) {
   return true
 }
 
-/** Alias “deleteConversationMessage” */
 export async function deleteConversationMessage(conversationId, messageId) {
   return deleteMessage(conversationId, messageId)
+}
+
+export async function markMessagesRead(conversationId, messageIds = []) {
+  const cid = encodeURIComponent(conversationId)
+  const uniqueIds = Array.isArray(messageIds)
+    ? Array.from(new Set(messageIds.map((id) => coerceUuid(id)).filter(Boolean)))
+    : []
+  const payload = uniqueIds.length ? { message_ids: uniqueIds } : {}
+  await api.post(`/conversations/${cid}/read`, payload)
+  return true
 }

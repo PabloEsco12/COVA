@@ -50,6 +50,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/utils/api'
+import { clearSession } from '@/services/auth'
 import CustomModal from '@/components/ui/CustomModal.vue'
 
 const loadingDelete = ref(false)
@@ -73,7 +74,7 @@ async function confirmDelete() {
   loadingDelete.value = true
   try {
     await api.delete('/me', { data: { password: deletePassword.value } })
-    localStorage.clear()
+    clearSession()
     router.push('/login')
   } catch (e) {
     deleteError.value =

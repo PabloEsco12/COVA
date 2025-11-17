@@ -37,13 +37,13 @@
                 @error="onAvatarError"
               />
               <div v-else class="avatar-hero placeholder d-flex align-items-center justify-content-center">
-                <i class="bi bi-shield-lock text-white-50"></i>
+                {{ heroInitials }}
               </div>
               <div class="flex-grow-1">
                 <div class="text-white-50 small mb-1">{{ greeting }}</div>
                 <h2 class="m-0 fw-bold text-white">Bienvenue, {{ pseudo }} !</h2>
                 <div class="text-white-75 mt-1">
-                  Messagerie securisee, simple et reactive pour votre equipe.
+                  Messagerie sécurisée, simple et réactive pour votre équipe.
                 </div>
               </div>
               <div class="hero-actions d-flex gap-2 flex-wrap">
@@ -82,6 +82,40 @@
                     <div class="tile-value">{{ tile.value }}</div>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-12" v-if="organization">
+          <div
+            class="card organization-highlight"
+            :class="{ 'organization-highlight--admin': canManageOrganization }"
+          >
+            <div class="card-body d-flex flex-wrap align-items-center gap-3">
+              <div class="flex-grow-1">
+                <div class="text-muted small">Organisation</div>
+                <h5 class="mb-1">{{ organization.name }}</h5>
+                <div class="text-muted small">
+                  {{ organization.member_count }} membres • {{ organization.admin_count }} administrateurs
+                </div>
+              </div>
+              <div class="text-center">
+                <div class="text-muted small">Votre rôle</div>
+                <span class="badge" :class="organizationRoleBadgeClass">
+                  {{ organizationRoleText(organization.membership.role) }}
+                </span>
+              </div>
+              <router-link
+                v-if="canManageOrganization"
+                to="/dashboard/settings"
+                class="btn btn-outline-primary btn-sm"
+              >
+                <i class="bi bi-gear me-1"></i>
+                Gérer les administrateurs
+              </router-link>
+              <div v-else class="text-muted small">
+                Contactez un administrateur pour modifier les accès.
               </div>
             </div>
           </div>
@@ -217,9 +251,10 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { api } from '@/utils/api'
+import { api, backendBase } from '@/utils/api'
+import { computeAvatarInitials, normalizeAvatarUrl } from '@/utils/profile'
 
 const router = useRouter()
 
@@ -231,7 +266,13 @@ const apiOk = ref(false)
 const overview = ref(null)
 
 const pseudo = ref(localStorage.getItem('pseudo') || 'Utilisateur')
-const avatarUrl = ref(localStorage.getItem('avatar_url') || null)
+const avatarUrl = ref(normalizeAvatarUrl(localStorage.getItem('avatar_url'), { baseUrl: backendBase }))
+const heroInitials = computed(() =>
+  computeAvatarInitials({
+    displayName: pseudo.value,
+    fallback: 'C',
+  }),
+)
 const greeting = ref('Bonjour')
 
 const defaultStats = {
@@ -256,6 +297,10 @@ const stats = computed(() => overview.value?.stats ?? defaultStats)
 const security = computed(() => overview.value?.security ?? defaultSecurity)
 const recentConversations = computed(() => overview.value?.recent_conversations ?? [])
 const recommendations = computed(() => security.value.recommendations ?? [])
+const organization = computed(() => overview.value?.organization ?? null)
+const organizationMembership = computed(() => organization.value?.membership ?? null)
+const canManageOrganization = computed(() => Boolean(organizationMembership.value?.can_manage_admins))
+const organizationRoleBadgeClass = computed(() => badgeClassForRole(organizationMembership.value?.role))
 
 const tiles = computed(() => {
   const snapshot = stats.value
@@ -306,7 +351,16 @@ const lastDeviceSeenLabel = computed(() => {
 
 onMounted(async () => {
   greeting.value = computeGreeting()
+  if (typeof window !== 'undefined') {
+    window.addEventListener('cova:profile-update', handleProfileUpdate)
+  }
   await fetchOverview()
+})
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('cova:profile-update', handleProfileUpdate)
+  }
 })
 
 async function fetchOverview(options = {}) {
@@ -329,10 +383,18 @@ async function fetchOverview(options = {}) {
         localStorage.setItem('pseudo', nextPseudo)
       } catch {}
     }
-    if (data.profile?.avatar_url) {
-      avatarUrl.value = data.profile.avatar_url
+    if (Object.prototype.hasOwnProperty.call(data.profile || {}, 'avatar_url')) {
+      const normalized = normalizeAvatarUrl(data.profile.avatar_url, {
+        baseUrl: backendBase,
+        cacheBust: true,
+      })
+      avatarUrl.value = normalized
       try {
-        localStorage.setItem('avatar_url', data.profile.avatar_url)
+        if (normalized) {
+          localStorage.setItem('avatar_url', normalized)
+        } else {
+          localStorage.removeItem('avatar_url')
+        }
       } catch {}
     }
   } catch (err) {
@@ -377,11 +439,51 @@ function goToConversation(id) {
   router.push({ path: '/dashboard/messages', query: { conversation: id } })
 }
 
+function handleProfileUpdate(event) {
+  const payload = event?.detail || {}
+  if (Object.prototype.hasOwnProperty.call(payload, 'display_name')) {
+    const next = (payload.display_name || '').trim()
+    pseudo.value = next || 'Utilisateur'
+    try {
+      if (next) {
+        localStorage.setItem('pseudo', next)
+      } else {
+        localStorage.removeItem('pseudo')
+      }
+    } catch {}
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'avatar_url')) {
+    const nextAvatar = normalizeAvatarUrl(payload.avatar_url || null, { baseUrl: backendBase })
+    avatarUrl.value = nextAvatar
+    try {
+      if (nextAvatar) {
+        localStorage.setItem('avatar_url', nextAvatar)
+      } else {
+        localStorage.removeItem('avatar_url')
+      }
+    } catch {}
+  }
+}
+
 function onAvatarError() {
   avatarUrl.value = null
   try {
     localStorage.removeItem('avatar_url')
   } catch {}
+}
+
+function organizationRoleText(role) {
+  if (role === 'owner') return 'Propriétaire'
+  if (role === 'admin') return 'Administrateur'
+  if (role === 'auditor') return 'Auditeur'
+  return 'Membre'
+}
+
+function badgeClassForRole(role) {
+  if (role === 'owner') return 'bg-dark text-white'
+  if (role === 'admin') return 'bg-primary-subtle text-primary'
+  if (role === 'auditor') return 'bg-info-subtle text-info'
+  return 'bg-light text-dark'
 }
 
 function formatRelative(value) {
@@ -489,6 +591,9 @@ function extractErrorMessage(err) {
 .avatar-hero.placeholder {
   background: rgba(255, 255, 255, 0.15);
   font-size: 1.6rem;
+  color: #fff;
+  font-weight: 600;
+  text-transform: uppercase;
 }
 
 .text-white-75 {
@@ -526,6 +631,16 @@ function extractErrorMessage(err) {
   font-size: 1.4rem;
   font-weight: 700;
   color: #1b2b59;
+}
+
+.organization-highlight {
+  border-left: 4px solid #94a3b8;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.organization-highlight--admin {
+  border-left-color: #0d6efd;
+  box-shadow: 0 8px 24px rgba(13, 110, 253, 0.15);
 }
 .status-banner {
   border-radius: 16px;
