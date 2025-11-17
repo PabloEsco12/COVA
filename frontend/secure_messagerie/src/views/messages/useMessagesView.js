@@ -360,20 +360,23 @@ export function useMessagesView() {
   function memberPresence(userId) {
     if (!userId) return { status: 'offline', label: STATUS_LABELS.offline, lastSeen: null }
     const conv = selectedConversation.value
-    const members = conv?.members || []
+    if (!conv || !Array.isArray(conv.members)) {
+      return { status: 'offline', label: STATUS_LABELS.offline, lastSeen: null }
+    }
+    const members = conv.members
     const target =
       members.find((member) => member.id === String(userId)) ||
       members.find((member) => member.userId === String(userId))
     if (!target) {
       return { status: 'offline', label: STATUS_LABELS.offline, lastSeen: null }
     }
-    const status = normalizePresenceStatus(target.presence?.status || target.state)
-    const lastSeen =
-      target.presence?.lastSeen || target.presence?.last_seen ? target.presence.lastSeen || target.presence.last_seen : null
+    const rawStatus = target.presence?.status || target.state
+    const status = normalizePresenceStatus(rawStatus)
+    const lastSeenRaw = target.presence?.lastSeen || target.presence?.last_seen || target.lastSeen || target.last_seen
     return {
       status,
       label: STATUS_LABELS[status] || STATUS_LABELS.offline,
-      lastSeen: lastSeen ? new Date(lastSeen) : null,
+      lastSeen: lastSeenRaw ? new Date(lastSeenRaw) : null,
     }
   }
 
@@ -642,7 +645,7 @@ export function useMessagesView() {
 
 
 
-  async function loadMessages({ conversationId = selectedConversationId.value, reset = false, before = null, after = null, limit = 50 } = {}) {
+async function loadMessages({ conversationId = selectedConversationId.value, reset = false, before = null, after = null, limit = 50 } = {}) {
     if (!conversationId) return
     if (before && after) return
     if (reset) {
@@ -2166,6 +2169,7 @@ export function useMessagesView() {
     loadingInvites,
     loadingMessages,
     loadingOlderMessages,
+    loadOlderMessages,
     loadMessages,
     loadUnreadSummary,
     mapAttachmentPayload,
@@ -2181,6 +2185,7 @@ export function useMessagesView() {
     messages,
     messageScroller,
     messageSearch,
+    showSearchPanel,
     messageSecurityLabel,
     messageSecurityTooltip,
     messageStatusClass,
@@ -2264,6 +2269,27 @@ export function useMessagesView() {
     updateMemberRole,
     updatePaginationFromHeaders,
     uploadAttachmentFile
+  }
+}
+
+async function loadOlderMessages() {
+  if (
+    loadingOlderMessages.value ||
+    !selectedConversationId.value ||
+    !pagination.hasMoreBefore ||
+    !pagination.beforeCursor
+  ) {
+    return
+  }
+  loadingOlderMessages.value = true
+  try {
+    await loadMessages({
+      conversationId: selectedConversationId.value,
+      before: pagination.beforeCursor,
+      limit: 50,
+    })
+  } finally {
+    loadingOlderMessages.value = false
   }
 }
 
