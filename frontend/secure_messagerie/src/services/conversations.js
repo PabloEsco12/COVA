@@ -94,7 +94,7 @@ export async function uploadAttachment(conversationId, file, { encryption, onUpl
     formData.append('encryption', JSON.stringify(encryption))
   }
   const { data } = await api.post(`${CONVERSATIONS_BASE}/${conversationId}/attachments`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    // Let Axios set the correct multipart boundary automatically.
     onUploadProgress,
   })
   return data

@@ -180,10 +180,13 @@
 
           <div v-if="message.attachments?.length" class="msg-attachments">
             <article v-for="attachment in message.attachments" :key="attachment.id" class="msg-attachment">
-              <div>
+              <div class="msg-attachment__icon" aria-hidden="true">
+                <i :class="attachmentIconClass(attachment)"></i>
+              </div>
+              <div class="msg-attachment__body">
                 <strong>{{ attachment.fileName || 'Pièce jointe' }}</strong>
                 <p class="small mb-0 text-muted">
-                  {{ attachment.mimeType || 'Fichier' }} · {{ callFormatter('formatFileSize', attachment.sizeBytes) }}
+                  {{ attachmentDescription(attachment) }}
                 </p>
               </div>
               <button
@@ -336,6 +339,66 @@ function callFormatter(name, ...args) {
   }
   const fallback = defaultFormatters[name]
   return typeof fallback === 'function' ? fallback(...args) : ''
+}
+
+const ATTACHMENT_TYPE_META = [
+  {
+    label: 'Document PDF',
+    icon: 'bi bi-filetype-pdf',
+    match: (type, name) => type.includes('pdf') || name.endsWith('.pdf'),
+  },
+  {
+    label: 'Document Word',
+    icon: 'bi bi-filetype-docx',
+    match: (type, name) => type.includes('word') || name.endsWith('.doc') || name.endsWith('.docx'),
+  },
+  {
+    label: 'Classeur Excel',
+    icon: 'bi bi-filetype-xlsx',
+    match: (type, name) => type.includes('sheet') || name.endsWith('.xls') || name.endsWith('.xlsx'),
+  },
+  {
+    label: 'Présentation',
+    icon: 'bi bi-filetype-ppt',
+    match: (type, name) => type.includes('presentation') || name.endsWith('.ppt') || name.endsWith('.pptx'),
+  },
+  {
+    label: 'Image',
+    icon: 'bi bi-file-image',
+    match: (type, name) => type.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(name),
+  },
+  {
+    label: 'Archive',
+    icon: 'bi bi-file-zip',
+    match: (type, name) => type.includes('zip') || /\.(zip|rar|7z|tar|gz)$/i.test(name),
+  },
+  {
+    label: 'Texte',
+    icon: 'bi bi-file-text',
+    match: (type, name) => type.includes('text') || name.endsWith('.txt'),
+  },
+  {
+    label: 'Vidéo',
+    icon: 'bi bi-file-earmark-play',
+    match: (type, name) => type.startsWith('video/') || /\.(mp4|mov|avi|mkv)$/i.test(name),
+  },
+]
+
+function attachmentMeta(attachment) {
+  const type = String(attachment?.mimeType || '').toLowerCase()
+  const name = String(attachment?.fileName || '').toLowerCase()
+  const meta = ATTACHMENT_TYPE_META.find((entry) => entry.match(type, name))
+  return meta || { label: attachment?.mimeType || 'Fichier', icon: 'bi bi-paperclip' }
+}
+
+function attachmentIconClass(attachment) {
+  return attachmentMeta(attachment).icon
+}
+
+function attachmentDescription(attachment) {
+  const meta = attachmentMeta(attachment)
+  const size = callFormatter('formatFileSize', attachment.sizeBytes)
+  return size ? `${meta.label} · ${size}` : meta.label
 }
 
 onMounted(scrollToBottom)

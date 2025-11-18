@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -36,14 +38,23 @@ def create_app() -> FastAPI:
     media_dir.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(media_dir)), name="static")
 
-    if settings.BACKEND_CORS_ORIGINS:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=[origin.rstrip("/") for origin in settings.BACKEND_CORS_ORIGINS],
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
+    cors_origins = [origin.rstrip("/") for origin in settings.BACKEND_CORS_ORIGINS or [settings.FRONTEND_ORIGIN]]
+    server_logger = logging.getLogger("uvicorn.error")
+    server_logger.info("CORS origins: %s", cors_origins)
+    server_logger.info(
+        "Storage config -> endpoint=%s bucket=%s access_key=%s",
+        settings.STORAGE_ENDPOINT,
+        settings.STORAGE_BUCKET,
+        settings.STORAGE_ACCESS_KEY,
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_origin_regex=r"https?://localhost(:\d+)?$",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)
     app.include_router(ws_api_router, prefix=settings.API_V1_PREFIX)
@@ -105,4 +116,3 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-

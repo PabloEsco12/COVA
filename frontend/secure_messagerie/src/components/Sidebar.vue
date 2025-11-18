@@ -23,18 +23,20 @@
         <div v-else class="avatar-fallback">{{ initials }}</div>
       </div>
       <div class="profile-details">
-        <div class="d-flex align-items-center justify-content-between">
-          <h6 class="mb-0">{{ pseudo }}</h6>
+        <div class="profile-heading">
+          <h6 class="profile-name mb-0" :title="pseudo">{{ pseudo }}</h6>
           <span class="badge encryption-badge">
             <i class="bi bi-lock-fill me-1"></i>
             Chiffré
           </span>
         </div>
-        <p class="profile-status-line mb-1">
+        <p class="profile-status-line">
           <span class="status-dot" :class="`status-${userStatusCode}`"></span>
-          <span>{{ userStatusLabel }}</span>
+          <span class="status-text">{{ userStatusLabel }}</span>
         </p>
-        <small class="text-muted">{{ isOnline ? 'Connexion sécurisée' : 'Connexion instable' }}</small>
+        <p class="profile-connection" :class="{ 'is-offline': !isOnline }">
+          {{ isOnline ? 'Connexion sécurisée' : 'Connexion instable' }}
+        </p>
       </div>
     </section>
 
@@ -94,15 +96,28 @@
           Rafraîchir
         </button>
       </div>
-      <div class="insights-grid mt-3">
-        <article v-for="card in insightCards" :key="card.id" class="insight-card">
-          <div class="insight-icon" :class="`variant-${card.variant}`">
-            <i :class="card.icon"></i>
+      <div class="insights-summary mt-3">
+        <div
+          v-for="highlight in insightHighlights"
+          :key="highlight.id"
+          class="insight-highlight"
+        >
+          <p class="highlight-label">{{ highlight.label }}</p>
+          <p class="highlight-value">{{ highlight.value }}</p>
+          <small>{{ highlight.hint }}</small>
+        </div>
+      </div>
+      <div class="insight-actions mt-3">
+        <article v-for="action in insightRecommendations" :key="action.id" class="insight-action">
+          <div class="insight-action__icon" :class="`variant-${action.variant || 'info'}`">
+            <i :class="action.icon"></i>
           </div>
-          <div class="insight-body">
-            <p class="insight-label mb-1">{{ card.label }}</p>
-            <p class="insight-value mb-1">{{ card.value }}</p>
-            <small class="text-muted">{{ card.hint }}</small>
+          <div class="insight-action__body">
+            <p class="insight-action__title mb-1">
+              {{ action.title }}
+              <span v-if="action.badge" class="insight-action__badge">{{ action.badge }}</span>
+            </p>
+            <small class="insight-action__description">{{ action.description }}</small>
           </div>
         </article>
       </div>
@@ -401,45 +416,91 @@ function formatStatNumber(value) {
   return numberFormatter.format(safe)
 }
 
-const insightCards = computed(() => {
+const insightHighlights = computed(() => {
   const totalUnread = Number(unreadCount.value) || 0
-  const activeConvs = activeConversationsCount.value
-  const totpActive = !!securitySettings.value.totpEnabled
-  const online = !!isOnline.value
+  const pending = Number(pendingContacts.value) || 0
+  const activeConvs = Number(activeConversationsCount.value) || 0
   return [
     {
       id: 'inbox',
-      label: 'Messages non lus',
+      label: 'Messages',
       value: formatStatNumber(totalUnread),
-      hint: totalUnread ? 'Traitez vos priorités confidentielles' : 'Vous êtes à jour',
-      icon: 'bi bi-chat-dots-fill',
-      variant: totalUnread ? 'warning' : 'success',
+      hint: totalUnread ? `${totalUnread} à traiter` : 'Tous lus',
     },
     {
-      id: 'conversations',
-      label: 'Conversations suivies',
+      id: 'invites',
+      label: 'Invitations',
+      value: formatStatNumber(pending),
+      hint: pending ? 'Contacts à valider' : 'Aucune demande',
+    },
+    {
+      id: 'threads',
+      label: 'Conversations',
       value: formatStatNumber(activeConvs),
-      hint: activeConvs ? 'Conversations avec activité récente' : 'Démarrez un échange sécurisé',
-      icon: 'bi bi-people-fill',
-      variant: activeConvs ? 'info' : 'muted',
-    },
-    {
-      id: 'security',
-      label: 'Protection',
-      value: totpActive ? 'MFA actif' : 'MFA inactif',
-      hint: totpActive ? 'Codes requis à chaque connexion' : 'Activez TOTP pour verrouiller votre compte',
-      icon: 'bi bi-shield-lock-fill',
-      variant: totpActive ? 'success' : 'danger',
-    },
-    {
-      id: 'connection',
-      label: 'Connexion',
-      value: online ? 'En ligne' : 'Hors ligne',
-      hint: online ? 'Canal chiffré opérationnel' : 'Certaines alertes seront différées',
-      icon: online ? 'bi bi-wifi' : 'bi bi-wifi-off',
-      variant: online ? 'info' : 'muted',
+      hint: activeConvs ? 'Suivi actif' : 'Aucun fil suivi',
     },
   ]
+})
+
+const insightRecommendations = computed(() => {
+  const items = []
+  const totalUnread = Number(unreadCount.value) || 0
+  const pending = Number(pendingContacts.value) || 0
+  const totpActive = !!securitySettings.value.totpEnabled
+  const online = !!isOnline.value
+
+  if (!totpActive) {
+    items.push({
+      id: 'totp',
+      icon: 'bi bi-shield-exclamation',
+      title: 'Activez MFA',
+      description: 'Ajoutez une vérification TOTP pour sécuriser chaque connexion.',
+      variant: 'danger',
+    })
+  }
+
+  if (pending > 0) {
+    items.push({
+      id: 'pending',
+      icon: 'bi bi-people',
+      title: 'Invitations en attente',
+      description: 'Approuvez ou refusez les nouvelles demandes de contact.',
+      badge: pending > 99 ? '99+' : String(pending),
+      variant: 'warning',
+    })
+  }
+
+  if (totalUnread > 0) {
+    items.push({
+      id: 'unread',
+      icon: 'bi bi-chat-left-text',
+      title: 'Messages prioritaires',
+      description: totalUnread === 1 ? '1 message attend votre réponse.' : `${totalUnread} messages attendent votre réponse.`,
+      variant: 'info',
+    })
+  }
+
+  if (!online) {
+    items.push({
+      id: 'offline',
+      icon: 'bi bi-wifi-off',
+      title: 'Connexion instable',
+      description: 'Certaines alertes seront envoyées dès que le canal sera rétabli.',
+      variant: 'muted',
+    })
+  }
+
+  if (!items.length) {
+    items.push({
+      id: 'clear',
+      icon: 'bi bi-check2-circle',
+      title: 'Tout est sécurisé',
+      description: 'Aucune action urgente. Continuez vos échanges en toute confiance.',
+      variant: 'success',
+    })
+  }
+
+  return items.slice(0, 3)
 })
 
 const updateNetworkStatus = () => {
@@ -895,7 +956,8 @@ function formatRelativeTime(dateString) {
 .sidebar-profile {
   display: flex;
   align-items: center;
-  padding: 0.75rem 0.85rem;
+  gap: 0.95rem;
+  padding: 0.85rem;
   border-radius: 16px;
   background-color: rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(6px);
@@ -904,24 +966,82 @@ function formatRelativeTime(dateString) {
 }
 
 .sidebar-light .sidebar-profile {
-  background-color: rgba(255, 255, 255, 0.9);
+  background-color: rgba(255, 255, 255, 0.94);
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
 }
 
 .profile-avatar {
-  margin-right: 0.85rem;
+  flex-shrink: 0;
+  width: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  width: 100%;
+  margin-bottom: 0.35rem;
+}
+
+.profile-name {
+  width: 100%;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.sidebar-dark .profile-name {
+  color: #f8fafc;
 }
 
 .profile-status-line {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.35rem;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   color: #0f172a;
+  line-height: 1.25;
+  margin: 0 0 0.2rem;
 }
 
 .sidebar-dark .profile-status-line {
   color: #e2e8f0;
+}
+
+.status-text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.profile-connection {
+  margin: 0;
+  font-size: 0.78rem;
+  color: rgba(15, 23, 42, 0.7);
+}
+
+.sidebar-dark .profile-connection {
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.profile-connection.is-offline {
+  color: #f97316;
+}
+
+.sidebar-dark .profile-connection.is-offline {
+  color: #fdba74;
 }
 
 .status-dot {
@@ -1106,6 +1226,10 @@ function formatRelativeTime(dateString) {
 
 .quick-link__body {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
 }
 
 .quick-link__label {
@@ -1113,6 +1237,8 @@ function formatRelativeTime(dateString) {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  line-height: 1.3;
+  word-break: break-word;
 }
 
 .quick-link__badge {
@@ -1143,6 +1269,9 @@ function formatRelativeTime(dateString) {
 .quick-link__hint {
   font-size: 0.8rem;
   color: rgba(148, 163, 184, 0.9);
+  display: block;
+  line-height: 1.25;
+  white-space: normal;
 }
 
 .quick-link__chevron {
@@ -1179,72 +1308,149 @@ function formatRelativeTime(dateString) {
   margin-bottom: 0.15rem;
 }
 
-.insights-grid {
+.insights-summary {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 0.9rem;
 }
 
-.insight-card {
-  border-radius: 16px;
-  padding: 0.85rem;
-  background: rgba(15, 23, 42, 0.15);
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  backdrop-filter: blur(6px);
-}
-
-.sidebar-light .insight-card {
-  background: rgba(15, 23, 42, 0.05);
-}
-
-.insight-icon {
-  width: 42px;
-  height: 42px;
+.insight-highlight {
   border-radius: 14px;
+  padding: 0.85rem;
+  background: rgba(15, 23, 42, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-light .insight-highlight {
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.05);
+}
+
+.highlight-label {
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  color: rgba(226, 232, 240, 0.85);
+  margin-bottom: 0.3rem;
+}
+
+.sidebar-light .highlight-label {
+  color: rgba(71, 85, 105, 0.85);
+}
+
+.highlight-value {
+  font-size: 1.45rem;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 0.2rem;
+}
+
+.sidebar-light .highlight-value {
+  color: #0f172a;
+}
+
+.insight-highlight small {
+  font-size: 0.78rem;
+  color: rgba(226, 232, 240, 0.8);
+}
+
+.sidebar-light .insight-highlight small {
+  color: rgba(71, 85, 105, 0.85);
+}
+
+.insight-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.insight-action {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.sidebar-light .insight-action {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.05);
+}
+
+.insight-action__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.1rem;
+  font-size: 1.2rem;
+  color: #fff;
 }
 
-.insight-icon.variant-success {
-  background: rgba(34, 197, 94, 0.18);
-  color: #22c55e;
+.insight-action__icon.variant-danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
 }
 
-.insight-icon.variant-warning {
-  background: rgba(249, 115, 22, 0.2);
-  color: #fb923c;
+.insight-action__icon.variant-warning {
+  background: linear-gradient(135deg, #f97316, #ea580c);
 }
 
-.insight-icon.variant-info {
-  background: rgba(59, 130, 246, 0.2);
-  color: #60a5fa;
+.insight-action__icon.variant-info {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
 }
 
-.insight-icon.variant-danger {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+.insight-action__icon.variant-muted {
+  background: linear-gradient(135deg, #94a3b8, #64748b);
 }
 
-.insight-icon.variant-muted {
-  background: rgba(148, 163, 184, 0.25);
-  color: rgba(148, 163, 184, 0.9);
+.insight-action__icon.variant-success {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
 }
 
-.insight-label {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  opacity: 0.8;
+.insight-action__body {
+  flex: 1;
+  min-width: 0;
 }
 
-.insight-value {
-  font-size: 1.25rem;
+.insight-action__title {
   font-weight: 600;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   margin: 0;
+}
+
+.sidebar-light .insight-action__title {
+  color: #0f172a;
+}
+
+.insight-action__description {
+  color: rgba(226, 232, 240, 0.82);
+  line-height: 1.3;
+}
+
+.sidebar-light .insight-action__description {
+  color: rgba(71, 85, 105, 0.85);
+}
+
+.insight-action__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+}
+
+.sidebar-light .insight-action__badge {
+  background: rgba(15, 23, 42, 0.08);
+  color: #0f172a;
 }
 
 .insight-activity {

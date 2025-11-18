@@ -1,4 +1,4 @@
-"""Application settings for the FastAPI v2 backend."""
+﻿"""Application settings for the FastAPI v2 backend."""
 
 from __future__ import annotations
 
@@ -49,6 +49,7 @@ class Settings(BaseSettings):
 
     # Object storage (attachments)
     STORAGE_ENDPOINT: str | None = None
+    STORAGE_PUBLIC_ENDPOINT: str | None = None
     STORAGE_ACCESS_KEY: str | None = None
     STORAGE_SECRET_KEY: str | None = None
     STORAGE_REGION: str | None = None
@@ -78,7 +79,7 @@ class Settings(BaseSettings):
     # CORS / Frontend
     BACKEND_CORS_ORIGINS: List[str] = Field(default_factory=list)
 
-    # Redis (pour temps réel ultérieur)
+    # Redis (pour temps reel ulterieur)
     REDIS_URL: str | None = None
 
 
@@ -88,3 +89,4 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+

@@ -27,6 +27,7 @@ class ObjectStorage:
         region: str | None,
         use_ssl: bool,
         force_path_style: bool,
+        public_endpoint_url: str | None = None,
     ) -> None:
         session = boto3.session.Session(
             aws_access_key_id=access_key,
@@ -42,6 +43,14 @@ class ObjectStorage:
             endpoint_url=endpoint_url,
             config=config,
             use_ssl=use_ssl,
+        )
+        signing_endpoint = public_endpoint_url or endpoint_url
+        signing_use_ssl = use_ssl if public_endpoint_url is None else public_endpoint_url.lower().startswith("https://")
+        self.signing_client = session.client(
+            "s3",
+            endpoint_url=signing_endpoint,
+            config=config,
+            use_ssl=signing_use_ssl,
         )
         self.bucket = bucket
 
@@ -65,7 +74,7 @@ class ObjectStorage:
 
     def generate_presigned_url(self, key: str, *, expires_in: int) -> str:
         try:
-            return self.client.generate_presigned_url(
+            return self.signing_client.generate_presigned_url(
                 "get_object",
                 Params={"Bucket": self.bucket, "Key": key},
                 ExpiresIn=expires_in,
@@ -103,6 +112,7 @@ def get_storage() -> ObjectStorage | None:
         region=settings.STORAGE_REGION,
         use_ssl=settings.STORAGE_USE_SSL,
         force_path_style=settings.STORAGE_FORCE_PATH_STYLE,
+        public_endpoint_url=settings.STORAGE_PUBLIC_ENDPOINT,
     )
 
 

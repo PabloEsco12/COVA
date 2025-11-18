@@ -6,6 +6,7 @@ import asyncio
 import json
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from starlette.websockets import WebSocketState
 
 from ...core.redis import RealtimeBroker
 from ...core.security import decode_token
@@ -72,4 +73,9 @@ async def notifications_ws(
             send_task.cancel()
         await pubsub.unsubscribe(channel)
         await pubsub.close()
-        await websocket.close()
+        # Starlette raises if we close an already closed socket. Guard instead.
+        if websocket.application_state != WebSocketState.DISCONNECTED:
+            try:
+                await websocket.close()
+            except RuntimeError:
+                pass
