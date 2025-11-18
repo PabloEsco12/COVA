@@ -291,6 +291,12 @@ const quickLinks = computed(() => [
     hint: 'S\u00e9curit\u00e9 & alertes',
     icon: 'bi bi-gear-fill',
   },
+  {
+    to: '/dashboard/faq',
+    label: 'FAQ',
+    hint: 'Conseils & support',
+    icon: 'bi bi-question-circle-fill',
+  },
 ])
 
 const formattedToday = computed(() =>
@@ -875,8 +881,8 @@ function formatRelativeTime(dateString) {
 
 <style scoped>
 .sidebar {
-  width: clamp(200px, 19vw, 240px);
-  min-width: 200px;
+  width: clamp(240px, 20vw, 280px);
+  min-width: 240px;
   position: sticky;
   top: 1.5rem;
   height: calc(100vh - 3rem);
