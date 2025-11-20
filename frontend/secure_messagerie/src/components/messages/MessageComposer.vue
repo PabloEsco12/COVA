@@ -1,209 +1,267 @@
 <template>
-  <form @submit.prevent="handleSubmit" class="chat-input px-3 py-2">
-    <div class="input-group">
-      <!-- Mono-ligne -->
-      <input
-        v-if="!multiline"
-        ref="inputEl"
-        v-model="text"
-        type="text"
-        class="form-control"
-        :placeholder="placeholder"
-        :disabled="disabled || sending"
-        :maxlength="maxLength || null"
-        :aria-label="ariaLabel"
-        autocomplete="off"
-        @keydown.enter.exact.prevent="handleSubmit"
-        @input="onInput"
-        @focus="onFocus"
-        @blur="onBlur"
-        @compositionstart="onCompositionStart"
-        @compositionend="onCompositionEnd"
-      />
+  <div
+    v-if="blockedInfo"
+    class="msg-composer msg-composer--disabled"
+  >
+    <div class="msg-blocked-banner__icon">
+      <i :class="blockedInfo.state === 'blocked_by_other' ? 'bi bi-shield-lock-fill' : 'bi bi-shield-check'" aria-hidden="true"></i>
+    </div>
+    <div class="msg-blocked-banner__body">
+      <p class="mb-1 fw-semibold">{{ blockedInfo.title }}</p>
+      <p class="mb-0 text-muted">{{ blockedInfo.message }}</p>
+    </div>
+    <router-link to="/dashboard/contacts" class="btn btn-outline-primary btn-sm">
+      Gérer les contacts
+    </router-link>
+  </div>
 
-      <!-- Multiligne -->
-      <textarea
-        v-else
-        ref="inputEl"
-        v-model="text"
-        class="form-control"
-        :rows="rows"
-        :placeholder="placeholder"
-        :disabled="disabled || sending"
-        :maxlength="maxLength || null"
-        :aria-label="ariaLabel"
-        autocomplete="off"
-        @keydown.enter.exact="onEnterInTextarea"
-        @keydown.enter.ctrl.exact.prevent="handleSubmit"
-        @input="onInput"
-        @focus="onFocus"
-        @blur="onBlur"
-        @compositionstart="onCompositionStart"
-        @compositionend="onCompositionEnd"
-      ></textarea>
+  <form v-else class="msg-composer" @submit.prevent="sendMessage">
+    <div class="msg-composer__pickers">
+      <div v-if="showPicker" class="msg-picker" role="menu" aria-label="Choisir un contenu">
+        <div class="msg-picker__header">
+          <div class="msg-picker__tabs">
+            <button type="button" :class="{ active: pickerMode === 'emoji' }" @click="setPickerMode('emoji')">Emoji</button>
+            <button type="button" :class="{ active: pickerMode === 'gif' }" @click="setPickerMode('gif')">GIF</button>
+          </div>
+          <input
+            v-if="pickerMode === 'emoji'"
+            :value="emojiSearch"
+            type="search"
+            class="msg-picker__search"
+            placeholder="Rechercher un emoji"
+            @input="onEmojiSearch($event.target.value)"
+          />
+          <input
+            v-else-if="gifSearchAvailable"
+            :value="gifSearch"
+            type="search"
+            class="msg-picker__search"
+            placeholder="Rechercher un GIF"
+            @input="onGifSearch($event.target.value)"
+          />
+          <p v-else class="msg-picker__hint">Bibliothèque locale de GIFs prête à l'emploi.</p>
+        </div>
+        <div class="msg-picker__body" v-if="pickerMode === 'emoji'">
+          <div
+            v-for="section in filteredEmojiSections"
+            :key="section.id"
+            class="msg-picker__section"
+          >
+            <p class="msg-picker__section-title">{{ section.label }}</p>
+            <div class="msg-picker__grid">
+              <button
+                type="button"
+                v-for="emoji in section.items"
+                :key="`${section.id}-${emoji}`"
+                @click="addEmoji(emoji)"
+              >
+                {{ emoji }}
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="msg-picker__body msg-picker__body--gifs" v-else>
+          <button type="button" v-for="gif in displayedGifs" :key="gif.url" @click="insertGif(gif)">
+            <img :src="gif.preview || gif.url" :alt="gif.label" />
+            <span>{{ gif.label }}</span>
+          </button>
+          <p v-if="gifError && gifSearchAvailable && !loadingGifs" class="msg-picker__error">{{ gifError }}</p>
+          <div v-if="loadingGifs" class="msg-picker__loading">
+            <span class="spinner-border spinner-border-sm me-2"></span>
+            Chargement…
+          </div>
+        </div>
+      </div>
+    </div>
 
-      <button
-        class="btn btn-primary"
-        type="submit"
-        :disabled="disabled || sending || !textTrimmed"
-        :title="sendTitle"
-        :aria-label="sendTitle"
-      >
-        <i class="bi bi-send" aria-hidden="true"></i>
+    <input :ref="attachmentInput" class="visually-hidden" type="file" multiple @change="onAttachmentChange" />
+    <textarea
+      :value="messageInput"
+      class="form-control"
+      rows="2"
+      placeholder="Ecrire un message sécurisé."
+      :disabled="sending"
+      @keydown.enter.exact.prevent="sendMessage"
+      @input="handleComposerInput"
+      @blur="handleComposerBlur"
+    ></textarea>
+
+    <div v-if="pendingAttachments.length && !isEditingMessage" class="msg-composer__attachments">
+      <article v-for="attachment in pendingAttachments" :key="attachment.id" class="msg-composer__attachment">
+        <div>
+          <strong>{{ attachment.name }}</strong>
+          <p class="small mb-0 text-muted">
+            {{ formatFileSize(attachment.size) }}
+            <span v-if="attachment.status === 'uploading'"> · {{ attachment.progress || 0 }}%</span>
+            <span v-if="attachment.status === 'error'" class="text-danger"> · {{ attachment.error }}</span>
+          </p>
+        </div>
+        <div class="msg-composer__attachment-actions">
+          <span v-if="attachment.status === 'uploading'" class="msg-panel__pill">Envoi…</span>
+          <span v-else-if="attachment.status === 'ready'" class="msg-panel__pill ok">Prête</span>
+          <button type="button" class="btn btn-link p-0" @click="removeAttachment(attachment.id)">Retirer</button>
+        </div>
+      </article>
+    </div>
+    <p v-if="attachmentError" class="msg-alert mb-2">{{ attachmentError }}</p>
+
+    <div v-if="hasComposerContext" class="msg-composer__context">
+      <div>
+        <template v-if="isEditingMessage">
+          <strong>Modification du message</strong>
+        </template>
+        <template v-else-if="composerState.replyTo">
+          <strong>Réponse à {{ composerState.replyTo.displayName || composerState.replyTo.authorDisplayName || 'Participant' }}</strong>
+          <p class="small mb-0 text-muted">
+            {{ messagePreviewText(composerState.replyTo) }}
+          </p>
+        </template>
+        <template v-else-if="composerState.forwardFrom">
+          <strong>Transfert</strong>
+          <p class="small mb-0 text-muted">
+            {{ messagePreviewText(composerState.forwardFrom) }}
+          </p>
+        </template>
+      </div>
+      <button type="button" class="btn btn-link p-0" @click="cancelComposerContext">Annuler</button>
+    </div>
+
+    <p v-if="typingIndicatorText" class="msg-typing-indicator">
+      <i class="bi bi-pencil" aria-hidden="true"></i>
+      <span>{{ typingIndicatorText }}</span>
+    </p>
+
+    <div class="msg-composer__footer">
+      <div class="msg-composer__left">
+        <div class="msg-composer__actions">
+          <button
+            type="button"
+            class="msg-icon-btn"
+            @click="triggerAttachmentPicker"
+            :disabled="hasAttachmentInProgress || isEditingMessage"
+            aria-label="Ajouter une pièce jointe"
+          >
+            <i class="bi bi-paperclip"></i>
+          </button>
+          <button type="button" class="msg-icon-btn primary" @click="togglePicker" aria-label="Emoji et GIF">
+            <i class="bi bi-emoji-smile"></i>
+          </button>
+        </div>
+        <small>{{ messageInput.length }}/2000</small>
+      </div>
+      <button class="btn btn-primary" type="submit" :disabled="!canSend || sending">
+        <span v-if="sending" class="spinner-border spinner-border-sm me-2"></span>
+        Envoyer
       </button>
     </div>
   </form>
 </template>
 
 <script setup>
-import { onMounted, ref, watch, computed, nextTick, defineExpose } from 'vue'
-
 const props = defineProps({
-  modelValue: { type: String, default: '' },
-  disabled: { type: Boolean, default: false },
-  placeholder: { type: String, default: 'Ã‰crire un messageâ€¦' },
-  autofocus: { type: Boolean, default: false },
-  maxLength: { type: Number, default: 0 }, // 0 = illimitÃ©
-  multiline: { type: Boolean, default: false },
-  rows: { type: Number, default: 2 },
-  ariaLabel: { type: String, default: 'Zone de saisie du message' },
+  blockedInfo: Object,
+  showPicker: Boolean,
+  pickerMode: String,
+  emojiSearch: String,
+  gifSearch: String,
+  gifSearchAvailable: Boolean,
+  filteredEmojiSections: {
+    type: Array,
+    default: () => [],
+  },
+  displayedGifs: {
+    type: Array,
+    default: () => [],
+  },
+  gifError: String,
+  loadingGifs: Boolean,
+  addEmoji: {
+    type: Function,
+    required: true,
+  },
+  insertGif: {
+    type: Function,
+    required: true,
+  },
+  onEmojiSearch: {
+    type: Function,
+    default: () => {},
+  },
+  onGifSearch: {
+    type: Function,
+    default: () => {},
+  },
+  attachmentInput: Object,
+  onAttachmentChange: {
+    type: Function,
+    required: true,
+  },
+  messageInput: {
+    type: String,
+    default: '',
+  },
+  sending: Boolean,
+  onComposerInput: {
+    type: Function,
+    required: true,
+  },
+  handleComposerBlur: {
+    type: Function,
+    required: true,
+  },
+  pendingAttachments: {
+    type: Array,
+    default: () => [],
+  },
+  isEditingMessage: Boolean,
+  formatFileSize: {
+    type: Function,
+    required: true,
+  },
+  removeAttachment: {
+    type: Function,
+    required: true,
+  },
+  attachmentError: String,
+  hasComposerContext: Boolean,
+  composerState: {
+    type: Object,
+    default: () => ({}),
+  },
+  messagePreviewText: {
+    type: Function,
+    required: true,
+  },
+  cancelComposerContext: {
+    type: Function,
+    required: true,
+  },
+  typingIndicatorText: String,
+  triggerAttachmentPicker: {
+    type: Function,
+    required: true,
+  },
+  hasAttachmentInProgress: Boolean,
+  togglePicker: {
+    type: Function,
+    required: true,
+  },
+  setPickerMode: {
+    type: Function,
+    required: true,
+  },
+  canSend: Boolean,
+  sendMessage: {
+    type: Function,
+    required: true,
+  },
 })
 
-/**
- * Ã‰vÃ©nements Ã©mis :
- * - send: string
- * - typing-start
- * - typing-stop
- */
-const emit = defineEmits(['send', 'typing-start', 'typing-stop', 'update:modelValue'])
+const emit = defineEmits(['update:messageInput'])
 
-const text = ref(props.modelValue)
-const sending = ref(false)
-const composing = ref(false)
-const inputEl = ref(null)
-let lastSubmitTs = 0
-
-/* ----- Utils & labels ----- */
-const textTrimmed = computed(() => text.value.trim())
-const sendTitle = computed(() => (props.multiline ? 'Envoyer (Ctrl+EntrÃ©e)' : 'Envoyer (EntrÃ©e)'))
-
-/* ----- Autofocus ----- */
-onMounted(async () => {
-  if (props.autofocus) {
-    await nextTick()
-    inputEl.value?.focus()
-  }
-})
-
-/* ----- IME (composition) ----- */
-function onCompositionStart() {
-  composing.value = true
+function handleComposerInput(event) {
+  props.onComposerInput(event)
+  const value = event?.target?.value ?? ''
+  emit('update:messageInput', value)
 }
-function onCompositionEnd() {
-  composing.value = false
-}
-
-/* ----- Typing indicators (debounce) ----- */
-let typingTimer = null
-let hasSentTypingStart = false
-const TYPING_IDLE_MS = 3000
-
-function onInput() {
-  emit('update:modelValue', text.value)
-  // DÃ©lenche typing-start une seule fois tant quâ€™on tape
-  if (!hasSentTypingStart && text.value) {
-    emit('typing-start')
-    hasSentTypingStart = true
-  }
-  // Reset du timer -> typing-stop aprÃ¨s inactivitÃ©
-  clearTimeout(typingTimer)
-  typingTimer = setTimeout(() => {
-    if (hasSentTypingStart) {
-      emit('typing-stop')
-      hasSentTypingStart = false
-    }
-  }, TYPING_IDLE_MS)
-}
-
-function onFocus() {
-  // rien de spÃ©cial ici, mais prÃªt si tu veux brancher autre chose
-}
-
-function onBlur() {
-  // Stop typing si on sort du champ
-  clearTimeout(typingTimer)
-  if (hasSentTypingStart) {
-    emit('typing-stop')
-    hasSentTypingStart = false
-  }
-}
-
-/* ----- Envoi ----- */
-async function handleSubmit() {
-  if (props.disabled || sending.value) return
-  const payload = textTrimmed.value
-  if (!payload) return
-  // Ã©vite double envoi ultra-rapide
-  const now = Date.now()
-  if (now - lastSubmitTs < 300) return
-  lastSubmitTs = now
-
-  try {
-    sending.value = true
-    emit('send', payload)
-    text.value = ''
-    emit('update:modelValue', '')
-  } finally {
-    sending.value = false
-    // Forcer typing-stop aprÃ¨s envoi
-    clearTimeout(typingTimer)
-    if (hasSentTypingStart) {
-      emit('typing-stop')
-      hasSentTypingStart = false
-    }
-  }
-}
-
-/* ----- Gestion Enter en multiligne ----- */
-function onEnterInTextarea(e) {
-  if (composing.value) return // ne pas casser lâ€™IME
-  // En multiligne, Enter normal = nouvelle ligne (comportement natif)
-  // donc on ne preventDefault pas ici.
-  // Lâ€™envoi se fait via Ctrl+Enter (gÃ©rÃ© plus haut).
-}
-
-/* ----- Expose mÃ©thodes utiles ----- */
-function focus() {
-  inputEl.value?.focus()
-}
-function blur() {
-  inputEl.value?.blur()
-}
-defineExpose({ focus, blur })
-
-/* ----- SÃ©curitÃ© : si on disable, on sâ€™assure dâ€™envoyer typing-stop ----- */
-watch(
-  () => props.disabled,
-  (v) => {
-    if (v) {
-      clearTimeout(typingTimer)
-      if (hasSentTypingStart) {
-        emit('typing-stop')
-        hasSentTypingStart = false
-      }
-    }
-  },
-)
-
-watch(
-  () => props.modelValue,
-  (value) => {
-    if (value !== text.value) {
-      text.value = value || ''
-    }
-  },
-)
 </script>
-
-<style src="@/assets/styles/messages.css"></style>
-

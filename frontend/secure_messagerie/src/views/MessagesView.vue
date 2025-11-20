@@ -1,4 +1,4 @@
-<template>
+﻿?<template>
 
   <div class="msg-shell">
     <transition-group name="msg-toast" tag="div" class="msg-toast-stack">

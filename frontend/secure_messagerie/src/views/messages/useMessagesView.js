@@ -218,10 +218,10 @@ export function useMessagesView() {
 
   const copiedMessageId = ref(null)
 
-  const reactionPalette = [
-    '\u{1F44D}',
-    '\u{2764}\u{FE0F}',
-    '\u{1F389}',
+const reactionPalette = [
+  '\u{1F44D}',
+  '\u{2764}\u{FE0F}',
+  '\u{1F389}',
     '\u{1F44F}',
     '\u{1F525}',
     '\u{1F604}',
