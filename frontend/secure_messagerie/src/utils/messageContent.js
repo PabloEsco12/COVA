@@ -47,6 +47,18 @@ export function isEmojiOnly(value = '') {
   }
 }
 
+export function mapOptimisticAttachments(list = []) {
+  return list.map((entry) => ({
+    id: entry.id,
+    name: entry.descriptor?.file_name || entry.name || 'Fichier',
+    size: entry.descriptor?.file_size || entry.size || 0,
+    url: entry.descriptor?.upload_url || entry.url || null,
+    status: entry.status || 'ready',
+    descriptor: entry.descriptor || null,
+    mime_type: entry.descriptor?.mime_type || entry.mime_type || '',
+  }))
+}
+
 export function renderRichText(value = '') {
   if (!value) return ''
   const escaped = escapeHtml(value)

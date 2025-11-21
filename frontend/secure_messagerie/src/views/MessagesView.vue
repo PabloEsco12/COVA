@@ -262,6 +262,7 @@ import MessageEmptyState from '@/components/messages/MessageEmptyState.vue'
 import MessageSearchPanel from '@/components/messages/MessageSearchPanel.vue'
 import DeleteMessageModal from '@/components/messages/DeleteMessageModal.vue'
 import CustomModal from '@/components/ui/CustomModal.vue'
+import { useMessageComposer } from '@/composables/useMessageComposer'
 
 
 const gifLibrary = defaultGifLibrary
@@ -368,14 +369,22 @@ const inviteBusy = ref(false)
 const inviteRevokeBusy = reactive({})
 const memberBusy = reactive({})
 const leavingConversation = ref(false)
-const attachmentInput = ref(null)
-const pendingAttachments = ref([])
-const attachmentError = ref('')
-const composerState = reactive({
-  mode: 'new', // new | reply | forward | edit
-  targetMessageId: null,
-  replyTo: null,
-  forwardFrom: null,
+const {
+  messageInput,
+  sending,
+  attachmentError,
+  pendingAttachments,
+  showPicker,
+  pickerMode,
+  emojiSearch,
+  gifSearch,
+  attachmentInput,
+  composerState,
+} = useMessageComposer({
+  onSendSuccess: () => {},
+  onSendError: () => {},
+  onAfterSend: () => {},
+  scrollToBottom,
 })
 const forwardPicker = reactive({
   open: false,
@@ -416,10 +425,6 @@ const loadingMessages = ref(false)
 
 const messageError = ref('')
 
-const messageInput = ref('')
-
-const sending = ref(false)
-
 const copiedMessageId = ref(null)
 
 const reactionPalette = [
@@ -442,10 +447,6 @@ const reactionBusy = reactive({})
 const reactionPickerFor = ref(null)
 const messageMenuOpen = ref(null)
 
-const showPicker = ref(false)
-const pickerMode = ref('emoji')
-const emojiSearch = ref('')
-const gifSearch = ref('')
 const gifResults = ref(gifLibrary.slice())
 const loadingGifs = ref(false)
 const gifError = ref('')
@@ -900,15 +901,9 @@ const currentMembership = computed(() => {
 const isConversationOwner = computed(() => currentMembership.value?.role === 'owner')
 const canManageConversation = computed(() => isConversationOwner.value)
 const readyAttachments = computed(() => pendingAttachments.value.filter((entry) => entry.status === 'ready'))
-const hasAttachmentInProgress = computed(() => pendingAttachments.value.some((entry) => entry.status === 'uploading'))
-const isEditingMessage = computed(() => composerState.mode === 'edit' && Boolean(composerState.targetMessageId))
-const hasComposerContext = computed(() => {
-  return (
-    composerState.mode !== 'new' ||
-    composerState.replyTo !== null ||
-    composerState.forwardFrom !== null
-  )
-})
+const hasAttachmentInProgress = computed(() =>
+  pendingAttachments.value.some((entry) => entry.status === 'uploading'),
+)
 
 const canSend = computed(() => {
   if (isComposerBlocked.value) return false
