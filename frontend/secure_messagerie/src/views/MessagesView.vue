@@ -269,6 +269,13 @@ import {
   STATUS_PRESETS,
   availabilityOptions,
 } from '@/views/messages/constants'
+import {
+  formatTime,
+  formatAbsolute,
+  formatFileSize,
+  messagePreviewText,
+  extractDeliverySummary,
+} from '@/views/messages/formatters'
 import { createMessageFormatters } from '@/views/messages/message-formatters'
 
 
@@ -2653,10 +2660,17 @@ function triggerAttachmentPicker() {
     attachmentError.value = 'Sélectionnez une conversation avant d\'ajouter un fichier.'
     return
   }
-  if (attachmentInput.value) {
-    attachmentInput.value.value = ''
-    attachmentInput.value.click()
+  const inputEl =
+    attachmentInput?.value ||
+    (typeof document !== 'undefined'
+      ? document.querySelector('.msg-composer input[type="file"]')
+      : null)
+  if (!inputEl) {
+    attachmentError.value = 'Sélecteur de fichiers indisponible. Rechargez la page.'
+    return
   }
+  inputEl.value = ''
+  inputEl.click()
 }
 function onAttachmentChange(event) {
   const files = Array.from(event.target?.files || [])
@@ -3929,92 +3943,11 @@ async function toggleReaction(message, emoji) {
 }
 
 
-
-function formatTime(date) {
-
-  if (!(date instanceof Date)) return ''
-
-  return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-
-}
-
-
-
-function formatListTime(date) {
-
-  if (!(date instanceof Date)) date = new Date(date || Date.now())
-
-  return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-
-}
-
-
-
-function formatAbsolute(date) {
-  if (!(date instanceof Date)) return ''
-  return date.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })
-}
-
-function formatFileSize(bytes) {
-  if (typeof bytes !== 'number' || Number.isNaN(bytes)) return ''
-  if (bytes < 1024) return `${bytes} o`
-  const units = ['Ko', 'Mo', 'Go', 'To']
-  let size = bytes / 1024
-  let unit = 0
-  while (size >= 1024 && unit < units.length - 1) {
-    size /= 1024
-    unit += 1
-  }
-  return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[unit]}`
-}
-
 function downloadAttachment(attachment) {
   if (!attachment || !attachment.downloadUrl) return
   window.open(attachment.downloadUrl, '_blank', 'noopener')
 }
 
-function messagePreviewText(message) {
-
-  if (!message) return ''
-
-  if (message.excerpt) return message.excerpt
-
-  if (message.content) {
-    const gifs = detectGifLinks(message.content)
-    const trimmed = stripGifLinks(message.content, gifs).trim()
-    if (gifs.length && !trimmed) {
-      return 'GIF partagé'
-    }
-    return trimmed || String(message.content).slice(0, 120)
-  }
-
-  if (Array.isArray(message.attachments) && message.attachments.length) {
-
-    return `${message.attachments.length} piece(s) jointe(s)`
-
-  }
-
-  if (typeof message.attachments === 'number' && message.attachments > 0) {
-
-    return `${message.attachments} piece(s) jointe(s)`
-
-  }
-
-  return ''
-
-}
-
-
-
-function extractDeliverySummary(message) {
-  const summary = message.deliverySummary || {}
-  return {
-    total: Number(summary.total || 0),
-    delivered: Number(summary.delivered || 0),
-    read: Number(summary.read || 0),
-    pending: Number(summary.pending || 0),
-  }
-}
 
 const messageFormatters = createMessageFormatters({
   formatTime,
@@ -4204,6 +4137,8 @@ onBeforeUnmount(() => {
 </script>
 
 <style src="@/assets/styles/messages.css"></style>
+
+
 
 
 
