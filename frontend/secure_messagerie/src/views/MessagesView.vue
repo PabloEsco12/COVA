@@ -278,6 +278,7 @@ import { generateLocalId } from '@/views/messages/id'
 import { useNotificationsBridge } from '@/views/messages/useNotificationsBridge'
 import { useConversationPanel } from '@/views/messages/useConversationPanel'
 import { useComposerContext } from '@/views/messages/useComposerContext'
+import { useDeleteMessage } from '@/views/messages/useDeleteMessage'
 
 
 const gifLibrary = defaultGifLibrary
@@ -293,16 +294,6 @@ const storedStatusMessage = (() => {
 const myAvailability = ref(resolveAvailabilityFromStatus(storedStatusMessage))
 const conversationPresence = reactive({})
 const conversationPresenceSource = reactive({})
-const deleteDialog = reactive({
-  visible: false,
-  message: null,
-  loading: false,
-  error: '',
-})
-const deleteDialogPreview = computed(() =>
-  deleteDialog.message ? messagePreviewText(deleteDialog.message) : '',
-)
-
 const conversations = ref([])
 
 watch(
@@ -477,6 +468,14 @@ const {
   forwardPicker,
   resetComposerState,
 })
+const { deleteDialog, deleteDialogPreview, confirmDeleteMessage, closeDeleteDialog, performDeleteMessage } =
+  useDeleteMessage({
+    selectedConversationId,
+    messagePreviewText,
+    applyMessageUpdate,
+    normalizeMessage,
+    extractError,
+  })
 const { processNotificationPayload } = useNotificationsBridge({
   notificationDedupSet,
   handleIncomingNotificationPayload,
@@ -2593,36 +2592,6 @@ function resetComposerState() {
   composerState.forwardFrom = null
 }
 
-function confirmDeleteMessage(message) {
-  if (!message || !selectedConversationId.value) return
-  deleteDialog.message = message
-  deleteDialog.error = ''
-  deleteDialog.visible = true
-}
-
-function closeDeleteDialog() {
-  if (deleteDialog.loading) return
-  deleteDialog.visible = false
-  deleteDialog.message = null
-  deleteDialog.error = ''
-}
-
-async function performDeleteMessage() {
-  if (!deleteDialog.message || !selectedConversationId.value) return
-  deleteDialog.loading = true
-  deleteDialog.error = ''
-  try {
-    const data = await deleteConversationMessage(selectedConversationId.value, deleteDialog.message.id)
-    applyMessageUpdate(normalizeMessage(data))
-    closeDeleteDialog()
-  } catch (err) {
-    deleteDialog.error = extractError(err, "Impossible de supprimer le message.")
-  } finally {
-    deleteDialog.loading = false
-  }
-}
-
-
 function addEmoji(emoji) {
   if (!emoji) return
   const separator = messageInput.value && !messageInput.value.endsWith(' ') ? ' ' : ''
@@ -3212,6 +3181,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style src="@/assets/styles/messages.css"></style>
+
 
 
 
