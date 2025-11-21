@@ -241,8 +241,6 @@ import {
 } from '@/services/conversations'
 import { fetchGifs, hasGifApiSupport } from '@/services/media'
 import { emojiSections, emojiCatalog, defaultGifLibrary } from '@/utils/reactions'
-import { detectGifLinks, stripGifLinks } from '@/utils/messageContent'
-import { broadcastProfileUpdate, normalizeAvatarUrl } from '@/utils/profile'
 import ConversationSidebar from '@/components/messages/ConversationSidebar.vue'
 import ChatHeader from '@/components/messages/ChatHeader.vue'
 import MessageList from '@/components/messages/MessageList.vue'
@@ -257,12 +255,7 @@ import MessageSearchPanel from '@/components/messages/MessageSearchPanel.vue'
 import DeleteMessageModal from '@/components/messages/DeleteMessageModal.vue'
 import CustomModal from '@/components/ui/CustomModal.vue'
 import { useMessageComposer } from '@/composables/useMessageComposer'
-import {
-  PRESENCE_STALE_MS,
-  STATUS_LABELS,
-  STATUS_PRESETS,
-  availabilityOptions,
-} from '@/views/messages/constants'
+import { STATUS_LABELS, availabilityOptions } from '@/views/messages/constants'
 import {
   formatTime,
   formatAbsolute,
@@ -279,33 +272,14 @@ import { useNotificationsBridge } from '@/views/messages/useNotificationsBridge'
 import { useConversationPanel } from '@/views/messages/useConversationPanel'
 import { useComposerContext } from '@/views/messages/useComposerContext'
 import { useDeleteMessage } from '@/views/messages/useDeleteMessage'
+import { memberUserId, normalizeMember, normalizeConversation, normalizeMessage } from '@/views/messages/mappers'
+import { usePresenceStatus } from '@/views/messages/usePresenceStatus'
 
 
 const gifLibrary = defaultGifLibrary
 
 
-const storedStatusMessage = (() => {
-  try {
-    return localStorage.getItem('status_message') || ''
-  } catch {
-    return ''
-  }
-})()
-const myAvailability = ref(resolveAvailabilityFromStatus(storedStatusMessage))
-const conversationPresence = reactive({})
-const conversationPresenceSource = reactive({})
 const conversations = ref([])
-
-watch(
-  conversations,
-  (list) => {
-    list.forEach((conv) => {
-      refreshManualPresenceForConversation(conv)
-    })
-  },
-  { deep: true, immediate: true },
-)
-
 const conversationMeta = reactive({})
 
 const conversationSearch = ref('')
@@ -329,9 +303,6 @@ const conversationRoles = [
   { value: 'member', label: 'Membre' },
   { value: 'guest', label: 'Invité' },
 ]
-const presenceSnapshot = ref({ users: [], timestamp: null })
-const typingTimestamps = reactive({})
-const typingUsers = ref([])
 let typingCleanupTimer = null
 const selectedConversationId = ref(null)
 const currentUserId = ref(localStorage.getItem('user_id') || null)
@@ -341,6 +312,31 @@ const selectedConversation = computed(() => {
   if (!selectedConversationId.value) return null
   return conversations.value.find((conv) => conv.id === selectedConversationId.value) || null
 })
+
+const {
+  myAvailability,
+  conversationPresence,
+  presenceSummary,
+  primaryParticipantPresence,
+  typingIndicatorText,
+  memberPresence,
+  memberPresenceText,
+  resetPresenceState,
+  applyPresencePayload,
+  handleRealtimeTyping,
+  cleanupRemoteTyping,
+  loadAvailabilityStatus,
+  onAvailabilityChange,
+  handleProfileBroadcast,
+  displayNameForUser,
+} = usePresenceStatus({
+  conversations,
+  selectedConversation,
+  selectedConversationId,
+  currentUserId,
+  formatAbsolute,
+})
+
 const route = useRoute()
 const router = useRouter()
 const {
@@ -549,7 +545,6 @@ const callLog = (...args) => {
 }
 const localTypingState = reactive({ active: false, timer: null })
 const LOCAL_TYPING_IDLE_MS = 3500
-const REMOTE_TYPING_STALE_MS = 6000
 
 const connectionStatus = ref('idle')
 const realtimeConversationId = ref(null)
@@ -598,84 +593,6 @@ function handleBrowserPrefBroadcast(event) {
   }
 }
 
-function computeInitials(label = '') {
-  if (!label) return 'C'
-  const tokens = String(label)
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-  if (!tokens.length) return 'C'
-  const first = tokens[0][0] || ''
-  const second = tokens.length > 1 ? tokens[tokens.length - 1][0] : tokens[0][1] || ''
-  const initials = (first + (second || '')).toUpperCase()
-  return initials || 'C'
-}
-
-function normalizeMember(member) {
-  if (!member) return null
-  const userId = member.user_id || member.userId || member.contact_user_id || null
-  const membershipId = member.id || member.member_id || member.membership_id || userId
-  if (!membershipId) return null
-  const displayName = member.display_name || member.email || 'Membre'
-  const avatarUrl = normalizeAvatarUrl(member.avatar_url || null, { baseUrl: backendBase })
-  return {
-    id: String(membershipId),
-    membershipId: membershipId ? String(membershipId) : null,
-    userId: userId ? String(userId) : null,
-    role: member.role || 'member',
-    state: member.state || 'active',
-    joinedAt: member.joined_at ? new Date(member.joined_at) : null,
-    mutedUntil: member.muted_until ? new Date(member.muted_until) : null,
-    displayName,
-    email: member.email || '',
-    avatarUrl,
-    initials: computeInitials(displayName),
-    statusMessage: member.status_message || '',
-  }
-}
-
-function normalizeConversation(payload) {
-  if (!payload) return null
-  const members = Array.isArray(payload.members)
-    ? payload.members.map((member) => normalizeMember(member)).filter(Boolean)
-    : []
-  const selfId = currentUserId.value ? String(currentUserId.value) : null
-  const activeParticipants = members.filter((member) => {
-    const userKey = memberUserId(member)
-    return member.state === 'active' && (!selfId || userKey !== selfId)
-  })
-  const createdAt = payload.created_at ? new Date(payload.created_at) : new Date()
-  let displayName = payload.title ? String(payload.title).trim() : ''
-  if (!displayName) {
-    const names = activeParticipants
-      .map((member) => member.displayName || member.email)
-      .filter(Boolean)
-    displayName = names.join(', ')
-  }
-  if (!displayName) {
-    displayName = members.length > 1 ? 'Conversation' : 'Nouvelle conversation'
-  }
-  let conversationAvatar = payload.avatar_url || null
-  if (!conversationAvatar && payload.type === 'direct' && activeParticipants.length === 1) {
-    conversationAvatar = activeParticipants[0]?.avatarUrl || null
-  }
-  const normalizedConversationAvatar = normalizeAvatarUrl(conversationAvatar, { baseUrl: backendBase })
-  return {
-    id: String(payload.id),
-    title: payload.title || null,
-    topic: payload.topic || null,
-    type: payload.type || 'group',
-    archived: Boolean(payload.archived),
-    createdAt,
-    members,
-    participants: activeParticipants,
-    displayName,
-    initials: computeInitials(displayName),
-    avatarUrl: normalizedConversationAvatar,
-    blockedByMe: Boolean(payload.blocked_by_viewer),
-    blockedByOther: Boolean(payload.blocked_by_other),
-  }
-}
 const conversationSummary = computed(() => {
 
   if (loadingConversations.value) return 'Chargementâ?,?¦'
@@ -741,67 +658,10 @@ const composerBlockedInfo = computed(() => {
 })
 const isComposerBlocked = computed(() => Boolean(composerBlockedInfo.value))
 
-function displayNameForUser(userId) {
-  if (!userId) return 'Participant'
-  const conv = selectedConversation.value
-  if (!conv || !Array.isArray(conv.members)) return 'Participant'
-  const match = conv.members.find((member) => memberUserId(member) === String(userId))
-  return match?.displayName || match?.email || 'Participant'
-}
-
 const conversationOwners = computed(() => {
   const conv = selectedConversation.value
   if (!conv || !Array.isArray(conv.members)) return []
   return conv.members.filter((member) => member.role === 'owner')
-})
-
-const presenceByUserId = computed(() => {
-  const map = new Map()
-  const snapshot = presenceSnapshot.value?.users || []
-  snapshot.forEach((entry) => {
-    if (!entry?.userId) return
-    map.set(String(entry.userId), entry)
-  })
-  return map
-})
-
-const presenceSummary = computed(() => {
-  const conv = selectedConversation.value
-  if (!conv || !Array.isArray(conv.members)) return ''
-  const snapshot = presenceSnapshot.value
-  const snapshotUsers = snapshot?.users || []
-  const snapshotTimestamp = snapshot?.timestamp instanceof Date ? snapshot.timestamp.getTime() : 0
-  const isSnapshotFresh =
-    snapshotUsers.length && snapshotTimestamp && Date.now() - snapshotTimestamp < PRESENCE_STALE_MS
-  if (isSnapshotFresh) {
-    const selfId = currentUserId.value ? String(currentUserId.value) : null
-    const others = conv.members.filter((member) => memberUserId(member) !== selfId)
-    if (!others.length) return ''
-    if (others.length === 1) {
-      const target = others[0]
-      return memberPresenceText(target.userId || target.id)
-    }
-    const activeMembers = others.filter((member) => {
-      const presence = memberPresence(member.userId || member.id)
-      return presence.status === 'online' || presence.status === 'available'
-    })
-    if (!activeMembers.length) {
-      return 'Tous les membres sont hors ligne'
-    }
-    if (activeMembers.length === 1) {
-      return `${displayNameForUser(activeMembers[0].id)} est en ligne`
-    }
-    return `${activeMembers.length} membres en ligne`
-  }
-  if (conv.type === 'direct') {
-    const manual = manualPresenceFromConversation(conv)
-    if (manual) {
-      return manual.label
-    }
-  }
-  const entry = conversationPresence[conv.id]
-  if (entry?.label) return entry.label
-  return STATUS_LABELS.offline
 })
 
 const headerParticipants = computed(() => {
@@ -816,37 +676,6 @@ const headerParticipants = computed(() => {
 const headerSubtitle = computed(() => {
   const parts = [headerParticipants.value, presenceSummary.value].filter(Boolean)
   return parts.join(' \u00b7 ')
-})
-
-const primaryParticipantPresence = computed(() => {
-  const conv = selectedConversation.value
-  if (!conv) {
-    return { status: 'offline', label: STATUS_LABELS.offline, lastSeen: null }
-  }
-  const selfId = currentUserId.value ? String(currentUserId.value) : null
-  const target =
-    conv.participants.find((member) => memberUserId(member) !== selfId) ||
-    conv.members.find((member) => memberUserId(member) !== selfId)
-  if (!target) {
-    return { status: 'offline', label: STATUS_LABELS.offline, lastSeen: null }
-  }
-  return memberPresence(target.userId || target.id)
-})
-
-const typingIndicatorText = computed(() => {
-  if (!typingUsers.value.length) return ''
-  const selfId = currentUserId.value ? String(currentUserId.value) : null
-  const participants = typingUsers.value.filter((id) => id !== selfId)
-  if (!participants.length) return ''
-  const names = participants.map((id) => displayNameForUser(id)).filter(Boolean)
-  if (!names.length) return ''
-  if (names.length === 1) {
-    return `${names[0]} est en train d'écrire...`
-  }
-  if (names.length === 2) {
-    return `${names[0]} et ${names[1]} sont en train d'écrire...`
-  }
-  return `${names[0]}, ${names[1]} et ${names.length - 2} autres écrivent...`
 })
 
 const currentMembership = computed(() => {
@@ -1198,7 +1027,10 @@ async function loadConversations() {
   conversationError.value = ''
   try {
     const { data } = await api.get('/conversations/')
-    const list = Array.isArray(data) ? data.map((item) => normalizeConversation(item)).filter(Boolean) : []
+    const selfId = currentUserId.value
+    const list = Array.isArray(data)
+      ? data.map((item) => normalizeConversation(item, { selfId })).filter(Boolean)
+      : []
     conversations.value = list
     list.forEach((conv) => initializeMeta(conv))
     if (!selectedConversationId.value && list.length) {
@@ -1271,7 +1103,9 @@ async function loadMessages({ conversationId = selectedConversationId.value, res
     if (before) params.before = before
     if (after) params.after = after
     const response = await api.get(`/conversations/${conversationId}/messages`, { params })
-    const list = Array.isArray(response.data) ? response.data.map(normalizeMessage) : []
+    const list = Array.isArray(response.data)
+      ? response.data.map((entry) => normalizeMessage(entry, { selfId: currentUserId.value }))
+      : []
     updatePaginationFromHeaders(response.headers, { reset, before, after, received: list })
     if (reset) {
       messages.value = list
@@ -1425,147 +1259,6 @@ async function ensureMessageVisible(messageId, streamPosition) {
 
   }
 }
-
-
-function normalizeMessage(payload) {
-  const convId = String(payload.conversation_id || payload.conv_id || '')
-  const authorId = payload.author_id ? String(payload.author_id) : null
-  const createdAt = payload.created_at ? new Date(payload.created_at) : new Date()
-  const displayName =
-    payload.author_display_name || (authorId && authorId === currentUserId.value ? 'Vous' : 'Participant')
-
-  const content = (payload.content || '').toString()
-  const gifLinks = detectGifLinks(content)
-  const textWithoutGifs = stripGifLinks(content, gifLinks)
-  const previewContent =
-    gifLinks.length && !textWithoutGifs ? 'GIF partagé' : textWithoutGifs || content
-
-  const reactions = Array.isArray(payload.reactions)
-
-    ? payload.reactions.map((reaction) => ({
-
-        emoji: reaction.emoji,
-
-        count: Number(reaction.count || 0),
-
-        reacted: Boolean(reaction.reacted),
-
-      }))
-
-    : []
-
-  const deliveredAt = payload.delivered_at ? new Date(payload.delivered_at) : null
-  const readAt = payload.read_at ? new Date(payload.read_at) : null
-  const pinnedAt = payload.pinned_at ? new Date(payload.pinned_at) : null
-  const attachments = Array.isArray(payload.attachments)
-    ? payload.attachments.map((attachment) => mapAttachmentPayload(attachment)).filter(Boolean)
-    : []
-  const editedAt = payload.edited_at ? new Date(payload.edited_at) : null
-  const deletedAt = payload.deleted_at ? new Date(payload.deleted_at) : null
-  const deleted = Boolean(payload.deleted)
-  const replyTo = payload.reply_to ? mapReferencePayload(payload.reply_to) : null
-  const forwardFrom = payload.forward_from ? mapReferencePayload(payload.forward_from) : null
-  const streamPosition = Number(payload.stream_position ?? payload.streamPosition ?? null)
-  const deliverySummaryRaw = payload.delivery_summary || {}
-  const deliverySummary = {
-    total: Number(deliverySummaryRaw.total || 0),
-    delivered: Number(deliverySummaryRaw.delivered || 0),
-    read: Number(deliverySummaryRaw.read || 0),
-    pending: Number(deliverySummaryRaw.pending || 0),
-  }
-  return {
-    id: String(payload.id || payload.message_id || generateLocalId()),
-    conversationId: convId,
-    authorId,
-    displayName,
-    avatarUrl: normalizeAvatarUrl(payload.author_avatar_url || null, { baseUrl: backendBase }),
-    content: deleted ? '' : content,
-    createdAt,
-    isSystem: Boolean(payload.is_system),
-    sentByMe: Boolean(authorId && currentUserId.value && authorId === String(currentUserId.value)),
-    deliveryState: payload.delivery_state || null,
-    deliveredAt,
-    readAt,
-    reactions,
-    pinned: Boolean(payload.pinned),
-    pinnedAt,
-    pinnedBy: payload.pinned_by ? String(payload.pinned_by) : null,
-    security: {
-      scheme: payload.encryption_scheme || 'confidentiel',
-      metadata: payload.encryption_metadata || {},
-    },
-    preview: `${displayName}: ${previewContent || ''}`.trim(),
-    attachments,
-    editedAt,
-    deletedAt,
-    deleted,
-    replyTo,
-    forwardFrom,
-    streamPosition,
-    deliverySummary,
-  }
-}
-
-function memberUserId(member) {
-  if (!member) return null
-  if (member.userId) return String(member.userId)
-  if (member.user_id) return String(member.user_id)
-  if (member.contact_user_id) return String(member.contact_user_id)
-  return member.id ? String(member.id) : null
-}
-
-function matchesUser(member, userId) {
-  if (!member || !userId) return false
-  return memberUserId(member) === String(userId)
-}
-
-function mapAttachmentPayload(raw) {
-  if (!raw) return null
-
-  return {
-
-    id: String(raw.id || raw.attachment_id || generateLocalId()),
-
-    fileName: raw.file_name || raw.filename || raw.name || 'Pièce jointe',
-
-    mimeType: raw.mime_type || raw.mimeType || null,
-
-    sizeBytes: raw.size_bytes || raw.sizeBytes || null,
-
-    sha256: raw.sha256 || null,
-
-    downloadUrl: raw.download_url || raw.downloadUrl || null,
-
-    encryption: raw.encryption || {},
-
-  }
-
-}
-
-
-
-function mapReferencePayload(raw) {
-
-  if (!raw) return null
-
-  return {
-
-    id: String(raw.id || raw.message_id || generateLocalId()),
-
-    authorDisplayName: raw.author_display_name || 'Participant',
-
-    excerpt: raw.excerpt || '',
-
-    createdAt: raw.created_at ? new Date(raw.created_at) : null,
-
-    deleted: Boolean(raw.deleted),
-
-    attachments: Number(raw.attachments || 0),
-
-  }
-
-}
-
 
 
 function applyMessageUpdate(nextMessage) {
@@ -1803,7 +1496,7 @@ function incrementUnreadCounter(convId) {
 
 function applyConversationPatch(payload) {
   if (!payload) return
-  const normalized = normalizeConversation(payload)
+  const normalized = normalizeConversation(payload, { selfId: currentUserId.value })
   if (!normalized) return
   const idx = conversations.value.findIndex((conv) => conv.id === normalized.id)
   if (idx >= 0) {
@@ -1833,188 +1526,6 @@ function applyMemberPayload(payload) {
   const activeMembers = target.members.filter((member) => member.state === 'active')
   const selfId = currentUserId.value ? String(currentUserId.value) : null
   target.participants = activeMembers.filter((member) => !selfId || memberUserId(member) !== selfId)
-}
-
-function mapInvite(invite) {
-  if (!invite) return null
-  return {
-    id: invite.id,
-    email: invite.email,
-    role: invite.role,
-    token: invite.token,
-    expiresAt: invite.expires_at ? new Date(invite.expires_at) : null,
-    acceptedAt: invite.accepted_at ? new Date(invite.accepted_at) : null,
-  }
-}
-
-function memberPresence(memberId) {
-  const key = memberId ? String(memberId) : null
-  if (!key) {
-    return { status: 'offline', label: STATUS_LABELS.offline, lastSeen: null }
-  }
-  const base = presenceByUserId.value.get(key) || { status: 'offline', lastSeen: null }
-  const member = findMemberById(key)
-  const manual = deriveStatusFromMessage(member?.statusMessage || '')
-  const status = manual || normalizePresenceStatus(base.status)
-  const label =
-    manual && member?.statusMessage
-      ? member.statusMessage
-      : STATUS_LABELS[status] || STATUS_LABELS.offline
-  return { status, label, lastSeen: base.lastSeen || null }
-}
-
-function memberPresenceText(memberId) {
-  const entry = memberPresence(memberId)
-  if (entry.status === 'online' || entry.status === 'available') {
-    return entry.label || STATUS_LABELS.online
-  }
-  if (entry.label && entry.label !== STATUS_LABELS.offline) {
-    return entry.label
-  }
-  if (entry.lastSeen instanceof Date) {
-    return `${STATUS_LABELS.offline} · vu ${formatAbsolute(entry.lastSeen)}`
-  }
-  return STATUS_LABELS.offline
-}
-
-function findMemberById(memberId) {
-  const conv = selectedConversation.value
-  if (!conv || !Array.isArray(conv.members)) return null
-  const key = memberId ? String(memberId) : null
-  if (!key) return null
-  return (
-    conv.members.find((member) => String(member.id) === key) ||
-    conv.members.find((member) => memberUserId(member) === key) ||
-    null
-  )
-}
-
-function normalizePresenceStatus(status) {
-  if (!status) return 'offline'
-  const value = status.toLowerCase()
-  if (value === 'online' || value === 'available') return 'online'
-  if (value === 'meeting') return 'meeting'
-  if (value === 'busy') return 'busy'
-  if (value === 'dnd') return 'dnd'
-  if (value === 'away') return 'away'
-  return 'offline'
-}
-
-function deriveStatusFromMessage(message) {
-  if (!message) return null
-  const normalized = stripDiacritics(message).toLowerCase()
-  if (normalized.includes('reunion') || normalized.includes('meeting')) return 'meeting'
-  if (normalized.includes('pas deranger')) return 'dnd'
-  if (normalized.includes('occup') || normalized.includes('busy')) return 'busy'
-  if (normalized.includes('absent')) return 'away'
-  if (normalized.includes('disponible')) return 'available'
-  return null
-}
-
-function stripDiacritics(value) {
-  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-}
-
-function resolveAvailabilityFromStatus(message) {
-  const code = deriveStatusFromMessage(message)
-  if (code && STATUS_PRESETS[code]) {
-    return code
-  }
-  return 'available'
-}
-
-function findConversationById(conversationId) {
-  const targetId = String(conversationId)
-  if (selectedConversation.value && String(selectedConversation.value.id) === targetId) {
-    return selectedConversation.value
-  }
-  return conversations.value.find((entry) => String(entry.id) === targetId) || null
-}
-
-function findMemberInConversation(conversationId, memberId) {
-  const conv = findConversationById(conversationId)
-  if (!conv || !Array.isArray(conv.members)) return null
-  const key = memberId ? String(memberId) : null
-  if (!key) return null
-  return (
-    conv.members.find((member) => String(member.id) === key) ||
-    conv.members.find((member) => memberUserId(member) === key) ||
-    null
-  )
-}
-
-function manualPresenceFromConversation(conv) {
-  if (!conv || conv.type !== 'direct') return null
-  const selfId = currentUserId.value ? String(currentUserId.value) : null
-  const target =
-    (Array.isArray(conv.participants) &&
-      conv.participants.find((member) => !selfId || memberUserId(member) !== selfId)) ||
-    (Array.isArray(conv.members) &&
-      conv.members.find((member) => !selfId || memberUserId(member) !== selfId))
-  if (!target) return null
-  return { status: 'offline', label: STATUS_LABELS.offline }
-}
-
-function manualPresenceForConversationId(convId) {
-  const conv = findConversationById(convId)
-  if (!conv) return null
-  return manualPresenceFromConversation(conv)
-}
-
-function setConversationPresence(convId, entry, source = 'manual') {
-  if (!convId) return
-  const key = String(convId)
-  conversationPresence[key] = entry
-  conversationPresenceSource[key] = source
-}
-
-function getConversationPresenceSource(convId) {
-  return conversationPresenceSource[String(convId)] || 'unknown'
-}
-
-function refreshManualPresenceForConversation(convOrId) {
-  const conv =
-    typeof convOrId === 'object' && convOrId !== null ? convOrId : findConversationById(convOrId)
-  if (!conv) return
-  if (conv.type !== 'direct') {
-    if (!conversationPresence[conv.id]) {
-      setConversationPresence(conv.id, { status: 'offline', label: STATUS_LABELS.offline }, 'unknown')
-    }
-    return
-  }
-  if (getConversationPresenceSource(conv.id) === 'realtime') {
-    return
-  }
-  const manual = manualPresenceFromConversation(conv)
-  if (manual) {
-    setConversationPresence(conv.id, manual, 'manual')
-  } else if (!conversationPresence[conv.id]) {
-    setConversationPresence(conv.id, { status: 'offline', label: STATUS_LABELS.offline }, 'unknown')
-  }
-}
-
-function refreshManualPresenceForAll() {
-  conversations.value.forEach((conv) => refreshManualPresenceForConversation(conv))
-}
-
-function summarizePresenceEntries(entries) {
-  if (!entries.length) {
-    return { status: 'offline', label: STATUS_LABELS.offline }
-  }
-  const normalized = entries.map((entry) => normalizePresenceStatus(entry.status))
-  if (normalized.some((status) => status === 'meeting')) {
-    return { status: 'meeting', label: STATUS_LABELS.meeting }
-  }
-  if (normalized.some((status) => status === 'busy' || status === 'dnd')) {
-    return { status: 'busy', label: STATUS_LABELS.busy }
-  }
-  if (normalized.some((status) => status === 'online')) {
-    return { status: 'online', label: STATUS_LABELS.online }
-  }
-  if (normalized.some((status) => status === 'away')) {
-    return { status: 'away', label: STATUS_LABELS.away }
-  }
-  return { status: 'offline', label: STATUS_LABELS.offline }
 }
 
 async function loadGifResults(query = '') {
@@ -2083,34 +1594,6 @@ function stopLocalTyping() {
     socketRef.value.send({ event: 'typing:stop' })
   } catch {}
   localTypingState.active = false
-}
-
-function resetRemoteTyping() {
-  Object.keys(typingTimestamps).forEach((key) => delete typingTimestamps[key])
-  typingUsers.value = []
-}
-
-function cleanupRemoteTyping() {
-  const now = Date.now()
-  let changed = false
-  for (const [key, ts] of Object.entries(typingTimestamps)) {
-    if (now - ts > REMOTE_TYPING_STALE_MS) {
-      delete typingTimestamps[key]
-      changed = true
-    }
-  }
-  if (changed) {
-    typingUsers.value = Object.keys(typingTimestamps)
-  }
-}
-
-function resetPresenceState() {
-  presenceSnapshot.value = { users: [], timestamp: null }
-  if (selectedConversationId.value) {
-    setConversationPresence(selectedConversationId.value, { status: 'offline', label: STATUS_LABELS.offline }, 'unknown')
-    refreshManualPresenceForConversation(selectedConversationId.value)
-  }
-  resetRemoteTyping()
 }
 
 function limitDraft() {
@@ -2193,7 +1676,7 @@ async function sendMessage() {
   sending.value = true
   try {
     const { data } = await api.post(`/conversations/${selectedConversationId.value}/messages`, payload)
-    const message = normalizeMessage(data)
+    const message = normalizeMessage(data, { selfId: currentUserId.value })
     message.sentByMe = true
     resolveOptimisticMessage(optimisticId, message)
     showPicker.value = false
@@ -2243,7 +1726,7 @@ async function submitMessageEdit() {
     const data = await editConversationMessage(selectedConversationId.value, composerState.targetMessageId, {
       content: messageInput.value.trim(),
     })
-    const message = normalizeMessage(data)
+    const message = normalizeMessage(data, { selfId: currentUserId.value })
     message.sentByMe = true
     applyMessageUpdate(message)
     messageInput.value = ''
@@ -2344,7 +1827,7 @@ function disconnectRealtime(options = {}) {
 
 function handleIncomingRealtime(payload) {
   const type = typeof payload?.event === 'string' ? payload.event : 'message'
-  const message = normalizeMessage(payload)
+  const message = normalizeMessage(payload, { selfId: currentUserId.value })
   const meta = ensureMeta(message.conversationId)
   if (typeof message.streamPosition === 'number') {
     pagination.afterCursor = pagination.afterCursor
@@ -2370,81 +1853,6 @@ function handleIncomingRealtime(payload) {
     (!isSameConversation || (typeof document !== 'undefined' && (document.hidden || !document.hasFocus())))
   ) {
     notifyNewIncomingMessage(message)
-  }
-}
-
-function handleRealtimeTyping(evt) {
-  const eventName = evt?.event
-  const userIdRaw = evt?.payload?.user_id
-  const convId = evt?.payload?.conversation_id || evt?.conversation_id
-  if (!selectedConversationId.value || !convId || String(convId) !== String(selectedConversationId.value)) {
-    return
-  }
-  if (!eventName || !userIdRaw) return
-  const userId = String(userIdRaw)
-  if (currentUserId.value && String(currentUserId.value) === userId) return
-  if (eventName === 'typing:start') {
-    typingTimestamps[userId] = Date.now()
-  } else if (eventName === 'typing:stop') {
-    delete typingTimestamps[userId]
-  }
-  typingUsers.value = Object.keys(typingTimestamps)
-}
-
-function applyPresencePayload(payload) {
-  if (!payload) return
-  const incomingConvId = payload.conversation_id ? String(payload.conversation_id) : null
-  const currentConvId = selectedConversationId.value ? String(selectedConversationId.value) : null
-  const isCurrentConversation = !incomingConvId || incomingConvId === currentConvId
-  const convId = incomingConvId || currentConvId
-  const selfId = currentUserId.value ? String(currentUserId.value) : null
-
-  const rawUsers = Array.isArray(payload.users) ? payload.users : []
-  const users = rawUsers
-        .map((entry) => {
-          const userId = entry?.user_id ? String(entry.user_id) : entry?.id ? String(entry.id) : ''
-          if (!userId) return null
-          if (selfId && userId === selfId) return null
-          const baseStatus = normalizePresenceStatus(entry?.status || 'offline')
-          const member = convId ? findMemberInConversation(convId, userId) : findMemberById(userId)
-          const manualStatus = member?.statusMessage ? deriveStatusFromMessage(member.statusMessage) : null
-          const status = manualStatus || baseStatus
-          const label =
-            manualStatus && member?.statusMessage
-              ? member.statusMessage
-              : STATUS_LABELS[status] || STATUS_LABELS.offline
-          return {
-            userId,
-            status,
-            label,
-            lastSeen: entry?.last_seen ? new Date(entry.last_seen) : null,
-          }
-        })
-        .filter(Boolean);
-  if (isCurrentConversation) {
-    presenceSnapshot.value = {
-      users,
-      timestamp: payload.timestamp ? new Date(payload.timestamp) : new Date(),
-    }
-  }
-  if (convId) {
-    let entry
-    let source = 'realtime'
-    if (users.length) {
-      entry = summarizePresenceEntries(users)
-    } else if (rawUsers.length) {
-      entry = { status: 'offline', label: STATUS_LABELS.offline }
-    } else {
-      const manual = manualPresenceForConversationId(convId)
-      if (manual) {
-        entry = manual
-        source = 'manual'
-      } else {
-        entry = { status: 'offline', label: STATUS_LABELS.offline }
-        source = 'unknown'
-      }
-    }
-    setConversationPresence(convId, entry, source)
   }
 }
 
@@ -2476,84 +1884,6 @@ function goToNewConversation() {
   router.push({ path: '/dashboard/messages/new' }).catch(() => {})
 
 }
-
-async function loadAvailabilityStatus() {
-  try {
-    const { data } = await api.get('/me/profile')
-    const statusMessage = data?.status_message || ''
-    const code = resolveAvailabilityFromStatus(statusMessage)
-    persistStatusMessage(statusMessage, code)
-    myAvailability.value = code
-    applyLocalStatusMessage(statusMessage)
-  } catch {
-    myAvailability.value = 'available'
-  }
-}
-
-async function onAvailabilityChange(value) {
-  if (value === myAvailability.value) return
-  const next = STATUS_PRESETS[value] ? value : 'available'
-  const previous = myAvailability.value
-  myAvailability.value = next
-  const message = STATUS_PRESETS[next].message || ''
-  try {
-    await api.put('/me/profile', { status_message: message || null })
-    persistStatusMessage(message, next)
-    applyLocalStatusMessage(message)
-    broadcastProfileUpdate({ status_message: message || null, status_code: next })
-  } catch (err) {
-    console.error('Impossible de mettre ? jour le statut', err)
-    myAvailability.value = previous
-  }
-}
-function persistStatusMessage(value, codeHint) {
-  const message = value || ''
-  const code = codeHint || resolveAvailabilityFromStatus(message)
-  try {
-    if (message) {
-      localStorage.setItem('status_message', message)
-    } else {
-      localStorage.removeItem('status_message')
-    }
-    if (code) {
-      localStorage.setItem('status_code', code)
-    } else {
-      localStorage.removeItem('status_code')
-    }
-  } catch {}
-}
-
-function applyLocalStatusMessage(message) {
-  const selfId = currentUserId.value ? String(currentUserId.value) : null
-  if (!selfId) return
-  conversations.value.forEach((conv) => {
-    if (!Array.isArray(conv.members)) return
-    conv.members.forEach((member) => {
-      if (memberUserId(member) === selfId) {
-        member.statusMessage = message || ''
-      }
-    })
-  })
-  if (selectedConversation.value && Array.isArray(selectedConversation.value.members)) {
-    selectedConversation.value.members.forEach((member) => {
-      if (memberUserId(member) === selfId) {
-        member.statusMessage = message || ''
-      }
-    })
-  }
-  refreshManualPresenceForAll()
-}
-function handleProfileBroadcast(event) {
-  const detail = event?.detail || {}
-  if (Object.prototype.hasOwnProperty.call(detail, 'status_message')) {
-    const statusMessage = detail.status_message || ''
-    const code = resolveAvailabilityFromStatus(statusMessage)
-    persistStatusMessage(statusMessage, code)
-    myAvailability.value = code
-    applyLocalStatusMessage(statusMessage)
-  }
-}
-
 
 
 
@@ -2979,7 +2309,7 @@ async function togglePin(message) {
 
       : await pinMessage(selectedConversationId.value, messageId)
 
-    applyMessageUpdate(normalizeMessage(data))
+    applyMessageUpdate(normalizeMessage(data, { selfId: currentUserId.value }))
 
   } catch (err) {
 
@@ -3007,7 +2337,7 @@ async function toggleReaction(message, emoji) {
 
     const data = await updateMessageReaction(selectedConversationId.value, message.id, { emoji })
 
-    applyMessageUpdate(normalizeMessage(data))
+    applyMessageUpdate(normalizeMessage(data, { selfId: currentUserId.value }))
 
   } catch (err) {
 
@@ -3157,7 +2487,6 @@ onMounted(async () => {
 })
 
 
-
 onBeforeUnmount(() => {
   endCall(true)
   disconnectRealtime()
@@ -3181,6 +2510,11 @@ onBeforeUnmount(() => {
 </script>
 
 <style src="@/assets/styles/messages.css"></style>
+
+
+
+
+
 
 
 
