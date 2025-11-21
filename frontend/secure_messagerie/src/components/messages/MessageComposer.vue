@@ -79,7 +79,7 @@
       :value="messageInput"
       class="form-control"
       rows="2"
-      placeholder="Ecrire un message sÃ©curisÃ©."
+      placeholder="Ecrire un message sécurisé."
       :disabled="sending"
       @keydown.enter.exact.prevent="sendMessage"
       @input="handleComposerInput"
