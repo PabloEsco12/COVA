@@ -63,42 +63,20 @@
           </template>
         </ChatHeader>
         <p v-if="messageError" class="msg-alert">{{ messageError }}</p>
-        <div v-if="showSearchPanel" class="msg-search-panel">
-          <form class="msg-search-panel__form" @submit.prevent="performMessageSearch">
-            <input
-              v-model.trim="messageSearch.query"
-              type="search"
-              class="form-control"
-              placeholder="Rechercher dans cette conversation"
-            />
-            <button class="btn btn-secondary btn-sm" type="submit" :disabled="messageSearch.loading">
-              <span v-if="messageSearch.loading" class="spinner-border spinner-border-sm me-2"></span>
-              Rechercher
-            </button>
-            <button type="button" class="btn btn-link btn-sm" @click="closeSearchPanel">Fermer</button>
-          </form>
-          <p v-if="messageSearch.error" class="msg-alert">{{ messageSearch.error }}</p>
-          <ul class="msg-search-results">
-            <li
-              v-for="result in messageSearch.results"
-              :key="result.id"
-              class="msg-search-results__item"
-            >
-              <div>
-                <p class="msg-search__author">{{ result.displayName }}</p>
-                <p class="msg-search__excerpt">{{ messagePreviewText(result) }}</p>
-                <small class="text-muted">{{ formatAbsolute(result.createdAt) }}</small>
-              </div>
-              <button type="button" class="btn btn-link p-0" @click="jumpToSearchResult(result)">Afficher</button>
-            </li>
-            <li
-              v-if="messageSearch.executed && !messageSearch.loading && !messageSearch.results.length"
-              class="text-muted small"
-            >
-              Aucun message trouvé.
-            </li>
-          </ul>
-        </div>
+        <MessageSearchPanel
+          :show="showSearchPanel"
+          :query="messageSearch.query"
+          :loading="messageSearch.loading"
+          :error="messageSearch.error"
+          :results="messageSearch.results"
+          :executed="messageSearch.executed"
+          :format-absolute="formatAbsolute"
+          :message-preview-text="messagePreviewText"
+          @update:query="messageSearch.query = $event"
+          @submit="performMessageSearch"
+          @close="closeSearchPanel"
+          @jump="jumpToSearchResult"
+        />
         <MessageList
           ref="messageListRef"
           :messages="messages"
@@ -167,30 +145,14 @@
           :send-message="sendMessage"
         />
 
-        <CustomModal v-model="deleteDialog.visible">
-          <template #title>
-            <i class="bi bi-trash me-2"></i>Supprimer le message
-          </template>
-          <p class="mb-2">
-            Cette action retirera définitivement ce message pour tous les participants de la conversation.
-          </p>
-          <div v-if="deleteDialogPreview" class="alert alert-warning py-2 px-3 mb-3">
-            <strong>Aperçu&nbsp;:</strong>
-            <span class="ms-1">{{ deleteDialogPreview }}</span>
-          </div>
-          <div v-if="deleteDialog.error" class="alert alert-danger">
-            {{ deleteDialog.error }}
-          </div>
-          <template #footer>
-            <button class="btn btn-outline-secondary" type="button" :disabled="deleteDialog.loading" @click="closeDeleteDialog">
-              Annuler
-            </button>
-            <button class="btn btn-danger" type="button" :disabled="deleteDialog.loading" @click="performDeleteMessage">
-              <span v-if="deleteDialog.loading" class="spinner-border spinner-border-sm me-2"></span>
-              Supprimer pour tous
-            </button>
-          </template>
-        </CustomModal>
+        <DeleteMessageModal
+          v-model:visible="deleteDialog.visible"
+          :preview="deleteDialogPreview"
+          :error="deleteDialog.error"
+          :loading="deleteDialog.loading"
+          @close="closeDeleteDialog"
+          @confirm="performDeleteMessage"
+        />
 
         <CallOverlay
           :call-state="callState"
@@ -297,6 +259,8 @@ import ForwardPicker from '@/components/messages/ForwardPicker.vue'
 import MessageToastStack from '@/components/messages/MessageToastStack.vue'
 import MessageComposer from '@/components/messages/MessageComposer.vue'
 import MessageEmptyState from '@/components/messages/MessageEmptyState.vue'
+import MessageSearchPanel from '@/components/messages/MessageSearchPanel.vue'
+import DeleteMessageModal from '@/components/messages/DeleteMessageModal.vue'
 import CustomModal from '@/components/ui/CustomModal.vue'
 
 
