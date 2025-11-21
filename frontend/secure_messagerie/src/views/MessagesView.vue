@@ -281,6 +281,7 @@ import { useAttachments } from '@/views/messages/useAttachments'
 import { useMessageToasts } from '@/views/messages/useMessageToasts'
 import { useCallControls } from '@/views/messages/useCallControls'
 import { generateLocalId } from '@/views/messages/id'
+import { useNotificationsBridge } from '@/views/messages/useNotificationsBridge'
 
 
 const gifLibrary = defaultGifLibrary
@@ -360,6 +361,7 @@ const memberBusy = reactive({})
 const leavingConversation = ref(false)
 const selectedConversationId = ref(null)
 const currentUserId = ref(localStorage.getItem('user_id') || null)
+const notificationDedupSet = new Set()
 const selectedConversation = computed(() => {
   if (!selectedConversationId.value) return null
   return conversations.value.find((conv) => conv.id === selectedConversationId.value) || null
@@ -465,6 +467,10 @@ const {
   attachStream,
   generateCallId,
 })
+const { processNotificationPayload } = useNotificationsBridge({
+  notificationDedupSet,
+  handleIncomingNotificationPayload,
+})
 const forwardPicker = reactive({
   open: false,
   message: null,
@@ -530,7 +536,6 @@ const loadingGifs = ref(false)
 const gifError = ref('')
 const gifSearchAvailable = hasGifApiSupport()
 const optimisticMessageIds = new Set()
-const notificationDedupSet = new Set()
 let notificationPermissionRequestPending = false
 const browserNotificationsEnabled = ref(readBrowserNotificationPreference())
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -3353,35 +3358,6 @@ function extractError(err, fallback) {
     err.message
   if (typeof detail === 'string' && detail.trim()) return detail.trim()
   return fallback
-}
-
-function makeNotificationFingerprint(payload) {
-  if (!payload || typeof payload !== 'object') return `generic:${Date.now()}`
-  const parts = [
-    payload.type || 'generic',
-    payload.message_id ||
-      payload.id ||
-      payload.notification_id ||
-      payload.conversation_id ||
-      payload.preview ||
-      payload.title ||
-      payload.sender ||
-      payload.timestamp ||
-      payload.created_at ||
-      JSON.stringify(payload).slice(0, 60),
-  ]
-  return parts.join(':')
-}
-
-function processNotificationPayload(payload, origin = 'stream') {
-  if (!payload || typeof payload !== 'object') return
-  const key = makeNotificationFingerprint(payload)
-  if (notificationDedupSet.has(key)) return
-  if (notificationDedupSet.size > 512) {
-    notificationDedupSet.clear()
-  }
-  notificationDedupSet.add(key)
-  handleIncomingNotificationPayload(payload, origin)
 }
 
 function handleGlobalNotificationEvent(event) {
