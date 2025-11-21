@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div
     v-if="blockedInfo"
     class="msg-composer msg-composer--disabled"
@@ -11,7 +11,7 @@
       <p class="mb-0 text-muted">{{ blockedInfo.message }}</p>
     </div>
     <router-link to="/dashboard/contacts" class="btn btn-outline-primary btn-sm">
-      Gérer les contacts
+      GÃ©rer les contacts
     </router-link>
   </div>
 
@@ -39,7 +39,7 @@
             placeholder="Rechercher un GIF"
             @input="onGifSearch($event.target.value)"
           />
-          <p v-else class="msg-picker__hint">Bibliothèque locale de GIFs prête à l'emploi.</p>
+          <p v-else class="msg-picker__hint">BibliothÃ¨que locale de GIFs prÃªte Ã  l'emploi.</p>
         </div>
         <div class="msg-picker__body" v-if="pickerMode === 'emoji'">
           <div
@@ -68,7 +68,7 @@
           <p v-if="gifError && gifSearchAvailable && !loadingGifs" class="msg-picker__error">{{ gifError }}</p>
           <div v-if="loadingGifs" class="msg-picker__loading">
             <span class="spinner-border spinner-border-sm me-2"></span>
-            Chargement…
+            Chargementâ€¦
           </div>
         </div>
       </div>
@@ -79,7 +79,7 @@
       :value="messageInput"
       class="form-control"
       rows="2"
-      placeholder="Ecrire un message sécurisé."
+      placeholder="Ecrire un message sÃ©curisÃ©."
       :disabled="sending"
       @keydown.enter.exact.prevent="sendMessage"
       @input="handleComposerInput"
@@ -92,13 +92,13 @@
           <strong>{{ attachment.name }}</strong>
           <p class="small mb-0 text-muted">
             {{ formatFileSize(attachment.size) }}
-            <span v-if="attachment.status === 'uploading'"> · {{ attachment.progress || 0 }}%</span>
-            <span v-if="attachment.status === 'error'" class="text-danger"> · {{ attachment.error }}</span>
+            <span v-if="attachment.status === 'uploading'"> Â· {{ attachment.progress || 0 }}%</span>
+            <span v-if="attachment.status === 'error'" class="text-danger"> Â· {{ attachment.error }}</span>
           </p>
         </div>
         <div class="msg-composer__attachment-actions">
-          <span v-if="attachment.status === 'uploading'" class="msg-panel__pill">Envoi…</span>
-          <span v-else-if="attachment.status === 'ready'" class="msg-panel__pill ok">Prête</span>
+          <span v-if="attachment.status === 'uploading'" class="msg-panel__pill">Envoiâ€¦</span>
+          <span v-else-if="attachment.status === 'ready'" class="msg-panel__pill ok">PrÃªte</span>
           <button type="button" class="btn btn-link p-0" @click="removeAttachment(attachment.id)">Retirer</button>
         </div>
       </article>
@@ -111,7 +111,7 @@
           <strong>Modification du message</strong>
         </template>
         <template v-else-if="composerState.replyTo">
-          <strong>Réponse à {{ composerState.replyTo.displayName || composerState.replyTo.authorDisplayName || 'Participant' }}</strong>
+          <strong>RÃ©ponse Ã  {{ composerState.replyTo.displayName || composerState.replyTo.authorDisplayName || 'Participant' }}</strong>
           <p class="small mb-0 text-muted">
             {{ messagePreviewText(composerState.replyTo) }}
           </p>
@@ -139,7 +139,7 @@
             class="msg-icon-btn"
             @click="triggerAttachmentPicker"
             :disabled="hasAttachmentInProgress || isEditingMessage"
-            aria-label="Ajouter une pièce jointe"
+            aria-label="Ajouter une piÃ¨ce jointe"
           >
             <i class="bi bi-paperclip"></i>
           </button>
@@ -265,3 +265,4 @@ function handleComposerInput(event) {
   emit('update:messageInput', value)
 }
 </script>
+

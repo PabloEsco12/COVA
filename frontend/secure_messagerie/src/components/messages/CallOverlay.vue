@@ -119,16 +119,16 @@ defineProps({
     required: true,
   },
   localVideoRef: {
-    type: Object,
-    required: true,
+    type: [Object, Function],
+    default: null,
   },
   remoteVideoRef: {
-    type: Object,
-    required: true,
+    type: [Object, Function],
+    default: null,
   },
   remoteAudioRef: {
-    type: Object,
-    required: true,
+    type: [Object, Function],
+    default: null,
   },
 })
 

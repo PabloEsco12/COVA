@@ -263,39 +263,17 @@ import MessageSearchPanel from '@/components/messages/MessageSearchPanel.vue'
 import DeleteMessageModal from '@/components/messages/DeleteMessageModal.vue'
 import CustomModal from '@/components/ui/CustomModal.vue'
 import { useMessageComposer } from '@/composables/useMessageComposer'
+import {
+  PRESENCE_STALE_MS,
+  STATUS_LABELS,
+  STATUS_PRESETS,
+  availabilityOptions,
+} from '@/views/messages/constants'
+import { createMessageFormatters } from '@/views/messages/message-formatters'
 
 
 const gifLibrary = defaultGifLibrary
-const PRESENCE_STALE_MS = 60000
 
-
-const STATUS_LABELS = {
-  online: 'En ligne',
-  available: 'Disponible',
-  meeting: 'En réunion',
-  busy: 'Occupé',
-  dnd: 'Ne pas déranger',
-  away: 'Absent',
-  offline: 'Hors ligne',
-}
-
-const STATUS_PRESETS = {
-  available: { label: 'Disponible', message: 'Disponible' },
-  away: { label: 'Absent', message: 'Absent' },
-  meeting: { label: 'En réunion', message: 'En réunion' },
-  busy: { label: 'Occupé', message: 'Occupé' },
-  dnd: { label: 'Ne pas déranger', message: 'Ne pas déranger' },
-  offline: { label: 'Hors ligne', message: '' },
-}
-
-const availabilityOptions = [
-  { value: 'available', label: 'Disponible' },
-  { value: 'away', label: 'Absent' },
-  { value: 'meeting', label: 'En réunion' },
-  { value: 'busy', label: 'Occupé' },
-  { value: 'dnd', label: 'Ne pas déranger' },
-  { value: 'offline', label: 'Hors ligne' },
-]
 
 const storedStatusMessage = (() => {
   try {
@@ -374,6 +352,10 @@ const {
   sending,
   attachmentError,
   pendingAttachments,
+  readyAttachments,
+  hasAttachmentInProgress,
+  isEditingMessage,
+  hasComposerContext,
   showPicker,
   pickerMode,
   emojiSearch,
@@ -900,10 +882,7 @@ const currentMembership = computed(() => {
 
 const isConversationOwner = computed(() => currentMembership.value?.role === 'owner')
 const canManageConversation = computed(() => isConversationOwner.value)
-const readyAttachments = computed(() => pendingAttachments.value.filter((entry) => entry.status === 'ready'))
-const hasAttachmentInProgress = computed(() =>
-  pendingAttachments.value.some((entry) => entry.status === 'uploading'),
-)
+// readyAttachments / hasAttachmentInProgress provided by useMessageComposer
 
 const canSend = computed(() => {
   if (isComposerBlocked.value) return false
@@ -2142,7 +2121,8 @@ async function sendMessage() {
     return
   }
   attachmentError.value = ''
-  const attachmentsPayload = readyAttachments.value
+  const readyList = pendingAttachments.value.filter((entry) => entry.status === 'ready')
+  const attachmentsPayload = readyList
     .map((entry) => entry.descriptor?.upload_token)
     .filter(Boolean)
     .map((token) => ({ upload_token: token }))
@@ -2180,7 +2160,7 @@ async function sendMessage() {
     pinnedBy: null,
     isSystem: false,
     deleted: false,
-    attachments: mapOptimisticAttachments(readyAttachments.value),
+    attachments: mapOptimisticAttachments(readyList),
     replyTo: cloneComposerReference(composerState.replyTo),
     forwardFrom: forwardSameConversation ? cloneComposerReference(composerState.forwardFrom) : null,
     localOnly: true,
@@ -4036,101 +4016,12 @@ function extractDeliverySummary(message) {
   }
 }
 
-function messageStatusLabel(message) {
-  if (message.sentByMe) {
-    const summary = extractDeliverySummary(message)
-    if (summary.total <= 0) {
-      return 'Envoy\u00e9'
-    }
-    if (summary.read >= summary.total) {
-      return 'Lu'
-    }
-    if (summary.delivered > 0) {
-      return 'Distribu\u00e9'
-    }
-    return 'Envoy\u00e9'
-  }
-  switch (message.deliveryState) {
-    case 'read':
-      return 'Lu'
-    case 'delivered':
-      return 'Distribu\u00e9'
-    case 'queued':
-      return 'Envoi'
-    default:
-      return ''
-  }
-}
-
-function messageStatusClass(message) {
-  if (message.sentByMe) {
-    const summary = extractDeliverySummary(message)
-    if (summary.total > 0 && summary.read >= summary.total) {
-      return 'state-read'
-    }
-    if (summary.delivered > 0) {
-      return 'state-delivered'
-    }
-    return 'state-queued'
-  }
-  switch (message.deliveryState) {
-    case 'read':
-      return 'state-read'
-    case 'delivered':
-      return 'state-delivered'
-    case 'queued':
-      return 'state-queued'
-    default:
-      return ''
-  }
-}
-
-function messageStatusDetail(message) {
-  if (message.deleted) return 'Supprim\u00e9'
-  if (message.sentByMe) {
-    const summary = extractDeliverySummary(message)
-    if (!summary.total) {
-      return 'Envoy\u00e9'
-    }
-    if (summary.read >= summary.total) {
-      return `Lu par ${summary.read}/${summary.total}`
-    }
-    if (summary.delivered > 0) {
-      return `Distribu\u00e9 \u00e0 ${summary.delivered}/${summary.total}`
-    }
-    return `En attente (${summary.total})`
-  }
-  if (message.readAt) {
-    return `Lu ${formatTime(message.readAt)}`
-  }
-  if (message.deliveredAt) {
-    return `Distribu\u00e9 ${formatTime(message.deliveredAt)}`
-  }
-  return ''
-}
-
-function messageSecurityLabel(message) {
-  const scheme = message.security?.scheme || 'confidentiel'
-  if (scheme === 'plaintext') return 'Chiffrage applicatif'
-  return `Sch\u00e9ma ${scheme}`
-}
-
-function messageSecurityTooltip(message) {
-  const metadata = message.security?.metadata || {}
-  const lines = Object.entries(metadata).map(([key, value]) => `${key}: ${value}`)
-  return [`Sch\u00e9ma: ${message.security?.scheme || 'n/a'}`, ...lines].join('\n')
-}
-
-const messageFormatters = {
+const messageFormatters = createMessageFormatters({
   formatTime,
   formatAbsolute,
   formatFileSize,
-  messageStatusLabel,
-  messageStatusClass,
-  messageStatusDetail,
-  messageSecurityLabel,
-  messageSecurityTooltip,
-}
+  extractDeliverySummary,
+})
 
 
 
@@ -4313,6 +4204,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style src="@/assets/styles/messages.css"></style>
+
 
 
 

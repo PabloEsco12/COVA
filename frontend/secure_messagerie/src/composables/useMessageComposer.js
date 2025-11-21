@@ -14,7 +14,6 @@ export function useMessageComposer({
   const attachmentError = ref('')
   const pendingAttachments = ref([])
   const readyAttachments = ref([])
-  const hasAttachmentInProgress = ref(false)
   const attachmentInput = ref(null)
 
   const composerState = reactive({
@@ -34,6 +33,14 @@ export function useMessageComposer({
       composerState.mode === 'edit'
     )
   })
+
+  const readyAttachmentList = computed(() =>
+    pendingAttachments.value.filter((entry) => entry.status === 'ready'),
+  )
+
+  const hasAttachmentInProgress = computed(() =>
+    pendingAttachments.value.some((entry) => entry.status === 'uploading'),
+  )
 
   function resetComposerState() {
     composerState.mode = 'new'
@@ -186,7 +193,7 @@ export function useMessageComposer({
     sending,
     attachmentError,
     pendingAttachments,
-    readyAttachments,
+    readyAttachments: readyAttachmentList,
     hasAttachmentInProgress,
     attachmentInput,
     composerState,
