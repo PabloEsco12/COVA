@@ -280,6 +280,7 @@ import { createMessageFormatters } from '@/views/messages/message-formatters'
 import { useAttachments } from '@/views/messages/useAttachments'
 import { useMessageToasts } from '@/views/messages/useMessageToasts'
 import { useCallControls } from '@/views/messages/useCallControls'
+import { generateLocalId } from '@/views/messages/id'
 
 
 const gifLibrary = defaultGifLibrary
@@ -2978,20 +2979,6 @@ async function copyMessage(message) {
 
 
 
-function generateLocalId() {
-
-  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
-
-    return globalThis.crypto.randomUUID()
-
-  }
-
-  return `msg_${Math.random().toString(36).slice(2, 10)}`
-
-}
-
-
-
 function notifyNewIncomingMessage(message) {
   if (!message || message.sentByMe || message.deleted || message.isSystem) return
   const preview =
@@ -3515,6 +3502,9 @@ onBeforeUnmount(() => {
 </script>
 
 <style src="@/assets/styles/messages.css"></style>
+
+
+
 
 
 
