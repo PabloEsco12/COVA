@@ -277,6 +277,7 @@ import { useCallControls } from '@/views/messages/useCallControls'
 import { generateLocalId } from '@/views/messages/id'
 import { useNotificationsBridge } from '@/views/messages/useNotificationsBridge'
 import { useConversationPanel } from '@/views/messages/useConversationPanel'
+import { useComposerContext } from '@/views/messages/useComposerContext'
 
 
 const gifLibrary = defaultGifLibrary
@@ -344,6 +345,7 @@ let typingCleanupTimer = null
 const selectedConversationId = ref(null)
 const currentUserId = ref(localStorage.getItem('user_id') || null)
 const notificationDedupSet = new Set()
+const messageError = ref('')
 const selectedConversation = computed(() => {
   if (!selectedConversationId.value) return null
   return conversations.value.find((conv) => conv.id === selectedConversationId.value) || null
@@ -449,16 +451,36 @@ const {
   attachStream,
   generateCallId,
 })
-const { processNotificationPayload } = useNotificationsBridge({
-  notificationDedupSet,
-  handleIncomingNotificationPayload,
-})
 const forwardPicker = reactive({
   open: false,
   message: null,
   query: '',
 })
 const forwardPickerRef = ref(null)
+const {
+  startReply,
+  startForward,
+  startEdit,
+  cancelComposerContext,
+  initiateForward,
+  cancelForwardSelection,
+  confirmForwardTarget,
+} = useComposerContext({
+  composerState,
+  messageInput,
+  clearPendingAttachments,
+  selectedConversationId,
+  selectConversation,
+  route,
+  router,
+  messageError,
+  forwardPicker,
+  resetComposerState,
+})
+const { processNotificationPayload } = useNotificationsBridge({
+  notificationDedupSet,
+  handleIncomingNotificationPayload,
+})
 const pagination = reactive({
   beforeCursor: null,
   afterCursor: null,
@@ -488,8 +510,6 @@ const {
 })
 
 const loadingMessages = ref(false)
-
-const messageError = ref('')
 
 const copiedMessageId = ref(null)
 
@@ -2573,80 +2593,6 @@ function resetComposerState() {
   composerState.forwardFrom = null
 }
 
-function initiateForward(message) {
-  if (!message) return
-  closeTransientMenus()
-  forwardPicker.open = true
-  forwardPicker.message = message
-  forwardPicker.query = ''
-}
-
-function cancelForwardSelection() {
-  forwardPicker.open = false
-  forwardPicker.message = null
-  forwardPicker.query = ''
-}
-
-async function confirmForwardTarget(conversationId) {
-  if (!forwardPicker.message) {
-    cancelForwardSelection()
-    return
-  }
-  const targetMessage = forwardPicker.message
-  let targetSelected = true
-  cancelForwardSelection()
-  const normalizedId = conversationId ? String(conversationId) : null
-  if (normalizedId && normalizedId !== selectedConversationId.value) {
-    try {
-      await selectConversation(normalizedId)
-    } catch (error) {
-      targetSelected = false
-      messageError.value = "Impossible d'ouvrir la conversation cible pour le transfert."
-      console.warn('Impossible d’ouvrir la conversation cible pour le transfert.', error)
-    }
-  }
-  if (targetSelected && normalizedId && normalizedId !== selectedConversationId.value) {
-    // Si la sélection n’a pas abouti, on ne démarre pas de forward
-    if (String(selectedConversationId.value) !== normalizedId) return
-  }
-  if (targetSelected) {
-    startForward(targetMessage)
-  }
-}
-
-function startReply(message) {
-  if (!message) return
-  composerState.mode = 'reply'
-  composerState.replyTo = message
-  composerState.forwardFrom = null
-  composerState.targetMessageId = null
-}
-
-function startForward(message) {
-  if (!message) return
-  composerState.mode = 'forward'
-  composerState.forwardFrom = message
-  composerState.replyTo = null
-  composerState.targetMessageId = null
-  if (!messageInput.value) {
-    messageInput.value = message.content || ''
-  }
-}
-
-function startEdit(message) {
-  if (!message) return
-  composerState.mode = 'edit'
-  composerState.targetMessageId = message.id
-  composerState.replyTo = null
-  composerState.forwardFrom = null
-  messageInput.value = message.content || ''
-  clearPendingAttachments()
-}
-
-function cancelComposerContext() {
-  resetComposerState()
-}
-
 function confirmDeleteMessage(message) {
   if (!message || !selectedConversationId.value) return
   deleteDialog.message = message
@@ -3266,6 +3212,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style src="@/assets/styles/messages.css"></style>
+
 
 
 
