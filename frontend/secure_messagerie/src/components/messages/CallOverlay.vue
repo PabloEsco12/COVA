@@ -21,7 +21,7 @@
         <div class="call-remote">
           <template v-if="callState.kind === 'video'">
             <video
-              :ref="setRemoteVideoRef"
+              :ref="remoteVideoRef"
               autoplay
               playsinline
               class="call-video__stream"
@@ -31,11 +31,16 @@
           <div v-else class="call-audio-placeholder">
             <i class="bi bi-person-fill"></i>
           </div>
+          <audio
+            v-if="callState.kind !== 'video'"
+            :ref="remoteAudioRef"
+            autoplay
+          ></audio>
           <p class="call-remote__label">{{ remoteDisplayName }}</p>
         </div>
         <div v-if="callState.kind === 'video'" class="call-local">
           <video
-            :ref="setLocalVideoRef"
+            :ref="localVideoRef"
             autoplay
             muted
             playsinline
@@ -47,16 +52,16 @@
       <p v-if="callState.error" class="msg-alert mt-2">{{ callState.error }}</p>
       <div class="call-controls">
         <template v-if="callState.status === 'incoming'">
-          <button type="button" class="btn btn-success" @click="acceptIncomingCall">
+          <button type="button" class="btn btn-success" @click="$emit('accept')">
             <i class="bi bi-telephone-inbound-fill me-1"></i>
             Répondre
           </button>
-          <button type="button" class="btn btn-secondary" @click="rejectIncomingCall">
+          <button type="button" class="btn btn-secondary" @click="$emit('reject')">
             Refuser
           </button>
         </template>
         <template v-else-if="callState.status === 'outgoing'">
-          <button type="button" class="btn btn-secondary" @click="cancelOutgoingCall">
+          <button type="button" class="btn btn-secondary" @click="$emit('cancel')">
             Annuler l'appel
           </button>
         </template>
@@ -65,7 +70,7 @@
             type="button"
             class="btn"
             :class="{ 'is-muted': !callControls.micEnabled }"
-            @click="toggleMicrophone"
+            @click="$emit('toggle-mic')"
           >
             <i :class="callControls.micEnabled ? 'bi bi-mic-fill' : 'bi bi-mic-mute-fill'"></i>
           </button>
@@ -74,7 +79,7 @@
             type="button"
             class="btn"
             :class="{ 'is-muted': !callControls.cameraEnabled }"
-            @click="toggleCamera"
+            @click="$emit('toggle-camera')"
           >
             <i :class="callControls.cameraEnabled ? 'bi bi-camera-video-fill' : 'bi bi-camera-video-off-fill'"></i>
           </button>
@@ -83,7 +88,7 @@
           v-if="callState.status !== 'incoming'"
           type="button"
           class="btn btn-danger"
-          @click="hangupCall"
+          @click="$emit('hangup')"
         >
           <i class="bi bi-telephone-x-fill me-1"></i>
           Raccrocher
@@ -94,8 +99,14 @@
 </template>
 
 <script setup>
-const props = defineProps({
+import { defineProps, defineEmits } from 'vue'
+
+defineProps({
   callState: {
+    type: Object,
+    required: true,
+  },
+  callControls: {
     type: Object,
     required: true,
   },
@@ -105,43 +116,21 @@ const props = defineProps({
   },
   remoteDisplayName: {
     type: String,
-    default: '',
+    required: true,
   },
-  callControls: {
+  localVideoRef: {
     type: Object,
     required: true,
   },
-  acceptIncomingCall: {
-    type: Function,
+  remoteVideoRef: {
+    type: Object,
     required: true,
   },
-  rejectIncomingCall: {
-    type: Function,
-    required: true,
-  },
-  cancelOutgoingCall: {
-    type: Function,
-    required: true,
-  },
-  hangupCall: {
-    type: Function,
-    required: true,
-  },
-  toggleMicrophone: {
-    type: Function,
-    required: true,
-  },
-  toggleCamera: {
-    type: Function,
-    required: true,
-  },
-  setRemoteVideoRef: {
-    type: Function,
-    required: true,
-  },
-  setLocalVideoRef: {
-    type: Function,
+  remoteAudioRef: {
+    type: Object,
     required: true,
   },
 })
+
+defineEmits(['accept', 'reject', 'cancel', 'hangup', 'toggle-mic', 'toggle-camera'])
 </script>

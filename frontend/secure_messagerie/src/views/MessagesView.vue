@@ -1,30 +1,12 @@
-﻿?<template>
+﻿<template>
 
   <div class="msg-shell">
-    <transition-group name="msg-toast" tag="div" class="msg-toast-stack">
-      <article
-        v-for="toast in messageToasts"
-        :key="toast.id"
-        class="msg-toast"
-        @click="openToastConversation(toast)"
-      >
-        <div class="msg-toast__content">
-          <p class="msg-toast__title">{{ toast.title }}</p>
-          <p class="msg-toast__body">{{ toast.body }}</p>
-          <small>{{ formatTime(toast.createdAt) }}</small>
-        </div>
-        <button
-          type="button"
-          class="msg-toast__close"
-          @click.stop="dismissToast(toast.id)"
-          aria-label="Fermer la notification"
-        >
-          <i class="bi bi-x-lg"></i>
-        </button>
-      </article>
-    </transition-group>
-
-    
+    <MessageToastStack
+      :toasts="messageToasts"
+      :formatter="formatTime"
+      @dismiss="dismissToast"
+      @open="openToastConversation"
+    />
 
     <div class="msg-layout">
 
@@ -331,358 +313,72 @@
           </template>
         </CustomModal>
 
-        <div
-          v-if="callState.status !== 'idle'"
-          class="call-overlay"
-          role="dialog"
-          aria-modal="true"
-          :aria-label="callStatusLabel"
-        >
-          <div class="call-panel">
-            <header class="call-panel__header">
-              <div>
-                <p class="call-panel__eyebrow">{{ callState.kind === 'video' ? 'Appel vidéo' : 'Appel audio' }}</p>
-                <h4>{{ callStatusLabel }}</h4>
-                <p class="call-panel__subtitle">{{ remoteDisplayName }}</p>
-              </div>
-            </header>
-            <div
-              class="call-video"
-              :class="{ 'call-video--audio': callState.kind !== 'video' }"
-            >
-              <div class="call-remote">
-                <template v-if="callState.kind === 'video'">
-                  <video
-                    ref="remoteVideoRef"
-                    autoplay
-                    playsinline
-                    class="call-video__stream"
-                    :class="{ 'call-video__stream--hidden': !callState.remoteStream }"
-                  ></video>
-                </template>
-                <div v-else class="call-audio-placeholder">
-                  <i class="bi bi-person-fill"></i>
-                </div>
-                <p class="call-remote__label">{{ remoteDisplayName }}</p>
-              </div>
-              <div v-if="callState.kind === 'video'" class="call-local">
-                <video
-                  ref="localVideoRef"
-                  autoplay
-                  muted
-                  playsinline
-                  class="call-video__stream call-video__stream--local"
-                ></video>
-                <p class="call-local__label">Vous</p>
-              </div>
-            </div>
-            <p v-if="callState.error" class="msg-alert mt-2">{{ callState.error }}</p>
-            <div class="call-controls">
-              <template v-if="callState.status === 'incoming'">
-                <button type="button" class="btn btn-success" @click="acceptIncomingCall">
-                  <i class="bi bi-telephone-inbound-fill me-1"></i>
-                  Répondre
-                </button>
-                <button type="button" class="btn btn-secondary" @click="rejectIncomingCall">
-                  Refuser
-                </button>
-              </template>
-              <template v-else-if="callState.status === 'outgoing'">
-                <button type="button" class="btn btn-secondary" @click="cancelOutgoingCall">
-                  Annuler l'appel
-                </button>
-              </template>
-              <div v-if="callState.status === 'connected'" class="call-controls__toggles">
-                <button
-                  type="button"
-                  class="btn"
-                  :class="{ 'is-muted': !callControls.micEnabled }"
-                  @click="toggleMicrophone"
-                >
-                  <i :class="callControls.micEnabled ? 'bi bi-mic-fill' : 'bi bi-mic-mute-fill'"></i>
-                </button>
-                <button
-                  v-if="callState.kind === 'video'"
-                  type="button"
-                  class="btn"
-                  :class="{ 'is-muted': !callControls.cameraEnabled }"
-                  @click="toggleCamera"
-                >
-                  <i :class="callControls.cameraEnabled ? 'bi bi-camera-video-fill' : 'bi bi-camera-video-off-fill'"></i>
-                </button>
-              </div>
-              <button
-                v-if="callState.status !== 'incoming'"
-                type="button"
-                class="btn btn-danger"
-                @click="hangupCall"
-              >
-                <i class="bi bi-telephone-x-fill me-1"></i>
-                Raccrocher
-              </button>
-            </div>
-          </div>
-        </div>
+        <CallOverlay
+          :call-state="callState"
+          :call-controls="callControls"
+          :call-status-label="callStatusLabel"
+          :remote-display-name="remoteDisplayName"
+          :local-video-ref="localVideoRef"
+          :remote-video-ref="remoteVideoRef"
+          :remote-audio-ref="remoteAudioRef"
+          @accept="acceptIncomingCall"
+          @reject="rejectIncomingCall"
+          @cancel="cancelOutgoingCall"
+          @hangup="hangupCall"
+          @toggle-mic="toggleMicrophone"
+          @toggle-camera="toggleCamera"
+        />
 
       </template>
 
     </section>
   </div>
-  <div v-if="showConversationPanel && selectedConversation" class="msg-panel">
-    <div class="msg-panel__header">
-      <div>
-        <p class="msg-panel__eyebrow">Conversation</p>
-        <h4>{{ selectedConversation.displayName }}</h4>
-        <p class="msg-panel__subtitle" v-if="selectedConversation.topic">{{ selectedConversation.topic }}</p>
-      </div>
-      <button type="button" class="msg-panel__close" @click="closeConversationPanel" aria-label="Fermer le panneau">
-        <i class="bi bi-x-lg"></i>
-      </button>
-    </div>
-    <p class="msg-panel__hint">
-      Gérez les métadonnées, les invitations et les membres de ce canal sécurisé.
-    </p>
-    <dl class="msg-panel__meta">
-      <div>
-        <dt>Identifiant</dt>
-        <dd><code>{{ selectedConversation.id }}</code></dd>
-      </div>
-      <div>
-        <dt>Créée le</dt>
-        <dd>{{ formatAbsolute(selectedConversation.createdAt) }}</dd>
-      </div>
-      <div>
-        <dt>Propriétaires</dt>
-        <dd>{{ conversationOwnerSummary }}</dd>
-      </div>
-    </dl>
-    <p v-if="conversationInfoError" class="msg-alert">{{ conversationInfoError }}</p>
-    <div
-      v-if="conversationInfoNotice"
-      class="alert alert-success msg-panel__notice"
-      role="status"
-    >
-      {{ conversationInfoNotice }}
-    </div>
-    <form class="msg-panel__section" @submit.prevent="saveConversationSettings">
-      <div class="mb-3">
-        <label class="form-label">Titre</label>
-        <input v-model.trim="conversationForm.title" type="text" class="form-control" placeholder="Nom interne de la conversation" maxlength="160" />
-        <p class="msg-panel__hint">
-          Visible dans la colonne de gauche et dans les notifications.
-        </p>
-      </div>
-      <div class="mb-3">
-        <label class="form-label">Sujet</label>
-        <textarea v-model.trim="conversationForm.topic" class="form-control" rows="2" placeholder="Contexte ou consignes"></textarea>
-        <p class="msg-panel__hint">
-          Partagez un rappel ou une consigne qui s'affiche dans ce panneau.
-        </p>
-      </div>
-      <label class="form-check form-switch mb-3">
-        <input v-model="conversationForm.archived" class="form-check-input" type="checkbox" />
-        <span class="form-check-label">Conversation archivée</span>
-      </label>
-      <small class="msg-panel__hint text-muted">
-        Archivés, les échanges restent consultables mais sont masqués des vues actives.
-      </small>
-      <div class="d-flex gap-2">
-        <button class="btn btn-primary flex-grow-1" type="submit" :disabled="savingConversation">
-          <span v-if="savingConversation" class="spinner-border spinner-border-sm me-2"></span>
-          Enregistrer
-        </button>
-        <button class="btn btn-outline-secondary" type="button" @click="closeConversationPanel">Fermer</button>
-      </div>
-    </form>
-    <button
-      class="btn btn-outline-danger w-100 mb-3"
-      type="button"
-      @click="leaveCurrentConversation"
-      :disabled="leavingConversation"
-      title="Se retirer et ne plus recevoir les messages de ce canal"
-    >
-      <span v-if="leavingConversation" class="spinner-border spinner-border-sm me-2"></span>
-      Quitter la conversation
-    </button>
-    <small class="msg-panel__hint text-muted">
-      Lorsque vous êtes le dernier propriétaire actif, un membre actif est automatiquement promu avant votre départ.
-    </small>
-    <section v-if="canManageConversation" class="msg-panel__section">
-      <div class="msg-panel__section-header">
-        <h5>Invitations</h5>
-        <span v-if="loadingInvites" class="msg-panel__pill">Chargement</span>
-      </div>
-      <p class="msg-panel__hint">
-        Créez des accès temporaires en précisant le rôle souhaité et la durée de validité.
-      </p>
-      <form class="msg-panel__invite-form" @submit.prevent="submitInvite">
-        <input
-          v-model.trim="inviteForm.email"
-          type="email"
-          class="form-control"
-          placeholder="Adresse e-mail professionnelle"
-          required
-        />
-        <div class="msg-panel__invite-row">
-          <select v-model="inviteForm.role" class="form-select">
-            <option v-for="role in conversationRoles" :key="role.value" :value="role.value">
-              {{ role.label }}
-            </option>
-          </select>
-          <input
-            v-model.number="inviteForm.expiresInHours"
-            type="number"
-            class="form-control"
-            min="1"
-            max="336"
-            placeholder="Durée (h)"
-          />
-        </div>
-        <button class="btn btn-secondary w-100" type="submit" :disabled="inviteBusy">
-          <span v-if="inviteBusy" class="spinner-border spinner-border-sm me-2"></span>
-          Générer une invitation
-        </button>
-      </form>
-      <ul class="msg-panel__list">
-        <li v-for="invite in invites" :key="invite.id" class="msg-panel__list-item">
-          <div>
-            <strong>{{ invite.email }}</strong>
-            <p class="small mb-0 text-muted">
-              {{ roleLabel(member.role) }}
-              <span class="msg-presence-pill" :class="memberPresence(member.userId || member.id).status">
-                {{ memberPresenceText(member.userId || member.id) }}
-              </span>
-              <span v-if="member.state !== 'active'"> · {{ member.state }}</span>
-              <span v-if="member.mutedUntil" class="msg-panel__pill muted">
-                Sourdine {{ formatAbsolute(member.mutedUntil) }}
-              </span>
-            </p>
-          </div>
-          <button
-            class="btn btn-link text-danger p-0"
-            type="button"
-            @click="revokeInvite(invite.id)"
-            :disabled="inviteRevokeBusy[invite.id]"
-          >
-            Révoquer
-          </button>
-        </li>
-        <li v-if="!invites.length && !loadingInvites" class="text-muted small">Aucune invitation active.</li>
-      </ul>
-    </section>
-    <section v-if="selectedConversation.members?.length" class="msg-panel__section">
-      <div class="msg-panel__section-header">
-        <h5>Membres</h5>
-        <span class="msg-panel__pill">{{ selectedConversation.members.length }}</span>
-      </div>
-      <p class="msg-panel__hint">
-        Ajustez les rôles, activer une sourdine temporaire ou retirer un collaborateur.
-      </p>
-      <ul class="msg-panel__list">
-        <li v-for="member in selectedConversation.members" :key="member.id" class="msg-panel__member">
-          <div>
-            <strong>{{ member.displayName || member.email }}</strong>
-            <p class="small mb-0 text-muted">
-              {{ roleLabel(member.role) }}
-              <span v-if="member.state !== 'active'"> ?,· {{ member.state }}</span>
-              <span v-if="member.mutedUntil" class="msg-panel__pill muted">
-                Sourdine {{ formatAbsolute(member.mutedUntil) }}
-              </span>
-            </p>
-          </div>
-          <div
-            v-if="canManageConversation && (member.userId || member.id) !== String(currentUserId || '')"
-            class="msg-panel__member-actions"
-          >
-            <select
-              class="form-select form-select-sm"
-              :value="member.role"
-              @change="updateMemberRole(member, $event.target.value)"
-              :disabled="memberBusy[member.id]"
-            >
-              <option v-for="role in conversationRoles" :key="`${member.id}-${role.value}`" :value="role.value">
-                {{ role.label }}
-              </option>
-            </select>
-            <button
-              type="button"
-              class="btn btn-link p-0"
-              @click="member.mutedUntil ? unmuteMember(member) : muteMember(member)"
-              :disabled="memberBusy[member.id]"
-            >
-              {{ member.mutedUntil ? 'Réactiver' : 'Sourdine 1h' }}
-            </button>
-            <button
-              type="button"
-              class="btn btn-link text-danger p-0"
-              @click="removeMember(member)"
-              :disabled="memberBusy[member.id]"
-            >
-              Retirer
-            </button>
-          </div>
-        </li>
-      </ul>
-    </section>
-  </div>
+  <ConversationPanel
+    :show="showConversationPanel"
+    :selected-conversation="selectedConversation"
+    :conversation-owner-summary="conversationOwnerSummary"
+    :conversation-info-error="conversationInfoError"
+    :conversation-info-notice="conversationInfoNotice"
+    :conversation-form="conversationForm"
+    :saving-conversation="savingConversation"
+    :leaving-conversation="leavingConversation"
+    :loading-invites="loadingInvites"
+    :invites="invites"
+    :invite-form="inviteForm"
+    :invite-busy="inviteBusy"
+    :invite-revoke-busy="inviteRevokeBusy"
+    :member-busy="memberBusy"
+    :can-manage-conversation="canManageConversation"
+    :current-user-id="currentUserId"
+    :conversation-roles="conversationRoles"
+    :format-absolute="formatAbsolute"
+    :role-label="roleLabel"
+    :member-presence="memberPresence"
+    :member-presence-text="memberPresenceText"
+    :close-conversation-panel="closeConversationPanel"
+    :save-conversation-settings="saveConversationSettings"
+    :leave-current-conversation="leaveCurrentConversation"
+    :submit-invite="submitInvite"
+    :revoke-invite="revokeInvite"
+    :update-member-role="updateMemberRole"
+    :mute-member="muteMember"
+    :unmute-member="unmuteMember"
+    :remove-member="removeMember"
+  />
 
-  <div
-    v-if="forwardPicker.open"
-    class="forward-picker__backdrop"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Choisir la destination du transfert"
-    @click="cancelForwardSelection"
-  >
-    <div class="forward-picker__panel" @click.stop>
-      <header class="forward-picker__header">
-        <p class="forward-picker__eyebrow">Transférer ce message</p>
-        <div class="forward-picker__preview">
-          <strong class="forward-picker__preview-author">
-            {{ forwardPicker.message?.displayName || 'Message sélectionné' }}
-          </strong>
-          <p class="forward-picker__preview-body">
-            {{ messagePreviewText(forwardPicker.message) }}
-          </p>
-        </div>
-      </header>
-      <div class="forward-picker__search">
-        <input
-          ref="forwardPickerInput"
-          v-model.trim="forwardPicker.query"
-          type="search"
-          class="form-control"
-          placeholder="Rechercher un contact ou une conversation"
-        />
-      </div>
-      <div class="forward-picker__list" role="listbox">
-        <button
-          v-for="target in forwardPickerTargets"
-          :key="`forward-target-${target.id}`"
-          type="button"
-          class="forward-picker__item"
-          @click="confirmForwardTarget(target.id)"
-        >
-          <div class="forward-picker__item-main">
-            <span class="forward-picker__item-title">{{ target.displayName }}</span>
-            <span v-if="target.id === selectedConversationId" class="forward-picker__badge">Actuelle</span>
-          </div>
-          <p class="forward-picker__item-subtitle">
-            {{ target.participantsLabel || 'Conversation sécurisée' }}
-          </p>
-        </button>
-        <p v-if="!forwardPickerTargets.length" class="forward-picker__empty">
-          Aucune conversation ne correspond à votre recherche.
-        </p>
-      </div>
-      <div class="forward-picker__actions">
-        <router-link class="btn btn-outline-primary flex-grow-1" to="/dashboard/messages/new" @click="cancelForwardSelection">
-          Nouvelle conversation
-        </router-link>
-        <button type="button" class="btn btn-light" @click="cancelForwardSelection">Annuler</button>
-      </div>
-    </div>
-  </div>
+
+  <ForwardPicker
+    ref="forwardPickerRef"
+    :open="forwardPicker.open"
+    :message="forwardPicker.message"
+    :preview="messagePreviewText(forwardPicker.message)"
+    :query="forwardPicker.query"
+    :targets="forwardPickerTargets"
+    @update:query="forwardPicker.query = $event"
+    @select="confirmForwardTarget"
+    @cancel="cancelForwardSelection"
+  />
+
 </div>
 </template>
 <script setup>
@@ -716,6 +412,10 @@ import ConversationSidebar from '@/components/messages/ConversationSidebar.vue'
 import ChatHeader from '@/components/messages/ChatHeader.vue'
 import MessageList from '@/components/messages/MessageList.vue'
 import AvailabilityMenu from '@/components/messages/AvailabilityMenu.vue'
+import ConversationPanel from '@/components/messages/ConversationPanel.vue'
+import CallOverlay from '@/components/messages/CallOverlay.vue'
+import ForwardPicker from '@/components/messages/ForwardPicker.vue'
+import MessageToastStack from '@/components/messages/MessageToastStack.vue'
 import CustomModal from '@/components/ui/CustomModal.vue'
 
 
@@ -837,7 +537,7 @@ const forwardPicker = reactive({
   message: null,
   query: '',
 })
-const forwardPickerInput = ref(null)
+const forwardPickerRef = ref(null)
 const pagination = reactive({
   beforeCursor: null,
   afterCursor: null,
@@ -916,6 +616,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 
 const socketRef = ref(null)
 const localVideoRef = ref(null)
+const remoteAudioRef = ref(null)
 const remoteVideoRef = ref(null)
 const callState = reactive({
   status: 'idle',
@@ -932,6 +633,68 @@ const callControls = reactive({
   micEnabled: true,
   cameraEnabled: true,
 })
+const callLog = (...args) => {
+  try {
+    // eslint-disable-next-line no-console
+    console.info('[call]', ...args)
+  } catch {
+    /* ignore logging failures */
+  }
+}
+let ringtoneContext = null
+let ringtoneOscillator = null
+let ringtoneGain = null
+let ringtoneInterval = null
+function stopRingtone() {
+  try {
+    if (ringtoneInterval) {
+      clearInterval(ringtoneInterval)
+    }
+    if (ringtoneOscillator) {
+      ringtoneOscillator.stop()
+      ringtoneOscillator.disconnect()
+    }
+    if (ringtoneGain) {
+      ringtoneGain.disconnect()
+    }
+  } catch {}
+  ringtoneOscillator = null
+  ringtoneGain = null
+  ringtoneInterval = null
+}
+function startRingtone(mode = 'outgoing') {
+  try {
+    if (!ringtoneContext) {
+      const Ctx = window.AudioContext || window.webkitAudioContext
+      if (!Ctx) return
+      ringtoneContext = new Ctx()
+    }
+    stopRingtone()
+    const seq = mode === 'incoming' ? [523, 659, 784, 659] : [494, 622, 740, 622]
+    ringtoneOscillator = ringtoneContext.createOscillator()
+    ringtoneGain = ringtoneContext.createGain()
+    ringtoneOscillator.type = 'sine'
+    ringtoneOscillator.frequency.value = seq[0]
+    ringtoneGain.gain.value = 0.02
+    ringtoneOscillator.connect(ringtoneGain)
+    ringtoneGain.connect(ringtoneContext.destination)
+    ringtoneContext.resume?.()
+    ringtoneOscillator.start()
+    // Douce montée/descente toutes les ~480ms
+    let idx = 0
+    ringtoneInterval = setInterval(() => {
+      if (!ringtoneOscillator) {
+        clearInterval(ringtoneInterval)
+        ringtoneInterval = null
+        return
+      }
+      idx = (idx + 1) % seq.length
+      ringtoneOscillator.frequency.value = seq[idx]
+    }, 480)
+  } catch (err) {
+    callLog('ringtone error', err?.message || err)
+  }
+}
 let peerConnection = null
 const rtcConfig = {
   iceServers: [
@@ -1457,7 +1220,9 @@ watch(
   (open) => {
     if (open) {
       nextTick(() => {
-        forwardPickerInput.value?.focus()
+        try {
+          forwardPickerRef.value?.inputRef?.focus?.()
+        } catch {}
       })
     }
   },
@@ -2542,10 +2307,15 @@ async function sendMessage() {
     .filter(Boolean)
     .map((token) => ({ upload_token: token }))
   const draftContent = messageInput.value.trim()
+  const forwardSameConversation =
+    composerState.forwardFrom &&
+    composerState.forwardFrom.conversationId &&
+    selectedConversationId.value &&
+    String(composerState.forwardFrom.conversationId) === String(selectedConversationId.value)
   const replyToId =
     composerState.replyTo && isValidUuid(composerState.replyTo.id) ? composerState.replyTo.id : null
   const forwardId =
-    composerState.forwardFrom && isValidUuid(composerState.forwardFrom.id)
+    composerState.forwardFrom && forwardSameConversation && isValidUuid(composerState.forwardFrom.id)
       ? composerState.forwardFrom.id
       : null
   const payload = {
@@ -2572,7 +2342,7 @@ async function sendMessage() {
     deleted: false,
     attachments: mapOptimisticAttachments(readyAttachments.value),
     replyTo: cloneComposerReference(composerState.replyTo),
-    forwardFrom: cloneComposerReference(composerState.forwardFrom),
+    forwardFrom: forwardSameConversation ? cloneComposerReference(composerState.forwardFrom) : null,
     localOnly: true,
   }
   messages.value.push(optimisticMessage)
@@ -3003,16 +2773,25 @@ async function confirmForwardTarget(conversationId) {
     return
   }
   const targetMessage = forwardPicker.message
+  let targetSelected = true
   cancelForwardSelection()
   const normalizedId = conversationId ? String(conversationId) : null
   if (normalizedId && normalizedId !== selectedConversationId.value) {
     try {
       await selectConversation(normalizedId)
     } catch (error) {
+      targetSelected = false
+      messageError.value = "Impossible d'ouvrir la conversation cible pour le transfert."
       console.warn('Impossible d’ouvrir la conversation cible pour le transfert.', error)
     }
   }
-  startForward(targetMessage)
+  if (targetSelected && normalizedId && normalizedId !== selectedConversationId.value) {
+    // Si la sélection n’a pas abouti, on ne démarre pas de forward
+    if (String(selectedConversationId.value) !== normalizedId) return
+  }
+  if (targetSelected) {
+    startForward(targetMessage)
+  }
 }
 
 function startReply(message) {
@@ -3423,11 +3202,13 @@ function setCallError(err) {
   } else {
     callState.error = err.message || "La connexion ? l'appel a ?chou?."
   }
+  callLog('call error', callState.error)
 }
 
 function sendCallSignal(event, payload = {}) {
   if (!socketRef.value || !selectedConversationId.value) return
   try {
+    callLog('send signal', event, payload.call_id || null, payload.reason || '')
     socketRef.value.send({
       event,
       payload: {
@@ -3452,7 +3233,11 @@ async function requestMedia(kind = 'audio') {
     throw new Error('Votre navigateur ne permet pas les appels s?curis?s.')
   }
   const constraints = {
-    audio: true,
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    },
     video: kind === 'video',
   }
   return navigator.mediaDevices.getUserMedia(constraints)
@@ -3468,6 +3253,15 @@ async function createPeerConnection(stream) {
   peerConnection = new RTCPeerConnection(rtcConfig)
   peerConnection.ontrack = (event) => {
     const [remote] = event.streams
+    callLog('ontrack', event.track?.kind, {
+      streams: event.streams?.length,
+      trackMuted: event.track?.muted,
+    })
+    if (event.track) {
+      event.track.onmute = () => callLog('track muted', event.track.kind)
+      event.track.onunmute = () => callLog('track unmuted', event.track.kind)
+      event.track.onended = () => callLog('track ended', event.track.kind)
+    }
     if (remote) {
       callState.remoteStream = remote
     }
@@ -3485,13 +3279,23 @@ async function createPeerConnection(stream) {
       })
     }
   }
+  peerConnection.oniceconnectionstatechange = () => {
+    if (peerConnection) {
+      callLog('ice state', peerConnection.iceConnectionState)
+    }
+  }
   peerConnection.onconnectionstatechange = () => {
     if (!peerConnection) return
     if (peerConnection.connectionState === 'connected') {
+      callLog('peer connection connected')
       callState.status = 'connected'
     } else if (peerConnection.connectionState === 'failed') {
+      callLog('peer connection failed')
       setCallError('La connexion a ?chou?.')
       endCall(true)
+    }
+    if (['connected', 'failed', 'disconnected', 'closed'].includes(peerConnection.connectionState)) {
+      stopRingtone()
     }
   }
   if (stream) {
@@ -3507,6 +3311,7 @@ function serializeDescription(desc) {
 }
 
 async function startCall(kind = 'audio') {
+  callLog('startCall requested', kind)
   callState.error = ''
   if (!selectedConversationId.value) {
     setCallError('Aucune conversation active.')
@@ -3535,11 +3340,22 @@ async function startCall(kind = 'audio') {
   callControls.cameraEnabled = kind === 'video'
   try {
     const stream = await requestMedia(kind)
+    callLog('media acquired', {
+      audio: !!stream.getAudioTracks().length,
+      video: !!stream.getVideoTracks().length,
+    })
+    stream.getAudioTracks().forEach((track) => {
+      track.enabled = callControls.micEnabled
+    })
+    stream.getVideoTracks().forEach((track) => {
+      track.enabled = callControls.cameraEnabled
+    })
     callState.localStream = stream
     await createPeerConnection(stream)
     const offer = await peerConnection.createOffer()
     await peerConnection.setLocalDescription(offer)
     callState.status = 'outgoing'
+    startRingtone('outgoing')
     const description = serializeDescription(peerConnection.localDescription)
     if (!description) throw new Error('Impossible de pr\u00E9parer l\'offre.')
     sendCallSignal('call:offer', {
@@ -3549,6 +3365,7 @@ async function startCall(kind = 'audio') {
       sdp: description,
     })
   } catch (err) {
+    callLog('startCall error', err?.message || err)
     setCallError(err)
     endCall(true)
   }
@@ -3569,37 +3386,65 @@ function rejectIncomingCall() {
 async function acceptIncomingCall() {
   const offer = callState.incomingOffer
   if (!offer) return
+  callLog('acceptIncomingCall', offer.call_id || callState.callId || 'no-call-id')
+  stopRingtone()
   callState.error = ''
   callState.status = 'connecting'
   callControls.micEnabled = true
   callControls.cameraEnabled = callState.kind === 'video'
-  try {
-    const stream = await requestMedia(callState.kind)
-    callState.localStream = stream
-    await createPeerConnection(stream)
-    if (offer.sdp) {
-      await peerConnection.setRemoteDescription(offer.sdp)
+  const attemptKinds = callState.kind === 'video' ? ['video', 'audio'] : ['audio']
+  for (const attempt of attemptKinds) {
+    try {
+      callState.kind = attempt
+      callControls.cameraEnabled = attempt === 'video'
+      const stream = await requestMedia(attempt)
+      stream.getAudioTracks().forEach((track) => {
+        track.enabled = callControls.micEnabled
+      })
+      stream.getVideoTracks().forEach((track) => {
+        track.enabled = callControls.cameraEnabled
+      })
+      callState.localStream = stream
+      await createPeerConnection(stream)
+      if (offer.sdp) {
+        await peerConnection.setRemoteDescription(offer.sdp)
+      }
+      const answer = await peerConnection.createAnswer()
+      await peerConnection.setLocalDescription(answer)
+      flushPendingCandidates()
+      const description = serializeDescription(peerConnection.localDescription)
+      if (!description) throw new Error('Impossible de pr\u00E9parer la r\u00E9ponse.')
+      sendCallSignal('call:answer', {
+        call_id: callState.callId,
+        target_user_id: callState.remoteUserId,
+        kind: callState.kind,
+        sdp: description,
+      })
+      callState.incomingOffer = null
+      return
+    } catch (err) {
+      callLog('acceptIncomingCall error', attempt, err?.message || err)
+      if (attempt === 'audio') {
+        setCallError(err)
+        endCall(true)
+        return
+      }
     }
-    const answer = await peerConnection.createAnswer()
-    await peerConnection.setLocalDescription(answer)
-    flushPendingCandidates()
-    const description = serializeDescription(peerConnection.localDescription)
-    if (!description) throw new Error('Impossible de pr\u00E9parer la r\u00E9ponse.')
-    sendCallSignal('call:answer', {
-      call_id: callState.callId,
-      target_user_id: callState.remoteUserId,
-      sdp: description,
-    })
-    callState.incomingOffer = null
-  } catch (err) {
-    setCallError(err)
-    endCall(true)
   }
 }
 
 function endCall(silent = false, options = {}) {
+  callLog('endCall', { silent, options, callId: callState.callId })
+  stopRingtone()
   const currentCallId = callState.callId
   const remoteId = callState.remoteUserId
+  const callSummary = {
+    callId: currentCallId,
+    kind: callState.kind,
+    initiator: callState.initiator,
+    remote: remoteDisplayName.value,
+    reason: options.reason || 'ended',
+  }
   if (peerConnection) {
     try {
       peerConnection.ontrack = null
@@ -3622,6 +3467,9 @@ function endCall(silent = false, options = {}) {
   callControls.micEnabled = true
   callControls.cameraEnabled = true
   pendingIceCandidates.length = 0
+  if (callSummary.callId && selectedConversationId.value) {
+    addLocalCallLog(callSummary)
+  }
   if (!silent && currentCallId && remoteId) {
     sendCallSignal('call:hangup', {
       call_id: currentCallId,
@@ -3659,6 +3507,7 @@ function handleCallSignal(evt) {
 function handleIncomingOffer(data) {
   const fromUserId = data.from_user_id ? String(data.from_user_id) : null
   if (callState.status !== 'idle') {
+    callLog('incoming offer while busy', data.call_id, 'current', callState.callId)
     if (data.call_id && fromUserId) {
       sendCallSignal('call:hangup', {
         call_id: data.call_id,
@@ -3676,10 +3525,22 @@ function handleIncomingOffer(data) {
   callState.error = ''
   callControls.micEnabled = true
   callControls.cameraEnabled = callState.kind === 'video'
+  startRingtone('incoming')
+  callLog('incoming call', {
+    callId: callState.callId,
+    kind: callState.kind,
+    from: callState.remoteUserId,
+  })
 }
 
 function handleIncomingAnswer(data) {
   if (!callState.callId || callState.callId !== data.call_id || !peerConnection) return
+  callLog('answer received', data.call_id)
+  stopRingtone()
+  if (data.kind) {
+    callState.kind = data.kind
+    callControls.cameraEnabled = data.kind === 'video'
+  }
   if (data.from_user_id && !callState.remoteUserId) {
     callState.remoteUserId = String(data.from_user_id)
   }
@@ -3708,6 +3569,7 @@ function handleIncomingCandidate(data) {
 
 function handleIncomingHangup(data) {
   if (!callState.callId || data.call_id !== callState.callId) return
+  callLog('remote hangup', data.call_id, data.reason || '')
   endCall(true)
 }
 
@@ -3743,6 +3605,9 @@ function attachStream(el, stream) {
   } else {
     el.removeAttribute('src')
   }
+  if (stream && typeof el.play === 'function') {
+    el.play().catch(() => {})
+  }
 }
 
 function flushPendingCandidates() {
@@ -3767,11 +3632,51 @@ watch(
   () => callState.remoteStream,
   (stream) => {
     attachStream(remoteVideoRef.value, stream || null)
+    attachStream(remoteAudioRef.value, stream || null)
   },
 )
 
 watch(localVideoRef, (el) => attachStream(el, callState.localStream || null))
 watch(remoteVideoRef, (el) => attachStream(el, callState.remoteStream || null))
+watch(remoteAudioRef, (el) => attachStream(el, callState.remoteStream || null))
+
+watch(
+  () => callState.status,
+  (status, prev) => {
+    callLog('call status change', prev, '->', status)
+    if (status === 'connected' || status === 'idle') {
+      stopRingtone()
+    }
+  },
+)
+
+function addLocalCallLog(summary) {
+  const direction = summary.initiator ? 'sortant' : 'entrant'
+  const kindLabel = summary.kind === 'video' ? 'vidéo' : 'audio'
+  const outcomeMap = {
+    hangup: 'terminé',
+    decline: 'refusé',
+    canceled: 'annulé',
+    busy: 'occupé',
+    failed: 'interrompu',
+    ended: 'terminé',
+  }
+  const outcome = outcomeMap[summary.reason] || 'terminé'
+  const content = `Appel ${kindLabel} ${direction} ${outcome} - ${summary.remote || 'participant'}`
+  messages.value.push({
+    id: generateLocalId(),
+    conversationId: selectedConversationId.value,
+    authorId: null,
+    displayName: 'Système',
+    avatarUrl: null,
+    content,
+    createdAt: new Date(),
+    isSystem: true,
+    sentByMe: false,
+    deliveryState: 'delivered',
+    localOnly: true,
+  })
+}
 
 
 async function copyMessage(message) {
@@ -4568,6 +4473,8 @@ onBeforeUnmount(() => {
 </script>
 
 <style src="@/assets/styles/messages.css"></style>
+
+
 
 
 

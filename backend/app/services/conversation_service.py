@@ -274,7 +274,7 @@ class ConversationService:
         if conversation is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.")
         if self._get_metadata(conversation).get("archived"):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Conversation is archived.")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Conversation est archivée.")
         token = secrets.token_urlsafe(24)
         expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_in_hours)
         invite = ConversationInvite(
@@ -327,19 +327,19 @@ class ConversationService:
         result = await self.session.execute(stmt)
         invite = result.scalar_one_or_none()
         if invite is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found.")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation non trouvée.")
         now = datetime.now(timezone.utc)
         if invite.expires_at < now:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitation expired.")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitation expirée.")
         if invite.accepted_at:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitation already used.")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitation déjà utilisée.")
 
         conv_id = invite.conversation_id
         conversation = invite.conversation or await self.session.get(Conversation, conv_id)
         if conversation is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation non trouvée.")
         if self._get_metadata(conversation).get("archived"):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Conversation is archived.")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Conversation est archivée.")
         stmt_member = select(ConversationMember).where(
             ConversationMember.conversation_id == conv_id,
             ConversationMember.user_id == user.id,
@@ -581,9 +581,9 @@ class ConversationService:
         membership = await self._get_membership(conversation_id, author.id)
         conversation = await self.session.get(Conversation, conversation_id)
         if conversation is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation non trouvée.")
         if self._get_metadata(conversation).get("archived"):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Conversation is archived.")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Conversation est archivée")
         block_states = {}
         if conversation.type == ConversationType.DIRECT:
             block_states = await self.get_block_states(author, [conversation])
