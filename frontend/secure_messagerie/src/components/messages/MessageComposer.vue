@@ -39,7 +39,7 @@
             placeholder="Rechercher un GIF"
             @input="onGifSearch($event.target.value)"
           />
-          <p v-else class="msg-picker__hint">BibliothÃ¨que locale de GIFs prÃªte Ã  l'emploi.</p>
+          <p v-else class="msg-picker__hint">Bibliothèque locale de GIFs prête à l'emploi.</p>
         </div>
         <div class="msg-picker__body" v-if="pickerMode === 'emoji'">
           <div
@@ -68,7 +68,7 @@
           <p v-if="gifError && gifSearchAvailable && !loadingGifs" class="msg-picker__error">{{ gifError }}</p>
           <div v-if="loadingGifs" class="msg-picker__loading">
             <span class="spinner-border spinner-border-sm me-2"></span>
-            Chargementâ€¦
+            Chargement…
           </div>
         </div>
       </div>
@@ -97,8 +97,8 @@
           </p>
         </div>
         <div class="msg-composer__attachment-actions">
-          <span v-if="attachment.status === 'uploading'" class="msg-panel__pill">Envoiâ€¦</span>
-          <span v-else-if="attachment.status === 'ready'" class="msg-panel__pill ok">PrÃªte</span>
+          <span v-if="attachment.status === 'uploading'" class="msg-panel__pill">Envoi</span>
+          <span v-else-if="attachment.status === 'ready'" class="msg-panel__pill ok">Prêt</span>
           <button type="button" class="btn btn-link p-0" @click="removeAttachment(attachment.id)">Retirer</button>
         </div>
       </article>
