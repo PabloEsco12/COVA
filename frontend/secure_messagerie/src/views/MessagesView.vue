@@ -277,6 +277,9 @@ import {
   extractDeliverySummary,
 } from '@/views/messages/formatters'
 import { createMessageFormatters } from '@/views/messages/message-formatters'
+import { useAttachments } from '@/views/messages/useAttachments'
+import { useMessageToasts } from '@/views/messages/useMessageToasts'
+import { useCallControls } from '@/views/messages/useCallControls'
 
 
 const gifLibrary = defaultGifLibrary
@@ -354,6 +357,14 @@ const inviteBusy = ref(false)
 const inviteRevokeBusy = reactive({})
 const memberBusy = reactive({})
 const leavingConversation = ref(false)
+const selectedConversationId = ref(null)
+const currentUserId = ref(localStorage.getItem('user_id') || null)
+const selectedConversation = computed(() => {
+  if (!selectedConversationId.value) return null
+  return conversations.value.find((conv) => conv.id === selectedConversationId.value) || null
+})
+const route = useRoute()
+const router = useRouter()
 const {
   messageInput,
   sending,
@@ -375,6 +386,84 @@ const {
   onAfterSend: () => {},
   scrollToBottom,
 })
+const {
+  triggerAttachmentPicker,
+  onAttachmentChange,
+  queueAttachment,
+  uploadAttachmentFile,
+  removeAttachment,
+  clearPendingAttachments,
+} = useAttachments({
+  selectedConversationId,
+  pendingAttachments,
+  attachmentError,
+  attachmentInput,
+  uploadAttachment,
+  extractError,
+})
+const { messageToasts, queueToastNotification, dismissToast, openToastConversation } =
+  useMessageToasts({
+    router,
+    selectConversation,
+    ensureMessageVisible,
+    generateLocalId,
+  })
+const attachStream = (el, stream) => {
+  if (!el) return
+  if ('srcObject' in el) {
+    el.srcObject = stream || null
+  } else if (stream) {
+    el.src = URL.createObjectURL(stream)
+  } else {
+    el.removeAttribute('src')
+  }
+  if (stream && typeof el.play === 'function') {
+    el.play().catch(() => {})
+  }
+}
+function sendCallSignal(event, payload = {}) {
+  if (!socketRef.value || !selectedConversationId.value) return
+  try {
+    callLog('send signal', event, payload.call_id || null, payload.reason || '')
+    socketRef.value.send({
+      event,
+      payload: {
+        conversation_id: selectedConversationId.value,
+        ...payload,
+      },
+    })
+  } catch {}
+}
+const {
+  callState,
+  callControls,
+  localVideoRef,
+  remoteAudioRef,
+  remoteVideoRef,
+  remoteDisplayName,
+  callStatusLabel,
+  startCall,
+  acceptIncomingCall,
+  rejectIncomingCall,
+  cancelOutgoingCall,
+  hangupCall,
+  toggleMicrophone,
+  toggleCamera,
+  handleCallSignal,
+  flushPendingCandidates,
+  endCall,
+} = useCallControls({
+  selectedConversation,
+  selectedConversationId,
+  currentUserId,
+  displayNameForUser,
+  sendCallSignal,
+  notifyIncomingSummary: null,
+  addLocalCallLog,
+  ensurePeerConnectionReady: () => {},
+  attachStream,
+  generateCallId,
+})
 const forwardPicker = reactive({
   open: false,
   message: null,
@@ -389,7 +478,6 @@ const pagination = reactive({
 })
 const loadingOlderMessages = ref(false)
 const suppressAutoScroll = ref(false)
-const selectedConversationId = ref(null)
 const messages = ref([])
 
 const {
@@ -440,103 +528,18 @@ const gifResults = ref(gifLibrary.slice())
 const loadingGifs = ref(false)
 const gifError = ref('')
 const gifSearchAvailable = hasGifApiSupport()
-const messageToasts = ref([])
-const toastTimers = new Map()
 const optimisticMessageIds = new Set()
 const notificationDedupSet = new Set()
 let notificationPermissionRequestPending = false
 const browserNotificationsEnabled = ref(readBrowserNotificationPreference())
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-
 const socketRef = ref(null)
-const localVideoRef = ref(null)
-const remoteAudioRef = ref(null)
-const remoteVideoRef = ref(null)
-const callState = reactive({
-  status: 'idle',
-  callId: null,
-  kind: 'audio',
-  remoteUserId: null,
-  incomingOffer: null,
-  initiator: false,
-  error: '',
-  localStream: null,
-  remoteStream: null,
-})
-const callControls = reactive({
-  micEnabled: true,
-  cameraEnabled: true,
-})
 const callLog = (...args) => {
   try {
-    // eslint-disable-next-line no-console
     console.info('[call]', ...args)
-  } catch {
-    /* ignore logging failures */
-  }
-}
-let ringtoneContext = null
-let ringtoneOscillator = null
-let ringtoneGain = null
-let ringtoneInterval = null
-function stopRingtone() {
-  try {
-    if (ringtoneInterval) {
-      clearInterval(ringtoneInterval)
-    }
-    if (ringtoneOscillator) {
-      ringtoneOscillator.stop()
-      ringtoneOscillator.disconnect()
-    }
-    if (ringtoneGain) {
-      ringtoneGain.disconnect()
-    }
   } catch {}
-  ringtoneOscillator = null
-  ringtoneGain = null
-  ringtoneInterval = null
 }
-function startRingtone(mode = 'outgoing') {
-  try {
-    if (!ringtoneContext) {
-      const Ctx = window.AudioContext || window.webkitAudioContext
-      if (!Ctx) return
-      ringtoneContext = new Ctx()
-    }
-    stopRingtone()
-    const seq = mode === 'incoming' ? [523, 659, 784, 659] : [494, 622, 740, 622]
-    ringtoneOscillator = ringtoneContext.createOscillator()
-    ringtoneGain = ringtoneContext.createGain()
-    ringtoneOscillator.type = 'sine'
-    ringtoneOscillator.frequency.value = seq[0]
-    ringtoneGain.gain.value = 0.02
-    ringtoneOscillator.connect(ringtoneGain)
-    ringtoneGain.connect(ringtoneContext.destination)
-    ringtoneContext.resume?.()
-    ringtoneOscillator.start()
-    // Douce montée/descente toutes les ~480ms
-    let idx = 0
-    ringtoneInterval = setInterval(() => {
-      if (!ringtoneOscillator) {
-        clearInterval(ringtoneInterval)
-        ringtoneInterval = null
-        return
-      }
-      idx = (idx + 1) % seq.length
-      ringtoneOscillator.frequency.value = seq[idx]
-    }, 480)
-  } catch (err) {
-    callLog('ringtone error', err?.message || err)
-  }
-}
-let peerConnection = null
-const rtcConfig = {
-  iceServers: [
-    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
-  ],
-}
-const pendingIceCandidates = []
 const localTypingState = reactive({ active: false, timer: null })
 const LOCAL_TYPING_IDLE_MS = 3500
 const REMOTE_TYPING_STALE_MS = 6000
@@ -549,16 +552,10 @@ const realtimeConversationId = ref(null)
 let copyTimer = null
 let gifSearchTimer = null
 
-
-const route = useRoute()
-
-const router = useRouter()
-
 const messageListRef = ref(null)
 
 
 
-const currentUserId = ref(localStorage.getItem('user_id') || null)
 const authToken = ref(localStorage.getItem('access_token') || null)
 const notificationsStream = useNotificationsStream({
   token: authToken.value,
@@ -715,12 +712,6 @@ const activeFilterLabel = computed(() => {
 })
 
 
-
-const selectedConversation = computed(() => {
-  if (!selectedConversationId.value) return null
-  return conversations.value.find((conv) => conv.id === selectedConversationId.value) || null
-})
-
 const composerBlockedInfo = computed(() => {
   const conv = selectedConversation.value
   if (!conv) return null
@@ -858,27 +849,6 @@ const typingIndicatorText = computed(() => {
   return `${names[0]}, ${names[1]} et ${names.length - 2} autres écrivent...`
 })
 
-const remoteDisplayName = computed(() => {
-  if (callState.remoteUserId) {
-    return displayNameForUser(callState.remoteUserId)
-  }
-  return 'Participant'
-})
-
-const callStatusLabel = computed(() => {
-  switch (callState.status) {
-    case 'incoming':
-      return `${remoteDisplayName.value} vous appelle`
-    case 'outgoing':
-      return `Connexion avec ${remoteDisplayName.value}`
-    case 'connecting':
-      return `Initialisation de l'appel`
-    case 'connected':
-      return `En communication avec ${remoteDisplayName.value}`
-    default:
-      return 'Appel s?curis?'
-  }
-})
 const currentMembership = computed(() => {
   const conv = selectedConversation.value
   if (!conv || !Array.isArray(conv.members)) return null
@@ -2654,80 +2624,6 @@ function cancelComposerContext() {
   resetComposerState()
 }
 
-function triggerAttachmentPicker() {
-  attachmentError.value = ''
-  if (!selectedConversationId.value) {
-    attachmentError.value = 'Sélectionnez une conversation avant d\'ajouter un fichier.'
-    return
-  }
-  const inputEl =
-    attachmentInput?.value ||
-    (typeof document !== 'undefined'
-      ? document.querySelector('.msg-composer input[type="file"]')
-      : null)
-  if (!inputEl) {
-    attachmentError.value = 'Sélecteur de fichiers indisponible. Rechargez la page.'
-    return
-  }
-  inputEl.value = ''
-  inputEl.click()
-}
-function onAttachmentChange(event) {
-  const files = Array.from(event.target?.files || [])
-  if (!files.length) return
-  files.forEach((file) => queueAttachment(file))
-}
-
-function queueAttachment(file) {
-  if (!file) return
-  const entry = reactive({
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    name: file.name,
-    size: file.size,
-    type: file.type,
-    file,
-    status: 'uploading',
-    progress: 0,
-    descriptor: null,
-    error: '',
-  })
-  pendingAttachments.value = [...pendingAttachments.value, entry]
-  uploadAttachmentFile(entry)
-}
-
-async function uploadAttachmentFile(entry) {
-  if (!selectedConversationId.value) {
-    entry.status = 'error'
-    entry.error = 'Aucune conversation active.'
-    return
-  }
-  attachmentError.value = ''
-  try {
-    const descriptor = await uploadAttachment(selectedConversationId.value, entry.file, {
-      onUploadProgress: (event) => {
-        if (!event || !event.total) return
-        entry.progress = Math.min(100, Math.round((event.loaded / event.total) * 100))
-      },
-    })
-    entry.descriptor = descriptor
-    entry.status = 'ready'
-    entry.progress = 100
-  } catch (err) {
-    entry.status = 'error'
-    entry.error = extractError(err, 'Impossible de téléverser le fichier.')
-    attachmentError.value = entry.error
-  }
-}
-
-function removeAttachment(entryId) {
-  pendingAttachments.value = pendingAttachments.value.filter((item) => item.id !== entryId)
-}
-
-function clearPendingAttachments() {
-  pendingAttachments.value = []
-  attachmentError.value = ''
-}
-
 function confirmDeleteMessage(message) {
   if (!message || !selectedConversationId.value) return
   deleteDialog.message = message
@@ -3015,474 +2911,9 @@ function generateCallId() {
   return `call_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 }
 
-function getDefaultCallTarget() {
-  const conv = selectedConversation.value
-  if (!conv || !Array.isArray(conv.members)) return null
-  const selfId = currentUserId.value ? String(currentUserId.value) : null
-  return (
-    conv.members.find(
-      (member) => member.state === 'active' && (!selfId || memberUserId(member) !== selfId),
-    ) || null
-  )
-}
-
-function setCallError(err) {
-  if (!err) {
-    callState.error = ''
-    return
-  }
-  if (typeof err === 'string') {
-    callState.error = err
-  } else {
-    callState.error = err.message || "La connexion ? l'appel a ?chou?."
-  }
-  callLog('call error', callState.error)
-}
-
-function sendCallSignal(event, payload = {}) {
-  if (!socketRef.value || !selectedConversationId.value) return
-  try {
-    callLog('send signal', event, payload.call_id || null, payload.reason || '')
-    socketRef.value.send({
-      event,
-      payload: {
-        conversation_id: selectedConversationId.value,
-        ...payload,
-      },
-    })
-  } catch {}
-}
-
-function stopStream(stream) {
-  if (!stream) return
-  stream.getTracks().forEach((track) => {
-    try {
-      track.stop()
-    } catch {}
-  })
-}
-
-async function requestMedia(kind = 'audio') {
-  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-    throw new Error('Votre navigateur ne permet pas les appels s?curis?s.')
-  }
-  const constraints = {
-    audio: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-    },
-    video: kind === 'video',
-  }
-  return navigator.mediaDevices.getUserMedia(constraints)
-}
-
-async function createPeerConnection(stream) {
-  if (peerConnection) {
-    try {
-      peerConnection.close()
-    } catch {}
-    peerConnection = null
-  }
-  peerConnection = new RTCPeerConnection(rtcConfig)
-  peerConnection.ontrack = (event) => {
-    const [remote] = event.streams
-    callLog('ontrack', event.track?.kind, {
-      streams: event.streams?.length,
-      trackMuted: event.track?.muted,
-    })
-    if (event.track) {
-      event.track.onmute = () => callLog('track muted', event.track.kind)
-      event.track.onunmute = () => callLog('track unmuted', event.track.kind)
-      event.track.onended = () => callLog('track ended', event.track.kind)
-    }
-    if (remote) {
-      callState.remoteStream = remote
-    }
-  }
-  peerConnection.onicecandidate = (event) => {
-    if (event.candidate && callState.callId && callState.remoteUserId) {
-      sendCallSignal('call:candidate', {
-        call_id: callState.callId,
-        target_user_id: callState.remoteUserId,
-        candidate: {
-          candidate: event.candidate.candidate,
-          sdpMid: event.candidate.sdpMid,
-          sdpMLineIndex: event.candidate.sdpMLineIndex,
-        },
-      })
-    }
-  }
-  peerConnection.oniceconnectionstatechange = () => {
-    if (peerConnection) {
-      callLog('ice state', peerConnection.iceConnectionState)
-    }
-  }
-  peerConnection.onconnectionstatechange = () => {
-    if (!peerConnection) return
-    if (peerConnection.connectionState === 'connected') {
-      callLog('peer connection connected')
-      callState.status = 'connected'
-    } else if (peerConnection.connectionState === 'failed') {
-      callLog('peer connection failed')
-      setCallError('La connexion a ?chou?.')
-      endCall(true)
-    }
-    if (['connected', 'failed', 'disconnected', 'closed'].includes(peerConnection.connectionState)) {
-      stopRingtone()
-    }
-  }
-  if (stream) {
-    stream.getTracks().forEach((track) => {
-      peerConnection.addTrack(track, stream)
-    })
-  }
-}
-
-function serializeDescription(desc) {
-  if (!desc) return null
-  return { type: desc.type, sdp: desc.sdp }
-}
-
-async function startCall(kind = 'audio') {
-  callLog('startCall requested', kind)
-  callState.error = ''
-  if (!selectedConversationId.value) {
-    setCallError('Aucune conversation active.')
-    return
-  }
-  if (!socketRef.value) {
-    setCallError('Canal temps r?el indisponible.')
-    return
-  }
-  if (callState.status !== 'idle') {
-    setCallError('Un autre appel est d?j? en cours.')
-    return
-  }
-  const target = getDefaultCallTarget()
-  if (!target) {
-    setCallError('Aucun interlocuteur disponible dans cette conversation.')
-    return
-  }
-  callState.kind = kind
-  callState.remoteUserId = target.id
-  callState.callId = generateCallId()
-  callState.initiator = true
-  callState.status = 'connecting'
-  callState.error = ''
-  callControls.micEnabled = true
-  callControls.cameraEnabled = kind === 'video'
-  try {
-    const stream = await requestMedia(kind)
-    callLog('media acquired', {
-      audio: !!stream.getAudioTracks().length,
-      video: !!stream.getVideoTracks().length,
-    })
-    stream.getAudioTracks().forEach((track) => {
-      track.enabled = callControls.micEnabled
-    })
-    stream.getVideoTracks().forEach((track) => {
-      track.enabled = callControls.cameraEnabled
-    })
-    callState.localStream = stream
-    await createPeerConnection(stream)
-    const offer = await peerConnection.createOffer()
-    await peerConnection.setLocalDescription(offer)
-    callState.status = 'outgoing'
-    startRingtone('outgoing')
-    const description = serializeDescription(peerConnection.localDescription)
-    if (!description) throw new Error('Impossible de pr\u00E9parer l\'offre.')
-    sendCallSignal('call:offer', {
-      call_id: callState.callId,
-      target_user_id: callState.remoteUserId,
-      kind,
-      sdp: description,
-    })
-  } catch (err) {
-    callLog('startCall error', err?.message || err)
-    setCallError(err)
-    endCall(true)
-  }
-}
-
-function cancelOutgoingCall() {
-  endCall(false, { reason: 'canceled' })
-}
-
-function hangupCall() {
-  endCall(false, { reason: 'hangup' })
-}
-
-function rejectIncomingCall() {
-  endCall(false, { reason: 'decline' })
-}
-
-async function acceptIncomingCall() {
-  const offer = callState.incomingOffer
-  if (!offer) return
-  callLog('acceptIncomingCall', offer.call_id || callState.callId || 'no-call-id')
-  stopRingtone()
-  callState.error = ''
-  callState.status = 'connecting'
-  callControls.micEnabled = true
-  callControls.cameraEnabled = callState.kind === 'video'
-  const attemptKinds = callState.kind === 'video' ? ['video', 'audio'] : ['audio']
-  for (const attempt of attemptKinds) {
-    try {
-      callState.kind = attempt
-      callControls.cameraEnabled = attempt === 'video'
-      const stream = await requestMedia(attempt)
-      stream.getAudioTracks().forEach((track) => {
-        track.enabled = callControls.micEnabled
-      })
-      stream.getVideoTracks().forEach((track) => {
-        track.enabled = callControls.cameraEnabled
-      })
-      callState.localStream = stream
-      await createPeerConnection(stream)
-      if (offer.sdp) {
-        await peerConnection.setRemoteDescription(offer.sdp)
-      }
-      const answer = await peerConnection.createAnswer()
-      await peerConnection.setLocalDescription(answer)
-      flushPendingCandidates()
-      const description = serializeDescription(peerConnection.localDescription)
-      if (!description) throw new Error('Impossible de pr\u00E9parer la r\u00E9ponse.')
-      sendCallSignal('call:answer', {
-        call_id: callState.callId,
-        target_user_id: callState.remoteUserId,
-        kind: callState.kind,
-        sdp: description,
-      })
-      callState.incomingOffer = null
-      return
-    } catch (err) {
-      callLog('acceptIncomingCall error', attempt, err?.message || err)
-      if (attempt === 'audio') {
-        setCallError(err)
-        endCall(true)
-        return
-      }
-    }
-  }
-}
-
-function endCall(silent = false, options = {}) {
-  callLog('endCall', { silent, options, callId: callState.callId })
-  stopRingtone()
-  const currentCallId = callState.callId
-  const remoteId = callState.remoteUserId
-  const callSummary = {
-    callId: currentCallId,
-    kind: callState.kind,
-    initiator: callState.initiator,
-    remote: remoteDisplayName.value,
-    reason: options.reason || 'ended',
-  }
-  if (peerConnection) {
-    try {
-      peerConnection.ontrack = null
-      peerConnection.onicecandidate = null
-      peerConnection.close()
-    } catch {}
-    peerConnection = null
-  }
-  stopStream(callState.localStream)
-  stopStream(callState.remoteStream)
-  callState.localStream = null
-  callState.remoteStream = null
-  callState.incomingOffer = null
-  callState.status = 'idle'
-  callState.kind = 'audio'
-  callState.callId = null
-  callState.remoteUserId = null
-  callState.initiator = false
-  callState.error = ''
-  callControls.micEnabled = true
-  callControls.cameraEnabled = true
-  pendingIceCandidates.length = 0
-  if (callSummary.callId && selectedConversationId.value) {
-    addLocalCallLog(callSummary)
-  }
-  if (!silent && currentCallId && remoteId) {
-    sendCallSignal('call:hangup', {
-      call_id: currentCallId,
-      target_user_id: remoteId,
-      reason: options.reason || 'hangup',
-    })
-  }
-}
-
-function handleCallSignal(evt) {
-  const data = evt?.payload || {}
-  const convId = data.conversation_id || evt.conversation_id
-  if (!selectedConversationId.value || String(convId) !== String(selectedConversationId.value)) return
-  const targetId = data.target_user_id ? String(data.target_user_id) : null
-  const selfId = currentUserId.value ? String(currentUserId.value) : null
-  if (targetId && selfId && targetId !== selfId) return
-  switch (evt.event) {
-    case 'call:offer':
-      handleIncomingOffer(data)
-      break
-    case 'call:answer':
-      handleIncomingAnswer(data)
-      break
-    case 'call:candidate':
-      handleIncomingCandidate(data)
-      break
-    case 'call:hangup':
-      handleIncomingHangup(data)
-      break
-    default:
-      break
-  }
-}
-
-function handleIncomingOffer(data) {
-  const fromUserId = data.from_user_id ? String(data.from_user_id) : null
-  if (callState.status !== 'idle') {
-    callLog('incoming offer while busy', data.call_id, 'current', callState.callId)
-    if (data.call_id && fromUserId) {
-      sendCallSignal('call:hangup', {
-        call_id: data.call_id,
-        target_user_id: fromUserId,
-        reason: 'busy',
-      })
-    }
-    return
-  }
-  callState.callId = data.call_id || generateCallId()
-  callState.kind = data.kind || 'audio'
-  callState.remoteUserId = fromUserId
-  callState.incomingOffer = data
-  callState.status = 'incoming'
-  callState.error = ''
-  callControls.micEnabled = true
-  callControls.cameraEnabled = callState.kind === 'video'
-  startRingtone('incoming')
-  callLog('incoming call', {
-    callId: callState.callId,
-    kind: callState.kind,
-    from: callState.remoteUserId,
-  })
-}
-
-function handleIncomingAnswer(data) {
-  if (!callState.callId || callState.callId !== data.call_id || !peerConnection) return
-  callLog('answer received', data.call_id)
-  stopRingtone()
-  if (data.kind) {
-    callState.kind = data.kind
-    callControls.cameraEnabled = data.kind === 'video'
-  }
-  if (data.from_user_id && !callState.remoteUserId) {
-    callState.remoteUserId = String(data.from_user_id)
-  }
-  const answer = data.sdp
-  if (answer) {
-    peerConnection.setRemoteDescription(answer).then(() => {
-      flushPendingCandidates()
-    }).catch(() => {})
-  }
-}
-
-function handleIncomingCandidate(data) {
-  if (!callState.callId || callState.callId !== data.call_id) return
-  const candidate = data.candidate
-  if (!candidate) return
-  if (!peerConnection) {
-    pendingIceCandidates.push(candidate)
-    return
-  }
-  try {
-    peerConnection.addIceCandidate(candidate)
-  } catch {
-    pendingIceCandidates.push(candidate)
-  }
-}
-
-function handleIncomingHangup(data) {
-  if (!callState.callId || data.call_id !== callState.callId) return
-  callLog('remote hangup', data.call_id, data.reason || '')
-  endCall(true)
-}
-
-function toggleMicrophone() {
-  callControls.micEnabled = !callControls.micEnabled
-  if (callState.localStream) {
-    callState.localStream.getAudioTracks().forEach((track) => {
-      track.enabled = callControls.micEnabled
-    })
-  }
-}
-
-function toggleCamera() {
-  if (callState.kind !== 'video') return
-  callControls.cameraEnabled = !callControls.cameraEnabled
-  if (callState.localStream) {
-    callState.localStream.getVideoTracks().forEach((track) => {
-      track.enabled = callControls.cameraEnabled
-    })
-  }
-}
-
 function handleRealtimeCallEvent(payload) {
   handleCallSignal(payload)
 }
-
-function attachStream(el, stream) {
-  if (!el) return
-  if ('srcObject' in el) {
-    el.srcObject = stream || null
-  } else if (stream) {
-    el.src = URL.createObjectURL(stream)
-  } else {
-    el.removeAttribute('src')
-  }
-  if (stream && typeof el.play === 'function') {
-    el.play().catch(() => {})
-  }
-}
-
-function flushPendingCandidates() {
-  if (!peerConnection || !pendingIceCandidates.length) return
-  while (pendingIceCandidates.length) {
-    const candidate = pendingIceCandidates.shift()
-    if (!candidate) continue
-    try {
-      peerConnection.addIceCandidate(candidate)
-    } catch {}
-  }
-}
-
-watch(
-  () => callState.localStream,
-  (stream) => {
-    attachStream(localVideoRef.value, stream || null)
-  },
-)
-
-watch(
-  () => callState.remoteStream,
-  (stream) => {
-    attachStream(remoteVideoRef.value, stream || null)
-    attachStream(remoteAudioRef.value, stream || null)
-  },
-)
-
-watch(localVideoRef, (el) => attachStream(el, callState.localStream || null))
-watch(remoteVideoRef, (el) => attachStream(el, callState.remoteStream || null))
-watch(remoteAudioRef, (el) => attachStream(el, callState.remoteStream || null))
-
-watch(
-  () => callState.status,
-  (status, prev) => {
-    callLog('call status change', prev, '->', status)
-    if (status === 'connected' || status === 'idle') {
-      stopRingtone()
-    }
-  },
-)
 
 function addLocalCallLog(summary) {
   const direction = summary.initiator ? 'sortant' : 'entrant'
@@ -3557,57 +2988,6 @@ function generateLocalId() {
 
   return `msg_${Math.random().toString(36).slice(2, 10)}`
 
-}
-
-
-
-function queueToastNotification({ title, body, conversationId, messageId, targetRoute }) {
-  const toast = {
-    id: generateLocalId(),
-    title: title || 'Nouveau message',
-    body: body || '',
-    conversationId,
-    messageId,
-    targetRoute: targetRoute || null,
-    createdAt: new Date(),
-  }
-  messageToasts.value = [toast, ...messageToasts.value].slice(0, 4)
-  if (toastTimers.has(toast.id)) {
-    clearTimeout(toastTimers.get(toast.id))
-  }
-  toastTimers.set(
-    toast.id,
-    setTimeout(() => {
-      dismissToast(toast.id)
-    }, 7000),
-  )
-}
-
-
-
-function dismissToast(id) {
-  messageToasts.value = messageToasts.value.filter((toast) => toast.id !== id)
-  if (toastTimers.has(id)) {
-    clearTimeout(toastTimers.get(id))
-    toastTimers.delete(id)
-  }
-}
-
-
-
-async function openToastConversation(toast) {
-  if (toast?.targetRoute) {
-    router.push(toast.targetRoute).catch(() => {})
-    dismissToast(toast.id)
-    return
-  }
-  if (!toast?.conversationId) return
-  await selectConversation(toast.conversationId)
-  dismissToast(toast.id)
-  await nextTick()
-  if (toast.messageId) {
-    await ensureMessageVisible(toast.messageId)
-  }
 }
 
 
@@ -4114,8 +3494,6 @@ onBeforeUnmount(() => {
   if (gifSearchTimer) {
     clearTimeout(gifSearchTimer)
   }
-  toastTimers.forEach((timer) => clearTimeout(timer))
-  toastTimers.clear()
   if (conversationNoticeTimer) {
     clearTimeout(conversationNoticeTimer)
     conversationNoticeTimer = null
@@ -4137,6 +3515,8 @@ onBeforeUnmount(() => {
 </script>
 
 <style src="@/assets/styles/messages.css"></style>
+
+
 
 
 
