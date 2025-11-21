@@ -111,7 +111,7 @@
           <strong>Modification du message</strong>
         </template>
         <template v-else-if="composerState.replyTo">
-          <strong>RÃ©ponse Ã  {{ composerState.replyTo.displayName || composerState.replyTo.authorDisplayName || 'Participant' }}</strong>
+          <strong>Réponse à  {{ composerState.replyTo.displayName || composerState.replyTo.authorDisplayName || 'Participant' }}</strong>
           <p class="small mb-0 text-muted">
             {{ messagePreviewText(composerState.replyTo) }}
           </p>

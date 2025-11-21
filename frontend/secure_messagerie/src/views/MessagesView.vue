@@ -1,4 +1,4 @@
-﻿<template>
+<template>
 
   <div class="msg-shell">
     <MessageToastStack
@@ -269,6 +269,7 @@ import { useMessageToasts } from '@/views/messages/useMessageToasts'
 import { useCallControls } from '@/views/messages/useCallControls'
 import { generateLocalId } from '@/views/messages/id'
 import { useNotificationsBridge } from '@/views/messages/useNotificationsBridge'
+import { useMessageNotifications } from '@/views/messages/useMessageNotifications'
 import { useConversationPanel } from '@/views/messages/useConversationPanel'
 import { useComposerContext } from '@/views/messages/useComposerContext'
 import { useDeleteMessage } from '@/views/messages/useDeleteMessage'
@@ -382,6 +383,16 @@ const { messageToasts, queueToastNotification, dismissToast, openToastConversati
     ensureMessageVisible,
     generateLocalId,
   })
+const { notifyNewIncomingMessage, handleIncomingNotificationPayload } = useMessageNotifications({
+  selectedConversationId,
+  currentUserId,
+  queueToastNotification,
+  openToastConversation,
+  setUnreadForConversation,
+  ensureMeta,
+  updateConversationBlockStateByUser,
+  generateLocalId,
+})
 const attachStream = (el, stream) => {
   if (!el) return
   if ('srcObject' in el) {
@@ -533,8 +544,6 @@ const loadingGifs = ref(false)
 const gifError = ref('')
 const gifSearchAvailable = hasGifApiSupport()
 const optimisticMessageIds = new Set()
-let notificationPermissionRequestPending = false
-const browserNotificationsEnabled = ref(readBrowserNotificationPreference())
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const socketRef = ref(null)
@@ -567,30 +576,6 @@ const notificationsStream = useNotificationsStream({
 
 function isValidUuid(value) {
   return typeof value === 'string' && UUID_PATTERN.test(value)
-}
-
-function readBrowserNotificationPreference() {
-  try {
-    return localStorage.getItem('notif_browser') === '1'
-  } catch {
-    return false
-  }
-}
-
-function syncBrowserNotificationPreference() {
-  browserNotificationsEnabled.value = readBrowserNotificationPreference()
-}
-
-function handleBrowserPrefStorage(event) {
-  if (event?.key === 'notif_browser') {
-    syncBrowserNotificationPreference()
-  }
-}
-
-function handleBrowserPrefBroadcast(event) {
-  if (event?.detail && typeof event.detail.enabled === 'boolean') {
-    browserNotificationsEnabled.value = event.detail.enabled
-  }
 }
 
 const conversationSummary = computed(() => {
@@ -2021,183 +2006,7 @@ async function copyMessage(message) {
 
 
 
-function notifyNewIncomingMessage(message) {
-  if (!message || message.sentByMe || message.deleted || message.isSystem) return
-  const preview =
-    message.preview ||
-    (message.content ? String(message.content).slice(0, 140) : 'Nouveau message securise.')
-  const shouldToast = message.conversationId !== selectedConversationId.value
-  const browserAllowed =
-    browserNotificationsEnabled.value &&
-    typeof Notification !== 'undefined' &&
-    Notification.permission === 'granted'
-  const docHidden =
-    typeof document !== 'undefined' && (document.hidden || !document.hasFocus())
-  if (shouldToast) {
-    queueToastNotification({
-      title: message.displayName || 'Nouveau message',
-      body: preview,
-      conversationId: message.conversationId,
-      messageId: message.id,
-    })
-  }
-  const shouldBrowser = browserAllowed && (docHidden || shouldToast)
-  if (shouldBrowser) {
-    triggerBrowserNotification(message, preview)
-  }
-}
 
-function triggerBrowserNotification(message, body) {
-  if (typeof window !== 'undefined' && window.__covaGlobalBrowserNotifications) return
-  if (!browserNotificationsEnabled.value || typeof Notification === 'undefined') return
-  if (Notification.permission === 'granted') {
-    const notification = new Notification(message.displayName || 'Messagerie securisee', {
-      body,
-      tag: message.conversationId,
-    })
-    notification.onclick = () => {
-      window.focus()
-      openToastConversation({ conversationId: message.conversationId, id: message.id, messageId: message.id })
-      notification.close()
-    }
-    return
-  }
-  if (Notification.permission === 'default' && !notificationPermissionRequestPending) {
-    notificationPermissionRequestPending = true
-    Notification.requestPermission()
-      .catch(() => {})
-      .finally(() => {
-        notificationPermissionRequestPending = false
-      })
-  }
-}
-
-function triggerBrowserNotificationFromEvent(meta) {
-  if (typeof window !== 'undefined' && window.__covaGlobalBrowserNotifications) return
-  if (!browserNotificationsEnabled.value || typeof Notification === 'undefined') return
-  if (Notification.permission !== 'granted') return
-  const notification = new Notification(meta.title || 'Messagerie securisee', {
-    body: meta.body || '',
-    tag: meta.conversationId || meta.type || 'notification',
-  })
-  notification.onclick = () => {
-    window.focus()
-    openToastConversation({
-      id: meta.messageId || generateLocalId(),
-      conversationId: meta.conversationId,
-      messageId: meta.messageId,
-      targetRoute: meta.targetRoute,
-    })
-    notification.close()
-  }
-}
-
-function handleIncomingNotificationPayload(payload, origin = 'stream') {
-  if (!payload || typeof payload !== 'object') return
-  switch (payload.type) {
-    case 'message.received':
-      handleMessageNotificationEvent(payload)
-      break
-    case 'contact.request':
-    case 'contact.accepted':
-      handleContactNotificationEvent(payload)
-      break
-    case 'contact.blocked':
-    case 'contact.unblocked':
-      handleContactBlockEvent(payload)
-      break
-    default:
-      break
-  }
-}
-
-function handleMessageNotificationEvent(event) {
-  if (event?.author_id && currentUserId.value && String(event.author_id) === String(currentUserId.value)) {
-    return
-  }
-  const conversationId = event.conversation_id ? String(event.conversation_id) : null
-  if (!conversationId || conversationId === String(selectedConversationId.value)) return
-  const meta = ensureMeta(conversationId)
-  if (event.preview) meta.lastPreview = event.preview
-  meta.lastActivity = event.created_at ? new Date(event.created_at) : new Date()
-  meta.unreadCount = (meta.unreadCount || 0) + 1
-  setUnreadForConversation(conversationId, meta.unreadCount)
-  const title = event.sender || 'Nouveau message'
-  const body = event.preview || 'Message sécurisé'
-  queueToastNotification({
-    title,
-    body,
-    conversationId,
-    messageId: event.message_id,
-  })
-  triggerBrowserNotificationFromEvent({
-    title,
-    body,
-    conversationId,
-    messageId: event.message_id,
-  })
-}
-
-function notifyPendingContactsRefresh() {
-  if (typeof window === 'undefined') return
-  window.dispatchEvent(new CustomEvent('cova:contacts-pending', { detail: { refresh: true } }))
-}
-
-function handleContactNotificationEvent(event) {
-  const title = event.title || 'Notification de contact'
-  const body = event.body || 'Une mise à jour de vos contacts est disponible.'
-  queueToastNotification({
-    title,
-    body,
-    targetRoute: '/dashboard/contacts',
-  })
-  triggerBrowserNotificationFromEvent({
-    title,
-    body,
-    targetRoute: '/dashboard/contacts',
-  })
-  notifyPendingContactsRefresh()
-}
-
-function handleContactBlockEvent(event) {
-  const isUnblocked = event.type === 'contact.unblocked'
-  const flagValue = !isUnblocked
-  const selfId = currentUserId.value ? String(currentUserId.value) : null
-  let otherId = null
-  const updates = {}
-  if (event.blocked_by || event.unblocked_by) {
-    const candidate = String(event.blocked_by || event.unblocked_by)
-    if (!selfId || candidate !== selfId) {
-      otherId = candidate
-      updates.blockedByOther = flagValue
-    }
-  }
-  if (event.blocked_target || event.unblocked_target) {
-    const candidate = String(event.blocked_target || event.unblocked_target)
-    otherId = candidate
-    updates.blockedByMe = flagValue
-  }
-  if (otherId) {
-    updateConversationBlockStateByUser(otherId, updates)
-  }
-  const title = event.title || (isUnblocked ? 'Contact débloqué' : 'Contact bloqué')
-  const body =
-    event.body ||
-    (isUnblocked
-      ? 'La conversation a été réactivée.'
-      : "La conversation est bloquée jusqu’à nouvel ordre.")
-  queueToastNotification({
-    title,
-    body,
-    targetRoute: '/dashboard/contacts',
-  })
-  triggerBrowserNotificationFromEvent({
-    title,
-    body,
-    targetRoute: '/dashboard/contacts',
-  })
-  notifyPendingContactsRefresh()
-}
 
 function cloneComposerReference(target) {
   if (!target) return null
@@ -2440,26 +2249,6 @@ function handleDocumentKeydown(event) {
 
 
 watch(
-  browserNotificationsEnabled,
-  (enabled) => {
-    if (
-      enabled &&
-      typeof Notification !== 'undefined' &&
-      Notification.permission === 'default' &&
-      !notificationPermissionRequestPending
-    ) {
-      notificationPermissionRequestPending = true
-      Notification.requestPermission()
-        .catch(() => {})
-        .finally(() => {
-          notificationPermissionRequestPending = false
-        })
-    }
-  },
-  { immediate: true },
-)
-
-watch(
   () => composerBlockedInfo.value?.state,
   (state, previous) => {
     if (state && state !== previous) {
@@ -2476,14 +2265,11 @@ onMounted(async () => {
   if (typeof window !== 'undefined') {
     document.addEventListener('click', handleDocumentClick)
     document.addEventListener('keydown', handleDocumentKeydown)
-    window.addEventListener('storage', handleBrowserPrefStorage)
-    window.addEventListener('cova:browser-notifications', handleBrowserPrefBroadcast)
     window.addEventListener('cova:profile-update', handleProfileBroadcast)
     window.addEventListener('cova:notification-event', handleGlobalNotificationEvent)
     window.addEventListener('cova:open-conversation', handleExternalConversationRequest)
   }
   typingCleanupTimer = setInterval(cleanupRemoteTyping, 2000)
-  syncBrowserNotificationPreference()
 })
 
 
@@ -2500,8 +2286,6 @@ onBeforeUnmount(() => {
   if (typeof window !== 'undefined') {
     document.removeEventListener('click', handleDocumentClick)
     document.removeEventListener('keydown', handleDocumentKeydown)
-    window.removeEventListener('storage', handleBrowserPrefStorage)
-    window.removeEventListener('cova:browser-notifications', handleBrowserPrefBroadcast)
     window.removeEventListener('cova:profile-update', handleProfileBroadcast)
     window.removeEventListener('cova:notification-event', handleGlobalNotificationEvent)
     window.removeEventListener('cova:open-conversation', handleExternalConversationRequest)
