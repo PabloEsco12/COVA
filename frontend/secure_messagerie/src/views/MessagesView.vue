@@ -1,4 +1,4 @@
-<template>
+﻿<template>
 
   <div class="msg-shell">
     <MessageToastStack
@@ -232,9 +232,6 @@ import { createConversationSocket } from '@/services/realtime'
 import { useNotificationsStream } from '@/composables/useNotificationsStream'
 import { useConversationSearch } from '@/composables/useConversationSearch'
 import {
-  pinMessage,
-  unpinMessage,
-  updateMessageReaction,
   uploadAttachment,
   editConversationMessage,
   deleteConversationMessage,
@@ -262,7 +259,6 @@ import {
   messagePreviewText,
   extractDeliverySummary,
 } from '@/views/messages/formatters'
-import { createMessageFormatters } from '@/views/messages/message-formatters'
 import { useAttachments } from '@/views/messages/useAttachments'
 import { useMessageToasts } from '@/views/messages/useMessageToasts'
 import { useCallControls } from '@/views/messages/useCallControls'
@@ -276,6 +272,7 @@ import { useConversationsState } from '@/views/messages/useConversationsState'
 import { memberUserId, normalizeMessage } from '@/views/messages/mappers'
 import { usePresenceStatus } from '@/views/messages/usePresenceStatus'
 import { useConversationFilters } from '@/views/messages/useConversationFilters'
+import { useMessageActions } from '@/views/messages/useMessageActions'
 
 
 const gifLibrary = defaultGifLibrary
@@ -535,7 +532,41 @@ const {
 
 const loadingMessages = ref(false)
 
-const copiedMessageId = ref(null)
+const {
+  cloneComposerReference,
+  mapOptimisticAttachments,
+  removeMessageById,
+  resolveOptimisticMessage,
+  reactionPickerFor,
+  messageMenuOpen,
+  toggleReactionPicker,
+  toggleMessageMenu,
+  closeTransientMenus,
+  handlePinToggle,
+  handleReactionSelection,
+  togglePin,
+  toggleReaction,
+  isPinning,
+  isReactionPending,
+  optimisticMessageIds,
+  copyMessage,
+  copiedMessageId,
+  downloadAttachment,
+  messageFormatters,
+} = useMessageActions({
+  messages,
+  selectedConversationId,
+  currentUserId,
+  messageError,
+  applyMessageUpdate,
+  normalizeMessage,
+  extractError,
+  messagePreviewText,
+  formatTime,
+  formatAbsolute,
+  formatFileSize,
+  extractDeliverySummary,
+})
 
 const reactionPalette = [
   '\u{1F44D}',
@@ -550,18 +581,10 @@ const reactionPalette = [
   '\u{2757}',
 ]
 
-const pinBusy = reactive({})
-
-const reactionBusy = reactive({})
-
-const reactionPickerFor = ref(null)
-const messageMenuOpen = ref(null)
-
 const gifResults = ref(gifLibrary.slice())
 const loadingGifs = ref(false)
 const gifError = ref('')
 const gifSearchAvailable = hasGifApiSupport()
-const optimisticMessageIds = new Set()
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const socketRef = ref(null)
@@ -578,7 +601,6 @@ const realtimeConversationId = ref(null)
 
 
 
-let copyTimer = null
 let gifSearchTimer = null
 
 const messageListRef = ref(null)
@@ -609,7 +631,7 @@ const filteredEmojiSections = computed(() => {
   return [
     {
       id: 'search',
-      label: 'Résultats',
+      label: 'RÃ©sultats',
       items: emojiCatalog.filter((emoji) => emoji.toLowerCase().includes(term)),
     },
   ]
@@ -624,16 +646,16 @@ const composerBlockedInfo = computed(() => {
   if (conv.blockedByOther) {
     return {
       state: 'blocked_by_other',
-      title: 'Conversation bloquée',
+      title: 'Conversation bloquÃ©e',
       message:
-        `${conv.displayName || 'Ce contact'} a bloqué cette conversation. Vous ne pouvez plus répondre tant que le contact ne vous a pas débloqué.`,
+        `${conv.displayName || 'Ce contact'} a bloquÃ© cette conversation. Vous ne pouvez plus rÃ©pondre tant que le contact ne vous a pas dÃ©bloquÃ©.`,
     }
   }
   if (conv.blockedByMe) {
     return {
       state: 'blocked_by_me',
-      title: 'Vous avez bloqué ce contact',
-      message: `Débloquez ${conv.displayName || 'ce contact'} depuis la section Contacts pour reprendre l’échange.`,
+      title: 'Vous avez bloquÃ© ce contact',
+      message: `DÃ©bloquez ${conv.displayName || 'ce contact'} depuis la section Contacts pour reprendre lâ€™Ã©change.`,
     }
   }
   return null
@@ -775,7 +797,7 @@ const connectionStatusLabel = computed(() => {
 
     case 'connected':
 
-      return 'Canal temps réel actif'
+      return 'Canal temps rÃ©el actif'
 
     case 'connecting':
 
@@ -1310,7 +1332,7 @@ async function sendMessage() {
     return
   }
   if (hasAttachmentInProgress.value) {
-    attachmentError.value = 'Sélectionnez une conversation avant d\'ajouter un fichier.'
+    attachmentError.value = 'SÃ©lectionnez une conversation avant d\'ajouter un fichier.'
     return
   }
   if (pendingAttachments.value.some((entry) => entry.status === 'error')) {
@@ -1397,8 +1419,8 @@ async function sendMessage() {
       applyConversationBlockDetail(detail)
       messageError.value =
         detail.reason === 'blocked_by_other'
-          ? 'Ce contact a bloqué cette conversation.'
-          : 'Vous avez bloqué cette conversation.'
+          ? 'Ce contact a bloquÃ© cette conversation.'
+          : 'Vous avez bloquÃ© cette conversation.'
     } else {
       messageError.value = extractError(err, "Impossible d'envoyer le message.")
     }
@@ -1645,22 +1667,22 @@ function handleRealtimeCallEvent(payload) {
 
 function addLocalCallLog(summary) {
   const direction = summary.initiator ? 'sortant' : 'entrant'
-  const kindLabel = summary.kind === 'video' ? 'vidéo' : 'audio'
+  const kindLabel = summary.kind === 'video' ? 'vidÃ©o' : 'audio'
   const outcomeMap = {
-    hangup: 'terminé',
-    decline: 'refusé',
-    canceled: 'annulé',
-    busy: 'occupé',
+    hangup: 'terminÃ©',
+    decline: 'refusÃ©',
+    canceled: 'annulÃ©',
+    busy: 'occupÃ©',
     failed: 'interrompu',
-    ended: 'terminé',
+    ended: 'terminÃ©',
   }
-  const outcome = outcomeMap[summary.reason] || 'terminé'
+  const outcome = outcomeMap[summary.reason] || 'terminÃ©'
   const content = `Appel ${kindLabel} ${direction} ${outcome} - ${summary.remote || 'participant'}`
   messages.value.push({
     id: generateLocalId(),
     conversationId: selectedConversationId.value,
     authorId: null,
-    displayName: 'Système',
+    displayName: 'SystÃ¨me',
     avatarUrl: null,
     content,
     createdAt: new Date(),
@@ -1672,207 +1694,6 @@ function addLocalCallLog(summary) {
 }
 
 
-async function copyMessage(message) {
-
-  if (!message?.content) return
-
-  try {
-
-    if (navigator?.clipboard?.writeText) {
-
-      await navigator.clipboard.writeText(message.content)
-
-      copiedMessageId.value = message.id
-
-      if (copyTimer) clearTimeout(copyTimer)
-
-      copyTimer = setTimeout(() => {
-
-        copiedMessageId.value = null
-
-        copyTimer = null
-
-      }, 1500)
-
-    }
-
-  } catch (err) {
-
-    console.warn('Impossible de copier le message', err)
-
-  }
-
-}
-
-
-
-
-
-function cloneComposerReference(target) {
-  if (!target) return null
-  return {
-    id: target.id,
-    displayName: target.displayName,
-    authorDisplayName: target.authorDisplayName || target.displayName || target.email || 'Participant',
-    excerpt: target.excerpt || messagePreviewText(target),
-    deleted: Boolean(target.deleted),
-  }
-}
-
-
-
-function mapOptimisticAttachments(entries) {
-  return entries.map((entry) => ({
-    id: entry.descriptor?.id || entry.id,
-    fileName: entry.name || entry.descriptor?.file_name || 'Pièce jointe',
-    mimeType: entry.type || entry.descriptor?.mime_type || 'Fichier',
-    sizeBytes: entry.size,
-    downloadUrl: entry.descriptor?.download_url || null,
-  }))
-}
-
-
-
-function removeMessageById(messageId) {
-  const idx = messages.value.findIndex((msg) => msg.id === messageId)
-  if (idx !== -1) {
-    messages.value.splice(idx, 1)
-  }
-}
-
-
-
-function resolveOptimisticMessage(localId, nextMessage) {
-  optimisticMessageIds.delete(localId)
-  removeMessageById(localId)
-  applyMessageUpdate(nextMessage)
-}
-
-
-
-function isPinning(messageId) {
-  return Boolean(pinBusy[messageId])
-}
-
-
-function isReactionPending(messageId, emoji) {
-  return Boolean(reactionBusy[`${messageId}:${emoji}`])
-}
-
-
-
-function toggleReactionPicker(messageId) {
-  if (!messageId) return
-  reactionPickerFor.value = reactionPickerFor.value === messageId ? null : messageId
-  if (reactionPickerFor.value) {
-    messageMenuOpen.value = null
-  }
-}
-
-
-
-function toggleMessageMenu(messageId) {
-  if (!messageId) return
-  messageMenuOpen.value = messageMenuOpen.value === messageId ? null : messageId
-  if (messageMenuOpen.value) {
-    reactionPickerFor.value = null
-  }
-}
-
-
-
-function closeTransientMenus() {
-  reactionPickerFor.value = null
-  messageMenuOpen.value = null
-}
-
-
-
-async function handlePinToggle(message) {
-  await togglePin(message)
-  closeTransientMenus()
-}
-
-
-
-async function handleReactionSelection(message, emoji) {
-  await toggleReaction(message, emoji)
-  reactionPickerFor.value = null
-}
-
-
-
-async function togglePin(message) {
-
-  if (!selectedConversationId.value) return
-
-  const messageId = message.id
-
-  pinBusy[messageId] = true
-
-  try {
-
-    const data = message.pinned
-
-      ? await unpinMessage(selectedConversationId.value, messageId)
-
-      : await pinMessage(selectedConversationId.value, messageId)
-
-    applyMessageUpdate(normalizeMessage(data, { selfId: currentUserId.value }))
-
-  } catch (err) {
-
-    messageError.value = extractError(err, "Impossible de mettre à jour l'épingle.")
-
-  } finally {
-
-    pinBusy[messageId] = false
-
-  }
-
-}
-
-
-
-async function toggleReaction(message, emoji) {
-
-  if (!selectedConversationId.value || !emoji) return
-
-  const key = `${message.id}:${emoji}`
-
-  reactionBusy[key] = true
-
-  try {
-
-    const data = await updateMessageReaction(selectedConversationId.value, message.id, { emoji })
-
-    applyMessageUpdate(normalizeMessage(data, { selfId: currentUserId.value }))
-
-  } catch (err) {
-
-    console.warn('Impossible de mettre à jour la réaction', err)
-
-  } finally {
-
-    reactionBusy[key] = false
-
-  }
-
-}
-
-
-function downloadAttachment(attachment) {
-  if (!attachment || !attachment.downloadUrl) return
-  window.open(attachment.downloadUrl, '_blank', 'noopener')
-}
-
-
-const messageFormatters = createMessageFormatters({
-  formatTime,
-  formatAbsolute,
-  formatFileSize,
-  extractDeliverySummary,
-})
 
 
 
