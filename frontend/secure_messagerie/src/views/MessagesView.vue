@@ -275,6 +275,7 @@ import { useComposerContext } from '@/views/messages/useComposerContext'
 import { useDeleteMessage } from '@/views/messages/useDeleteMessage'
 import { memberUserId, normalizeMember, normalizeConversation, normalizeMessage } from '@/views/messages/mappers'
 import { usePresenceStatus } from '@/views/messages/usePresenceStatus'
+import { useConversationFilters } from '@/views/messages/useConversationFilters'
 
 
 const gifLibrary = defaultGifLibrary
@@ -283,27 +284,12 @@ const gifLibrary = defaultGifLibrary
 const conversations = ref([])
 const conversationMeta = reactive({})
 
-const conversationSearch = ref('')
-
 const loadingConversations = ref(true)
 
 const conversationError = ref('')
 
 const unreadSummary = ref({ total: 0, conversations: [] })
 
-const conversationFilter = ref('all')
-const conversationFilters = [
-  { value: 'all', label: 'Toutes', icon: 'bi bi-inbox' },
-  { value: 'unread', label: 'Non lues', icon: 'bi bi-envelope-open' },
-  { value: 'direct', label: 'Direct', icon: 'bi bi-person' },
-  { value: 'group', label: 'Groupes', icon: 'bi bi-people' },
-]
-const conversationRoles = [
-  { value: 'owner', label: 'Propriétaire' },
-  { value: 'moderator', label: 'Modérateur' },
-  { value: 'member', label: 'Membre' },
-  { value: 'guest', label: 'Invité' },
-]
 let typingCleanupTimer = null
 const selectedConversationId = ref(null)
 const currentUserId = ref(localStorage.getItem('user_id') || null)
@@ -336,6 +322,21 @@ const {
   selectedConversationId,
   currentUserId,
   formatAbsolute,
+})
+
+const {
+  conversationSearch,
+  conversationFilter,
+  conversationFilters,
+  conversationRoles,
+  conversationSummary,
+  sortedConversations,
+} = useConversationFilters({
+  conversations,
+  conversationMeta,
+  loadingConversations,
+  conversationPresence,
+  defaultPresenceLabel: STATUS_LABELS.offline,
 })
 
 const route = useRoute()
@@ -578,18 +579,6 @@ function isValidUuid(value) {
   return typeof value === 'string' && UUID_PATTERN.test(value)
 }
 
-const conversationSummary = computed(() => {
-
-  if (loadingConversations.value) return 'Chargementâ?,?¦'
-
-  const count = conversations.value.length
-
-  return count ? `${count} conversation${count > 1 ? 's' : ''}` : 'Aucune conversation'
-
-})
-
-
-
 const filteredEmojiSections = computed(() => {
   const term = emojiSearch.value.trim().toLowerCase()
   if (!term) return emojiSections
@@ -610,15 +599,6 @@ const filteredEmojiSections = computed(() => {
 })
 
 const displayedGifs = computed(() => (gifResults.value.length ? gifResults.value : gifLibrary))
-
-
-const activeFilterLabel = computed(() => {
-
-  const option = conversationFilters.find((filter) => filter.value === conversationFilter.value)
-
-  return option ? option.label : 'Toutes'
-
-})
 
 
 const composerBlockedInfo = computed(() => {
@@ -746,69 +726,6 @@ const pinnedMessages = computed(() => {
       return bDate - aDate
 
     })
-
-})
-
-
-
-const sortedConversations = computed(() => {
-
-  const term = conversationSearch.value.trim().toLowerCase()
-
-  const list = conversations.value.map((conv) => {
-
-    const meta = conversationMeta[conv.id] || {}
-    const presence = conversationPresence[conv.id] || { status: 'offline', label: STATUS_LABELS.offline }
-
-    return {
-
-      ...conv,
-
-      unreadCount: meta.unreadCount || 0,
-
-      lastPreview: meta.lastPreview || '',
-
-      lastActivity: meta.lastActivity || conv.createdAt,
-
-      avatarUrl: meta.avatarUrl ?? conv.avatarUrl ?? null,
-
-      presenceStatus: presence.status,
-
-      presenceLabel: presence.label,
-
-    }
-
-  })
-
-  let filtered = list
-
-  if (conversationFilter.value === 'unread') {
-
-    filtered = filtered.filter((conv) => conv.unreadCount > 0)
-
-  } else if (conversationFilter.value === 'direct') {
-
-    filtered = filtered.filter((conv) => conv.participants.length <= 1)
-
-  } else if (conversationFilter.value === 'group') {
-
-    filtered = filtered.filter((conv) => conv.participants.length > 1)
-
-  }
-
-  if (term) {
-
-    filtered = filtered.filter(
-
-      (conv) =>
-
-        conv.displayName.toLowerCase().includes(term) || (conv.lastPreview || '').toLowerCase().includes(term),
-
-    )
-
-  }
-
-  return filtered.sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity))
 
 })
 
@@ -2294,6 +2211,13 @@ onBeforeUnmount(() => {
 </script>
 
 <style src="@/assets/styles/messages.css"></style>
+
+
+
+
+
+
+
 
 
 
