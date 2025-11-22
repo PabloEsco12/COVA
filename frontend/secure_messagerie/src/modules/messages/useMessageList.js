@@ -1,6 +1,6 @@
 import { nextTick, reactive, ref } from 'vue'
 import { api } from '@/utils/api'
-import { normalizeMessage } from '@/views/messages/mappers'
+import { normalizeMessage } from './mappers'
 
 export function useMessageList({
   selectedConversationId,

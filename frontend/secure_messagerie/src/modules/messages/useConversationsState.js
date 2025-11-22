@@ -1,6 +1,6 @@
 import { reactive, ref } from 'vue'
 import { api } from '@/utils/api'
-import { normalizeConversation, normalizeMember, memberUserId } from '@/views/messages/mappers'
+import { normalizeConversation, normalizeMember, memberUserId } from './mappers'
 
 export function useConversationsState({
   route,

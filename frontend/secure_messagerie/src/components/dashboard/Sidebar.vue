@@ -736,7 +736,7 @@ function formatRelativeTime(dateString) {
   return date.toISOString()
 }
 </script>
-<style src="./sidebar/Sidebar.css"></style>
+<style src="@/assets/styles/sidebar.css"></style>
 
 
 

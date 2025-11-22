@@ -1,7 +1,7 @@
 import { backendBase } from '@/utils/api'
 import { detectGifLinks, stripGifLinks } from '@/utils/messageContent'
 import { normalizeAvatarUrl } from '@/utils/profile'
-import { generateLocalId } from '@/views/messages/id'
+import { generateLocalId } from './id'
 
 export function memberUserId(member) {
   if (!member) return null

@@ -2,8 +2,8 @@ import { computed, reactive, ref, watch } from 'vue'
 
 import { api } from '@/utils/api'
 import { broadcastProfileUpdate } from '@/utils/profile'
-import { PRESENCE_STALE_MS, STATUS_LABELS, STATUS_PRESETS } from '@/views/messages/constants'
-import { memberUserId } from '@/views/messages/mappers'
+import { PRESENCE_STALE_MS, STATUS_LABELS, STATUS_PRESETS } from './constants'
+import { memberUserId } from './mappers'
 
 const OFFLINE_ENTRY = { status: 'offline', label: STATUS_LABELS.offline, lastSeen: null }
 

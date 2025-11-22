@@ -1,6 +1,6 @@
 import { reactive, ref } from 'vue'
 import { pinMessage, unpinMessage, updateMessageReaction } from '@/services/conversations'
-import { createMessageFormatters } from '@/views/messages/message-formatters'
+import { createMessageFormatters } from './message-formatters'
 
 export function useMessageActions({
   messages,

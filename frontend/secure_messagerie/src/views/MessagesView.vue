@@ -242,32 +242,32 @@ import MessageEmptyState from '@/components/messages/MessageEmptyState.vue'
 import MessageSearchPanel from '@/components/messages/MessageSearchPanel.vue'
 import DeleteMessageModal from '@/components/messages/DeleteMessageModal.vue'
 import { useMessageComposer } from '@/composables/useMessageComposer'
-import { STATUS_LABELS, availabilityOptions } from '@/views/messages/constants'
+import { STATUS_LABELS, availabilityOptions } from '@/modules/messages/constants'
 import {
   formatTime,
   formatAbsolute,
   formatFileSize,
   messagePreviewText,
   extractDeliverySummary,
-} from '@/views/messages/formatters'
-import { useAttachments } from '@/views/messages/useAttachments'
-import { useMessageToasts } from '@/views/messages/useMessageToasts'
-import { useCallControls } from '@/views/messages/useCallControls'
-import { generateLocalId } from '@/views/messages/id'
-import { useNotificationsBridge } from '@/views/messages/useNotificationsBridge'
-import { useMessageNotifications } from '@/views/messages/useMessageNotifications'
-import { useConversationPanel } from '@/views/messages/useConversationPanel'
-import { useComposerContext } from '@/views/messages/useComposerContext'
-import { useDeleteMessage } from '@/views/messages/useDeleteMessage'
-import { useConversationsState } from '@/views/messages/useConversationsState'
-import { memberUserId, normalizeMessage } from '@/views/messages/mappers'
-import { usePresenceStatus } from '@/views/messages/usePresenceStatus'
-import { useConversationFilters } from '@/views/messages/useConversationFilters'
-import { useMessageActions } from '@/views/messages/useMessageActions'
-import { useMessageList } from '@/views/messages/useMessageList'
-import { useComposerInteractions } from '@/views/messages/useComposerInteractions'
-import { useConversationRealtime } from '@/views/messages/useConversationRealtime'
-import { useMessagesLifecycle } from '@/views/messages/useMessagesLifecycle'
+} from '@/modules/messages/formatters'
+import { useAttachments } from '@/modules/messages/useAttachments'
+import { useMessageToasts } from '@/modules/messages/useMessageToasts'
+import { useCallControls } from '@/modules/messages/useCallControls'
+import { generateLocalId } from '@/modules/messages/id'
+import { useNotificationsBridge } from '@/modules/messages/useNotificationsBridge'
+import { useMessageNotifications } from '@/modules/messages/useMessageNotifications'
+import { useConversationPanel } from '@/modules/messages/useConversationPanel'
+import { useComposerContext } from '@/modules/messages/useComposerContext'
+import { useDeleteMessage } from '@/modules/messages/useDeleteMessage'
+import { useConversationsState } from '@/modules/messages/useConversationsState'
+import { memberUserId, normalizeMessage } from '@/modules/messages/mappers'
+import { usePresenceStatus } from '@/modules/messages/usePresenceStatus'
+import { useConversationFilters } from '@/modules/messages/useConversationFilters'
+import { useMessageActions } from '@/modules/messages/useMessageActions'
+import { useMessageList } from '@/modules/messages/useMessageList'
+import { useComposerInteractions } from '@/modules/messages/useComposerInteractions'
+import { useConversationRealtime } from '@/modules/messages/useConversationRealtime'
+import { useMessagesLifecycle } from '@/modules/messages/useMessagesLifecycle'
 
 
 const selectedConversationId = ref(null)
@@ -1023,4 +1023,3 @@ function extractError(err, fallback) {
 
 
 
-Nettoyer les reliquats non utilisés pour alléger le tree (ex : frontend/secure_messagerie/src/components/Messages.vue n’est référencé nulle part, idem pour frontend/secure_messagerie/src/assets/styles/{sidebar.css,dashboard.css,dashboard-header.css,dashboard-home.css,main.css,base.css}).
