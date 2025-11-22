@@ -55,12 +55,12 @@ import { ref, onMounted, onBeforeUnmount, defineProps, toRefs, computed, watch }
 import { useRouter } from 'vue-router'
 import { api, backendBase } from '@/utils/api'
 import { computeAvatarInitials, normalizeAvatarUrl } from '@/utils/profile'
-import SidebarFooter from '../sidebar/SidebarFooter.vue'
-import SidebarInsights from '../sidebar/SidebarInsights.vue'
-import SidebarPrimaryActions from '../sidebar/SidebarPrimaryActions.vue'
-import SidebarProfileCard from '../sidebar/SidebarProfileCard.vue'
-import SidebarQuickLinks from '../sidebar/SidebarQuickLinks.vue'
-import SidebarSecurity from '../sidebar/SidebarSecurity.vue'
+import SidebarFooter from './sidebar/SidebarFooter.vue'
+import SidebarInsights from './sidebar/SidebarInsights.vue'
+import SidebarPrimaryActions from './sidebar/SidebarPrimaryActions.vue'
+import SidebarProfileCard from './sidebar/SidebarProfileCard.vue'
+import SidebarQuickLinks from './sidebar/SidebarQuickLinks.vue'
+import SidebarSecurity from './sidebar/SidebarSecurity.vue'
 
 const STATUS_LABELS = {
   available: 'Disponible',
@@ -736,7 +736,7 @@ function formatRelativeTime(dateString) {
   return date.toISOString()
 }
 </script>
-<style src="../sidebar/Sidebar.css"></style>
+<style src="./sidebar/Sidebar.css"></style>
 
 
 
