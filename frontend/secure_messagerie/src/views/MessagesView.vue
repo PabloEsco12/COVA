@@ -1096,9 +1096,6 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   endCall(true)
   disconnectRealtime()
-  if (gifSearchTimer) {
-    clearTimeout(gifSearchTimer)
-  }
   if (typingCleanupTimer) {
     clearInterval(typingCleanupTimer)
     typingCleanupTimer = null
