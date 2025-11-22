@@ -1,4 +1,4 @@
-<template>
+﻿<template>
 
   <div class="msg-shell">
     <MessageToastStack
@@ -1023,3 +1023,4 @@ function extractError(err, fallback) {
 
 
 
+Nettoyer les reliquats non utilisés pour alléger le tree (ex : frontend/secure_messagerie/src/components/Messages.vue n’est référencé nulle part, idem pour frontend/secure_messagerie/src/assets/styles/{sidebar.css,dashboard.css,dashboard-header.css,dashboard-home.css,main.css,base.css}).
