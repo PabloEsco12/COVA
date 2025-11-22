@@ -5,11 +5,12 @@
       isDark ? 'header-bar-dark text-light' : 'header-bar-light',
     ]"
   >
-    <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-2">
+    <div class="header-title">
       <span class="fw-bold fs-5 mb-0">Bienvenue {{ pseudo }} sur COVA&nbsp;!</span>
+      <small class="text-muted d-none d-md-block">Espace sécurisé et collaboratif</small>
     </div>
-    <div class="d-flex align-items-center gap-3 flex-wrap justify-content-end flex-grow-1">
-      <div class="avatar-wrapper me-2">
+    <div class="header-identity">
+      <div class="avatar-wrapper">
         <img
           v-if="avatarUrl"
           :src="avatarUrl"
@@ -21,16 +22,26 @@
         />
         <div v-else class="avatar-fallback">{{ avatarInitials }}</div>
       </div>
-      <span class="me-0 me-sm-2">{{ pseudo }}</span>
+      <span class="user-name">{{ pseudo }}</span>
+    </div>
+    <div class="header-actions">
+      <div class="chip" :class="isOnline ? 'chip-ok' : 'chip-off'">
+        <i :class="isOnline ? 'bi bi-shield-check' : 'bi bi-wifi-off'"></i>
+        <span>{{ isOnline ? 'Canal securise' : 'Hors ligne' }}</span>
+      </div>
+      <div class="chip chip-muted">
+        <i class="bi bi-clock-history"></i>
+        <span>{{ formattedTime }}</span>
+      </div>
+      <button
+        @click="emit('toggle-dark')"
+        :class="['btn theme-toggle', isDark ? 'btn-outline-light' : 'btn-outline-secondary']"
+        title="Activer/desactiver le mode sombre"
+      >
+        <i :class="isDark ? 'bi bi-moon-fill' : 'bi bi-brightness-high-fill'"></i>
+      </button>
       <button class="btn btn-outline-danger btn-sm" @click="handleLogout">Deconnexion</button>
     </div>
-    <button
-      @click="emit('toggle-dark')"
-      :class="['btn ms-2 theme-toggle', isDark ? 'btn-outline-light' : 'btn-outline-secondary']"
-      title="Activer/desactiver le mode sombre"
-    >
-      <i :class="isDark ? 'bi bi-moon-fill' : 'bi bi-brightness-high-fill'"></i>
-    </button>
   </header>
 </template>
 
@@ -52,19 +63,30 @@ const emit = defineEmits(['toggle-dark'])
 
 const pseudo = ref('Utilisateur')
 const avatarUrl = ref(normalizeAvatarUrl(localStorage.getItem('avatar_url'), { baseUrl: backendBase }))
+const isOnline = ref(typeof navigator !== 'undefined' ? navigator.onLine : true)
+const nowClock = ref(new Date())
 const avatarInitials = computed(() =>
   computeAvatarInitials({
     displayName: pseudo.value,
     fallback: 'C',
   }),
 )
+const formattedTime = computed(() =>
+  nowClock.value.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+)
+let clockTimer = null
 
 onMounted(async () => {
   pseudo.value = localStorage.getItem('pseudo') || 'Utilisateur'
   avatarUrl.value = normalizeAvatarUrl(localStorage.getItem('avatar_url'), { baseUrl: backendBase })
   if (typeof window !== 'undefined') {
     window.addEventListener('cova:profile-update', handleProfileUpdate)
+    window.addEventListener('online', updateNetworkStatus)
+    window.addEventListener('offline', updateNetworkStatus)
   }
+  clockTimer = setInterval(() => {
+    nowClock.value = new Date()
+  }, 60000)
 
   const token = localStorage.getItem('access_token')
   if (!token) return
@@ -91,8 +113,14 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  if (clockTimer) {
+    clearInterval(clockTimer)
+    clockTimer = null
+  }
   if (typeof window !== 'undefined') {
     window.removeEventListener('cova:profile-update', handleProfileUpdate)
+    window.removeEventListener('online', updateNetworkStatus)
+    window.removeEventListener('offline', updateNetworkStatus)
   }
 })
 
@@ -138,11 +166,25 @@ function handleProfileUpdate(event) {
     } catch {}
   }
 }
+
+function updateNetworkStatus() {
+  if (typeof navigator !== 'undefined') {
+    isOnline.value = navigator.onLine
+  }
+}
 </script>
 
 <style scoped>
 .theme-toggle {
   transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
 }
 .header-shell {
   transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
@@ -151,6 +193,7 @@ function handleProfileUpdate(event) {
   gap: 0.75rem;
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
   flex-wrap: wrap;
+  align-items: center;
 }
 .header-bar-light {
   background: #f9fbff;
@@ -196,5 +239,88 @@ function handleProfileUpdate(event) {
 .header-bar .btn-outline-secondary,
 .header-bar .btn-outline-light {
   border-width: 1px;
+}
+
+.header-title {
+  flex: 1;
+  min-width: 220px;
+}
+
+.header-identity {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex: 1;
+}
+
+.user-name {
+  font-weight: 600;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.8);
+  color: #0f172a;
+}
+
+.chip i {
+  font-size: 1rem;
+}
+
+.chip-muted {
+  background: rgba(15, 23, 42, 0.04);
+  color: #334155;
+}
+
+.chip-ok {
+  background: rgba(16, 185, 129, 0.12);
+  color: #0f766e;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.chip-off {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.header-bar-dark .chip {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e5e7eb;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.header-bar-dark .chip-muted {
+  background: rgba(255, 255, 255, 0.06);
+  color: #cbd5e1;
+}
+
+.header-bar-dark .chip-ok {
+  background: rgba(74, 222, 128, 0.14);
+  color: #bbf7d0;
+  border-color: rgba(74, 222, 128, 0.3);
+}
+
+.header-bar-dark .chip-off {
+  background: rgba(248, 113, 113, 0.18);
+  color: #fecdd3;
+  border-color: rgba(248, 113, 113, 0.35);
 }
 </style>
