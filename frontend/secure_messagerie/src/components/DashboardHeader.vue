@@ -1,14 +1,14 @@
-<template>
+﻿<template>
   <header
     :class="[
-      'd-flex align-items-center justify-content-between px-4 py-2 shadow-sm header-bar',
-      isDark ? 'header-bar-dark text-light' : 'bg-white',
+      'header-shell d-flex align-items-center justify-content-between px-4 py-3',
+      isDark ? 'header-bar-dark text-light' : 'header-bar-light',
     ]"
   >
-    <div>
-      <span class="fw-bold fs-5">Bienvenue {{ pseudo }} sur COVA&nbsp;!</span>
+    <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-2">
+      <span class="fw-bold fs-5 mb-0">Bienvenue {{ pseudo }} sur COVA&nbsp;!</span>
     </div>
-    <div class="d-flex align-items-center">
+    <div class="d-flex align-items-center gap-3 flex-wrap justify-content-end flex-grow-1">
       <div class="avatar-wrapper me-2">
         <img
           v-if="avatarUrl"
@@ -21,13 +21,13 @@
         />
         <div v-else class="avatar-fallback">{{ avatarInitials }}</div>
       </div>
-      <span class="me-3">{{ pseudo }}</span>
-      <button class="btn btn-outline-danger btn-sm" @click="handleLogout">Déconnexion</button>
+      <span class="me-0 me-sm-2">{{ pseudo }}</span>
+      <button class="btn btn-outline-danger btn-sm" @click="handleLogout">Deconnexion</button>
     </div>
     <button
       @click="emit('toggle-dark')"
       :class="['btn ms-2 theme-toggle', isDark ? 'btn-outline-light' : 'btn-outline-secondary']"
-      title="Activer/désactiver le mode sombre"
+      title="Activer/desactiver le mode sombre"
     >
       <i :class="isDark ? 'bi bi-moon-fill' : 'bi bi-brightness-high-fill'"></i>
     </button>
@@ -144,12 +144,23 @@ function handleProfileUpdate(event) {
 .theme-toggle {
   transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
-.header-bar {
-  transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+.header-shell {
+  transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  gap: 0.75rem;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+  flex-wrap: wrap;
+}
+.header-bar-light {
+  background: #f9fbff;
+  color: #0f172a;
 }
 .header-bar-dark {
-  background: rgba(22, 27, 34, 0.96);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+  background: linear-gradient(135deg, #161c27 0%, #0f1625 100%);
+  border-color: rgba(255, 255, 255, 0.06);
+  color: #e5e7eb;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
 }
 .avatar-wrapper {
   width: 40px;
@@ -171,5 +182,19 @@ function handleProfileUpdate(event) {
   justify-content: center;
   font-weight: 600;
   text-transform: uppercase;
+}
+
+.header-bar-dark .btn-outline-danger {
+  color: #f8d7da;
+  border-color: rgba(248, 215, 218, 0.6);
+}
+
+.header-bar-dark .btn-outline-danger:hover {
+  background: rgba(248, 215, 218, 0.1);
+}
+
+.header-bar .btn-outline-secondary,
+.header-bar .btn-outline-light {
+  border-width: 1px;
 }
 </style>
