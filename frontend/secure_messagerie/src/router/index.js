@@ -11,8 +11,8 @@ import NewPasswordView from '@/views/NewPasswordView.vue'
 import ConfirmEmailView from '@/views/ConfirmEmailView.vue'
 
 // layout / dashboard
-import Dashboard from '../components/Dashboard.vue'
-import DashboardHome from '../components/DashboardHomeEnhanced.vue'
+import Dashboard from '@/components/dashboard/Dashboard.vue'
+import DashboardHome from '@/components/dashboard/DashboardHomeEnhanced.vue'
 import Messages from '@/views/MessagesView.vue'
 import NewConversationForm from '@/components/messages/new/NewConversationForm.vue'
 import ContactsView from '@/views/ContactsView.vue'
