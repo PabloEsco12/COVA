@@ -1,14 +1,9 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/utils/api'
-import { createConversationSocket } from '@/services/realtime'
 import {
-  pinMessage,
-  unpinMessage,
-  updateMessageReaction,
   uploadAttachment,
   editConversationMessage,
-  deleteConversationMessage,
   searchConversationMessages,
   updateConversation,
   leaveConversation,
@@ -18,10 +13,22 @@ import {
   revokeConversationInvite,
 } from '@/services/conversations'
 import { defaultGifLibrary } from '@/utils/reactions'
+import {
+  formatAbsolute,
+  formatFileSize,
+  formatListTime,
+  formatTime,
+  messagePreviewText,
+  extractDeliverySummary,
+} from './formatters'
+import { generateLocalId } from './id'
 import { useMessageSearch } from './useMessageSearch'
 import { useComposerTools } from './useComposerTools'
 import { useNotificationsManager } from './useNotificationsManager'
 import { useConversationFilters } from './useConversationFilters'
+import { useMessageActions } from './useMessageActions'
+import { useDeleteMessage } from './useDeleteMessage'
+import { useRealtimeMessaging } from './useRealtimeMessaging'
 
 export function useMessagesView() {
   const STATUS_LABELS = {
@@ -102,12 +109,6 @@ export function useMessagesView() {
   const loadingMessages = ref(false)
 
   const messageError = ref('')
-  const deleteDialog = reactive({
-    visible: false,
-    message: null,
-    loading: false,
-    error: '',
-  })
 
   const messageInput = ref('')
   const composerTools = useComposerTools({
@@ -215,13 +216,10 @@ export function useMessagesView() {
   }
 
   const sending = ref(false)
-
-  const copiedMessageId = ref(null)
-
-const reactionPalette = [
-  '\u{1F44D}',
-  '\u{2764}\u{FE0F}',
-  '\u{1F389}',
+  const reactionPalette = [
+    '\u{1F44D}',
+    '\u{2764}\u{FE0F}',
+    '\u{1F389}',
     '\u{1F44F}',
     '\u{1F525}',
     '\u{1F604}',
@@ -231,34 +229,88 @@ const reactionPalette = [
     '\u{2757}',
   ]
 
-  const pinBusy = reactive({})
-
-  const reactionBusy = reactive({})
-
-  const reactionPickerFor = ref(null)
-  const messageMenuOpen = ref(null)
-
-  const optimisticMessageIds = new Set()
-
-  const socketRef = ref(null)
-
-  const connectionStatus = ref('idle')
-
-
-
-  let copyTimer = null
-
-
   const route = useRoute()
-
   const router = useRouter()
-
   const messageScroller = ref(null)
-
-
 
   const currentUserId = ref(localStorage.getItem('user_id') || null)
   const authToken = ref(localStorage.getItem('access_token') || null)
+
+  const {
+    cloneComposerReference,
+    mapOptimisticAttachments,
+    removeMessageById,
+    resolveOptimisticMessage,
+    reactionPickerFor,
+    messageMenuOpen,
+    toggleReactionPicker,
+    toggleMessageMenu,
+    closeTransientMenus,
+    handlePinToggle,
+    handleReactionSelection,
+    togglePin,
+    toggleReaction,
+    isPinning,
+    isReactionPending,
+    optimisticMessageIds,
+    copyMessage,
+    copiedMessageId,
+    downloadAttachment,
+    messageFormatters,
+  } = useMessageActions({
+    messages,
+    selectedConversationId,
+    currentUserId,
+    messageError,
+    applyMessageUpdate,
+    normalizeMessage,
+    extractError,
+    messagePreviewText,
+    formatTime,
+    formatAbsolute,
+    formatFileSize,
+    extractDeliverySummary,
+  })
+
+  const {
+    messageStatusLabel,
+    messageStatusClass,
+    messageStatusDetail,
+    messageSecurityLabel,
+    messageSecurityTooltip,
+  } = messageFormatters
+
+  const {
+    deleteDialog,
+    deleteDialogPreview,
+    confirmDeleteMessage,
+    closeDeleteDialog,
+    performDeleteMessage,
+  } = useDeleteMessage({
+    selectedConversationId,
+    messagePreviewText,
+    applyMessageUpdate,
+    normalizeMessage,
+    extractError,
+  })
+
+  const {
+    socketRef,
+    connectionStatus,
+    connectRealtime,
+    disconnectRealtime,
+    handleIncomingRealtime,
+  } = useRealtimeMessaging({
+    authToken,
+    normalizeMessage,
+    ensureMeta,
+    pagination,
+    selectedConversationId,
+    applyMessageUpdate,
+    markConversationAsRead,
+    incrementUnreadCounter,
+    notifyNewIncomingMessage,
+  })
 
 
   function computeInitials(label = '') {
@@ -702,6 +754,27 @@ async function loadMessages({ conversationId = selectedConversationId.value, res
       }
     }
   }
+  async function loadOlderMessages() {
+    if (
+      loadingOlderMessages.value ||
+      !selectedConversationId.value ||
+      !pagination.hasMoreBefore ||
+      !pagination.beforeCursor
+    ) {
+      return
+    }
+    loadingOlderMessages.value = true
+    try {
+      await loadMessages({
+        conversationId: selectedConversationId.value,
+        before: pagination.beforeCursor,
+        limit: 50,
+      })
+    } finally {
+      loadingOlderMessages.value = false
+    }
+  }
+
   const paginationHeaderKeys = {
     before: 'x-pagination-before',
     after: 'x-pagination-after',
@@ -807,12 +880,13 @@ async function loadMessages({ conversationId = selectedConversationId.value, res
   }
 
 
-  function normalizeMessage(payload) {
+  function normalizeMessage(payload, { selfId } = {}) {
     const convId = String(payload.conversation_id || payload.conv_id || '')
     const authorId = payload.author_id ? String(payload.author_id) : null
+    const viewerId = selfId ?? (currentUserId.value ? String(currentUserId.value) : null)
     const createdAt = payload.created_at ? new Date(payload.created_at) : new Date()
     const displayName =
-      payload.author_display_name || (authorId && authorId === currentUserId.value ? 'Vous' : 'Participant')
+      payload.author_display_name || (authorId && viewerId && authorId === viewerId ? 'Vous' : 'Participant')
 
     const content = (payload.content || '').toString()
 
@@ -851,7 +925,7 @@ async function loadMessages({ conversationId = selectedConversationId.value, res
       content: deleted ? '' : content,
       createdAt,
       isSystem: Boolean(payload.is_system),
-      sentByMe: Boolean(authorId && currentUserId.value && authorId === String(currentUserId.value)),
+      sentByMe: Boolean(authorId && viewerId && authorId === viewerId),
       deliveryState: payload.delivery_state || null,
       deliveredAt,
       readAt,
@@ -1262,90 +1336,6 @@ async function loadMessages({ conversationId = selectedConversationId.value, res
   }
 
 
-  function connectRealtime(convId) {
-
-    if (!authToken.value) {
-
-      connectionStatus.value = 'idle'
-
-      return
-
-    }
-
-    connectionStatus.value = 'connecting'
-
-    socketRef.value = createConversationSocket(convId, {
-
-      token: authToken.value,
-
-      onOpen: () => (connectionStatus.value = 'connected'),
-
-      onError: () => (connectionStatus.value = 'error'),
-
-      onClose: () => (connectionStatus.value = 'idle'),
-
-      onEvent: (payload) => {
-
-        if (!payload || typeof payload !== 'object') return
-
-        if (payload.event === 'ready') {
-
-          connectionStatus.value = 'connected'
-
-          return
-
-        }
-
-        if (payload.event === 'message' || payload.event === 'message.updated') {
-          handleIncomingRealtime(payload)
-        }
-      },
-
-    })
-
-  }
-
-
-
-  function disconnectRealtime() {
-    if (socketRef.value) {
-      socketRef.value.close()
-      socketRef.value = null
-    }
-    connectionStatus.value = 'idle'
-  }
-
-  function handleIncomingRealtime(payload) {
-    const type = typeof payload?.event === 'string' ? payload.event : 'message'
-    const message = normalizeMessage(payload)
-    const meta = ensureMeta(message.conversationId)
-    if (typeof message.streamPosition === 'number') {
-      pagination.afterCursor = pagination.afterCursor
-        ? Math.max(pagination.afterCursor, message.streamPosition)
-        : message.streamPosition
-    }
-    if (type === 'message') {
-      meta.lastPreview = message.preview
-      meta.lastActivity = message.createdAt
-    }
-    const isSameConversation = message.conversationId === selectedConversationId.value
-    const shouldNotify = type === 'message' && !message.sentByMe && !message.isSystem && !message.deleted
-    if (isSameConversation) {
-      applyMessageUpdate(message)
-      if (shouldNotify) {
-        markConversationAsRead(message.conversationId, [message.id]).catch(() => {})
-      }
-    } else if (shouldNotify) {
-      incrementUnreadCounter(message.conversationId)
-    }
-    if (
-      shouldNotify &&
-      (!isSameConversation || (typeof document !== 'undefined' && (document.hidden || !document.hasFocus())))
-    ) {
-      notifyNewIncomingMessage(message)
-    }
-  }
-
   function onThreadScroll() {
     const el = messageScroller.value
     if (!el || loadingOlderMessages.value || !pagination.hasMoreBefore) return
@@ -1385,39 +1375,6 @@ async function loadMessages({ conversationId = selectedConversationId.value, res
   }
 
 
-
-  function confirmDeleteMessage(message) {
-    if (!message) return
-    deleteDialog.message = message
-    deleteDialog.error = ''
-    deleteDialog.loading = false
-    deleteDialog.visible = true
-  }
-
-  function closeDeleteDialog() {
-    deleteDialog.visible = false
-    deleteDialog.message = null
-    deleteDialog.error = ''
-    deleteDialog.loading = false
-  }
-
-  async function performDeleteMessage() {
-    if (!deleteDialog.message || !selectedConversationId.value) return
-    deleteDialog.loading = true
-    deleteDialog.error = ''
-    try {
-      const data = await deleteConversationMessage(
-        selectedConversationId.value,
-        deleteDialog.message.id,
-      )
-      applyMessageUpdate(normalizeMessage(data))
-      closeDeleteDialog()
-    } catch (err) {
-      deleteDialog.error = extractError(err, "Impossible de supprimer le message.")
-    } finally {
-      deleteDialog.loading = false
-    }
-  }
 
   function syncConversationFormFromSelected() {
     const conv = selectedConversation.value
@@ -1631,370 +1588,6 @@ async function loadMessages({ conversationId = selectedConversationId.value, res
 
 
 
-  async function copyMessage(message) {
-
-    if (!message?.content) return
-
-    try {
-
-      if (navigator?.clipboard?.writeText) {
-
-        await navigator.clipboard.writeText(message.content)
-
-        copiedMessageId.value = message.id
-
-        if (copyTimer) clearTimeout(copyTimer)
-
-        copyTimer = setTimeout(() => {
-
-          copiedMessageId.value = null
-
-          copyTimer = null
-
-        }, 1500)
-
-      }
-
-    } catch (err) {
-
-      console.warn('Impossible de copier le message', err)
-
-    }
-
-  }
-
-
-
-  function generateLocalId() {
-
-    if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
-
-      return globalThis.crypto.randomUUID()
-
-    }
-
-    return `msg_${Math.random().toString(36).slice(2, 10)}`
-
-  }
-
-
-
-  function cloneComposerReference(target) {
-    if (!target) return null
-    return {
-      id: target.id,
-      displayName: target.displayName,
-      authorDisplayName: target.authorDisplayName || target.displayName || target.email || 'Participant',
-      excerpt: target.excerpt || messagePreviewText(target),
-      deleted: Boolean(target.deleted),
-    }
-  }
-
-
-
-  function mapOptimisticAttachments(entries) {
-    return entries.map((entry) => ({
-      id: entry.descriptor?.id || entry.id,
-      fileName: entry.name || entry.descriptor?.file_name || 'Pi+¿ce jointe',
-      mimeType: entry.type || entry.descriptor?.mime_type || 'Fichier',
-      sizeBytes: entry.size,
-      downloadUrl: entry.descriptor?.download_url || null,
-    }))
-  }
-
-
-
-  function removeMessageById(messageId) {
-    const idx = messages.value.findIndex((msg) => msg.id === messageId)
-    if (idx !== -1) {
-      messages.value.splice(idx, 1)
-    }
-  }
-
-
-
-  function resolveOptimisticMessage(localId, nextMessage) {
-    optimisticMessageIds.delete(localId)
-    removeMessageById(localId)
-    applyMessageUpdate(nextMessage)
-  }
-
-
-
-  function isPinning(messageId) {
-    return Boolean(pinBusy[messageId])
-  }
-
-
-  function isReactionPending(messageId, emoji) {
-    return Boolean(reactionBusy[`${messageId}:${emoji}`])
-  }
-
-
-
-  function toggleReactionPicker(messageId) {
-    if (!messageId) return
-    reactionPickerFor.value = reactionPickerFor.value === messageId ? null : messageId
-    if (reactionPickerFor.value) {
-      messageMenuOpen.value = null
-    }
-  }
-
-
-
-  function toggleMessageMenu(messageId) {
-    if (!messageId) return
-    messageMenuOpen.value = messageMenuOpen.value === messageId ? null : messageId
-    if (messageMenuOpen.value) {
-      reactionPickerFor.value = null
-    }
-  }
-
-
-
-  function closeTransientMenus() {
-    reactionPickerFor.value = null
-    messageMenuOpen.value = null
-  }
-
-
-
-  async function handlePinToggle(message) {
-    await togglePin(message)
-    closeTransientMenus()
-  }
-
-
-
-  async function handleReactionSelection(message, emoji) {
-    await toggleReaction(message, emoji)
-    reactionPickerFor.value = null
-  }
-
-
-
-  async function togglePin(message) {
-
-    if (!selectedConversationId.value) return
-
-    const messageId = message.id
-
-    pinBusy[messageId] = true
-
-    try {
-
-      const data = message.pinned
-
-        ? await unpinMessage(selectedConversationId.value, messageId)
-
-        : await pinMessage(selectedConversationId.value, messageId)
-
-      applyMessageUpdate(normalizeMessage(data))
-
-    } catch (err) {
-
-      messageError.value = extractError(err, "Impossible de mettre +á jour l'+®pingle.")
-
-    } finally {
-
-      pinBusy[messageId] = false
-
-    }
-
-  }
-
-
-
-  async function toggleReaction(message, emoji) {
-
-    if (!selectedConversationId.value || !emoji) return
-
-    const key = `${message.id}:${emoji}`
-
-    reactionBusy[key] = true
-
-    try {
-
-      const data = await updateMessageReaction(selectedConversationId.value, message.id, { emoji })
-
-      applyMessageUpdate(normalizeMessage(data))
-
-    } catch (err) {
-
-      console.warn('Impossible de mettre +á jour la r+®action', err)
-
-    } finally {
-
-      reactionBusy[key] = false
-
-    }
-
-  }
-
-
-
-  function formatTime(date) {
-
-    if (!(date instanceof Date)) return ''
-
-    return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-
-  }
-
-
-
-  function formatListTime(date) {
-
-    if (!(date instanceof Date)) date = new Date(date || Date.now())
-
-    return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-
-  }
-
-
-
-  function formatAbsolute(date) {
-    if (!(date instanceof Date)) return ''
-    return date.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })
-  }
-
-  function formatFileSize(bytes) {
-    if (typeof bytes !== 'number' || Number.isNaN(bytes)) return ''
-    if (bytes < 1024) return `${bytes} o`
-    const units = ['Ko', 'Mo', 'Go', 'To']
-    let size = bytes / 1024
-    let unit = 0
-    while (size >= 1024 && unit < units.length - 1) {
-      size /= 1024
-      unit += 1
-    }
-    return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[unit]}`
-  }
-
-  function downloadAttachment(attachment) {
-    if (!attachment || !attachment.downloadUrl) return
-    window.open(attachment.downloadUrl, '_blank', 'noopener')
-  }
-
-  function messagePreviewText(message) {
-    if (!message) return ''
-    if (message.excerpt) return message.excerpt
-    if (message.content) return String(message.content).slice(0, 120)
-    if (Array.isArray(message.attachments) && message.attachments.length) {
-      return `${message.attachments.length} piece(s) jointe(s)`
-    }
-    if (typeof message.attachments === 'number' && message.attachments > 0) {
-      return `${message.attachments} piece(s) jointe(s)`
-    }
-    return ''
-  }
-
-  const deleteDialogPreview = computed(() =>
-    deleteDialog.message ? messagePreviewText(deleteDialog.message) : '',
-  )
-
-
-
-  function messageStatusLabel(message) {
-
-    if (!message.deliveryState) {
-
-      return message.sentByMe ? 'Envoi' : ''
-
-    }
-
-    switch (message.deliveryState) {
-
-      case 'read':
-
-        return 'Lu'
-
-      case 'delivered':
-
-        return 'Distribu+®'
-
-      case 'queued':
-
-        return 'Envoi'
-
-      default:
-
-        return ''
-
-    }
-
-  }
-
-
-
-  function messageStatusClass(message) {
-
-    switch (message.deliveryState) {
-
-      case 'read':
-
-        return 'state-read'
-
-      case 'delivered':
-
-        return 'state-delivered'
-
-      case 'queued':
-
-        return 'state-queued'
-
-      default:
-
-        return ''
-
-    }
-
-  }
-
-
-
-  function messageStatusDetail(message) {
-    if (message.deleted) return 'Supprim+®'
-    if (!message.sentByMe) return ''
-    if (message.readAt) {
-      return `Lu ${formatTime(message.readAt)}`
-    }
-    if (message.deliveredAt) {
-
-      return `Distribu+® ${formatTime(message.deliveredAt)}`
-
-    }
-
-    return ''
-
-  }
-
-
-
-  function messageSecurityLabel(message) {
-
-    const scheme = message.security?.scheme || 'confidentiel'
-
-    if (scheme === 'plaintext') return 'Chiffrage applicatif'
-
-    return `Sch+®ma ${scheme}`
-
-  }
-
-
-
-  function messageSecurityTooltip(message) {
-
-    const metadata = message.security?.metadata || {}
-
-    const lines = Object.entries(metadata).map(([key, value]) => `${key}: ${value}`)
-
-    return [`Sch+®ma: ${message.security?.scheme || 'n/a'}`, ...lines].join('\n')
-
-  }
-
-
-
   function scrollToMessage(messageId) {
 
     const el = document.getElementById(`message-${messageId}`)
@@ -2185,7 +1778,6 @@ async function loadMessages({ conversationId = selectedConversationId.value, res
     messages,
     messageScroller,
     messageSearch,
-    showSearchPanel,
     messageSecurityLabel,
     messageSecurityTooltip,
     messageStatusClass,
@@ -2209,11 +1801,9 @@ async function loadMessages({ conversationId = selectedConversationId.value, res
     pendingAttachments,
     performMessageSearch,
     pickerMode,
-    pinBusy,
     pinnedMessages,
     queueAttachment,
     queueToastNotification,
-    reactionBusy,
     reactionPalette,
     reactionPickerFor,
     forwardPicker,
@@ -2249,7 +1839,6 @@ async function loadMessages({ conversationId = selectedConversationId.value, res
     startEdit,
     startForward,
     startReply,
-    initiateForward,
     cancelForwardSelection,
     confirmForwardTarget,
     submitInvite,
@@ -2270,26 +1859,4 @@ async function loadMessages({ conversationId = selectedConversationId.value, res
     updatePaginationFromHeaders,
     uploadAttachmentFile
   }
-}
-
-async function loadOlderMessages() {
-  if (
-    loadingOlderMessages.value ||
-    !selectedConversationId.value ||
-    !pagination.hasMoreBefore ||
-    !pagination.beforeCursor
-  ) {
-    return
-  }
-  loadingOlderMessages.value = true
-  try {
-    await loadMessages({
-      conversationId: selectedConversationId.value,
-      before: pagination.beforeCursor,
-      limit: 50,
-    })
-  } finally {
-    loadingOlderMessages.value = false
-  }
-}
 
