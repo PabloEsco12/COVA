@@ -227,8 +227,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
 import { useRoute, useRouter } from 'vue-router'
-import { createConversationSocket } from '@/services/realtime'
-import { useNotificationsStream } from '@/composables/useNotificationsStream'
 import { useConversationSearch } from '@/composables/useConversationSearch'
 import { uploadAttachment } from '@/services/conversations'
 import ConversationSidebar from '@/components/messages/ConversationSidebar.vue'
@@ -268,6 +266,7 @@ import { useConversationFilters } from '@/views/messages/useConversationFilters'
 import { useMessageActions } from '@/views/messages/useMessageActions'
 import { useMessageList } from '@/views/messages/useMessageList'
 import { useComposerInteractions } from '@/views/messages/useComposerInteractions'
+import { useConversationRealtime } from '@/views/messages/useConversationRealtime'
 
 
 let typingCleanupTimer = null
@@ -434,49 +433,6 @@ const attachStream = (el, stream) => {
     el.play().catch(() => {})
   }
 }
-function sendCallSignal(event, payload = {}) {
-  if (!socketRef.value || !selectedConversationId.value) return
-  try {
-    callLog('send signal', event, payload.call_id || null, payload.reason || '')
-    socketRef.value.send({
-      event,
-      payload: {
-        conversation_id: selectedConversationId.value,
-        ...payload,
-      },
-    })
-  } catch {}
-}
-const {
-  callState,
-  callControls,
-  localVideoRef,
-  remoteAudioRef,
-  remoteVideoRef,
-  remoteDisplayName,
-  callStatusLabel,
-  startCall,
-  acceptIncomingCall,
-  rejectIncomingCall,
-  cancelOutgoingCall,
-  hangupCall,
-  toggleMicrophone,
-  toggleCamera,
-  handleCallSignal,
-  flushPendingCandidates,
-  endCall,
-} = useCallControls({
-  selectedConversation,
-  selectedConversationId,
-  currentUserId,
-  displayNameForUser,
-  sendCallSignal,
-  notifyIncomingSummary: null,
-  addLocalCallLog,
-  ensurePeerConnectionReady: () => {},
-  attachStream,
-  generateCallId,
-})
 const forwardPicker = reactive({
   open: false,
   message: null,
@@ -508,13 +464,68 @@ const { deleteDialog, deleteDialogPreview, confirmDeleteMessage, closeDeleteDial
     selectedConversationId,
     messagePreviewText,
     applyMessageUpdate,
-    normalizeMessage,
-    extractError,
+  normalizeMessage,
+  extractError,
 })
 const { processNotificationPayload } = useNotificationsBridge({
   notificationDedupSet,
   handleIncomingNotificationPayload,
 })
+const {
+  socketRef,
+  connectionStatus,
+  realtimeConversationId,
+  sendCallSignal,
+  connectRealtime,
+  disconnectRealtime,
+  setCallEventHandler,
+  setStopLocalTyping,
+} = useConversationRealtime({
+  selectedConversationId,
+  currentUserId,
+  normalizeMessage,
+  ensureMeta,
+  pagination,
+  applyMessageUpdate,
+  markConversationAsRead,
+  incrementUnreadCounter,
+  notifyNewIncomingMessage,
+  handleRealtimeTyping,
+  applyPresencePayload,
+  resetPresenceState,
+  processNotificationPayload,
+})
+const {
+  callState,
+  callControls,
+  localVideoRef,
+  remoteAudioRef,
+  remoteVideoRef,
+  remoteDisplayName,
+  callStatusLabel,
+  startCall,
+  acceptIncomingCall,
+  rejectIncomingCall,
+  cancelOutgoingCall,
+  hangupCall,
+  toggleMicrophone,
+  toggleCamera,
+  handleCallSignal,
+  flushPendingCandidates,
+  endCall,
+} = useCallControls({
+  selectedConversation,
+  selectedConversationId,
+  currentUserId,
+  displayNameForUser,
+  sendCallSignal,
+  notifyIncomingSummary: null,
+  addLocalCallLog,
+  ensurePeerConnectionReady: () => {},
+  attachStream,
+  generateCallId,
+})
+setCallEventHandler(handleCallSignal)
 
 const {
   showSearchPanel,
@@ -583,29 +594,7 @@ const reactionPalette = [
   '\u{2757}',
 ]
 
-const socketRef = ref(null)
-const callLog = (...args) => {
-  try {
-    console.info('[call]', ...args)
-  } catch {}
-}
-
-const connectionStatus = ref('idle')
-const realtimeConversationId = ref(null)
-
-
-
 const messageListRef = ref(null)
-
-
-
-const authToken = ref(localStorage.getItem('access_token') || null)
-const notificationsStream = useNotificationsStream({
-  token: authToken.value,
-  onNotification: (payload) => processNotificationPayload(payload, 'stream'),
-})
-
-
 const {
   filteredEmojiSections,
   displayedGifs,
@@ -661,6 +650,7 @@ const {
   generateLocalId,
   sending,
 })
+setStopLocalTyping(stopLocalTyping)
 
 const conversationOwners = computed(() => {
   const conv = selectedConversation.value
@@ -830,17 +820,6 @@ watch(
   },
 )
 
-watch(authToken, (token) => {
-  notificationsStream.updateToken(token || null)
-  if (!token) {
-    disconnectRealtime()
-    return
-  }
-  if (selectedConversationId.value) {
-    connectRealtime(selectedConversationId.value, { force: true, preservePresence: true })
-  }
-})
-
 const forwardPickerTargets = computed(() => {
   const query = forwardPicker.query.trim().toLowerCase()
   return conversations.value
@@ -960,127 +939,6 @@ async function selectConversation(convId) {
   }
 }
 
-
-
-
-
-function connectRealtime(convId, options = {}) {
-  const targetId = convId ? String(convId) : null
-  if (!targetId) {
-    disconnectRealtime()
-    return
-  }
-  if (!authToken.value) {
-    disconnectRealtime()
-    return
-  }
-  const { force = false, preservePresence = false } = options
-  const sameConversation = realtimeConversationId.value === targetId
-  if (!force && sameConversation && socketRef.value) {
-    return
-  }
-  if (socketRef.value) {
-    disconnectRealtime({
-      preserveConversation: sameConversation,
-      preservePresence: preservePresence && sameConversation,
-    })
-  }
-  connectionStatus.value = 'connecting'
-  realtimeConversationId.value = targetId
-  socketRef.value = createConversationSocket(targetId, {
-    token: authToken.value,
-    onOpen: () => {
-      connectionStatus.value = 'connected'
-    },
-    onError: () => {
-      connectionStatus.value = 'error'
-    },
-    onClose: () => {
-      connectionStatus.value = 'idle'
-    },
-    onEvent: (payload) => {
-      if (!payload || typeof payload !== 'object') return
-      switch (payload.event) {
-        case 'ready':
-          connectionStatus.value = 'connected'
-          return
-        case 'message':
-        case 'message.updated':
-          handleIncomingRealtime(payload)
-          return
-        case 'typing:start':
-        case 'typing:stop':
-          handleRealtimeTyping(payload)
-          return
-        case 'presence:update':
-          applyPresencePayload(payload.payload)
-          return
-        case 'call:offer':
-        case 'call:answer':
-        case 'call:candidate':
-        case 'call:hangup':
-          handleRealtimeCallEvent(payload)
-          return
-        default:
-          break
-      }
-    },
-  })
-}
-
-
-
-function disconnectRealtime(options = {}) {
-  const { preserveConversation = false, preservePresence = false } = options
-  if (socketRef.value) {
-    try {
-      socketRef.value.close()
-    } catch {}
-    socketRef.value = null
-  }
-  connectionStatus.value = 'idle'
-  stopLocalTyping()
-  if (!preservePresence) {
-    resetPresenceState()
-  }
-  if (!preserveConversation) {
-    realtimeConversationId.value = null
-  }
-}
-
-
-
-function handleIncomingRealtime(payload) {
-  const type = typeof payload?.event === 'string' ? payload.event : 'message'
-  const message = normalizeMessage(payload, { selfId: currentUserId.value })
-  const meta = ensureMeta(message.conversationId)
-  if (typeof message.streamPosition === 'number') {
-    pagination.afterCursor = pagination.afterCursor
-      ? Math.max(pagination.afterCursor, message.streamPosition)
-      : message.streamPosition
-  }
-  if (type === 'message') {
-    meta.lastPreview = message.preview
-    meta.lastActivity = message.createdAt
-  }
-  const isSameConversation = message.conversationId === selectedConversationId.value
-  const shouldNotify = type === 'message' && !message.sentByMe && !message.isSystem && !message.deleted
-  if (isSameConversation) {
-    applyMessageUpdate(message)
-    if (shouldNotify) {
-      markConversationAsRead(message.conversationId, [message.id]).catch(() => {})
-    }
-  } else if (shouldNotify) {
-    incrementUnreadCounter(message.conversationId)
-  }
-  if (
-    shouldNotify &&
-    (!isSameConversation || (typeof document !== 'undefined' && (document.hidden || !document.hasFocus())))
-  ) {
-    notifyNewIncomingMessage(message)
-  }
-}
-
 function scrollToBottom() {
   messageListRef.value?.scrollToBottom?.()
 }
@@ -1115,10 +973,6 @@ function generateCallId() {
     return crypto.randomUUID()
   }
   return `call_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-}
-
-function handleRealtimeCallEvent(payload) {
-  handleCallSignal(payload)
 }
 
 function addLocalCallLog(summary) {
