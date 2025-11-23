@@ -16,6 +16,7 @@ from ...schemas.organization import (
 )
 from ...services.organization_service import OrganizationService
 from app.models import OrganizationMembership, UserAccount
+from fastapi import Query
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
@@ -103,8 +104,19 @@ async def update_member_role(
     payload: OrganizationRoleUpdate,
     current_user: UserAccount = Depends(get_current_user),
     service: OrganizationService = Depends(get_organization_service),
-) -> OrganizationMemberOut:
-    updated = await service.update_role(actor=current_user, membership_id=membership_id, role=payload.role)
-    await service.session.commit()
-    return _member_out(service, updated)
+    ) -> OrganizationMemberOut:
+        updated = await service.update_role(actor=current_user, membership_id=membership_id, role=payload.role)
+        await service.session.commit()
+        return _member_out(service, updated)
 
+
+@router.get("/current/members/suggest", response_model=list[OrganizationMemberOut])
+async def suggest_members(
+    q: str | None = Query(default=None, description="Search term for email or display name"),
+    limit: int = Query(default=10, ge=1, le=50),
+    current_user: UserAccount = Depends(get_current_user),
+    service: OrganizationService = Depends(get_organization_service),
+) -> list[OrganizationMemberOut]:
+    membership = await service.get_membership_for_user(current_user.id)
+    members = await service.search_members(membership.organization_id, query=q, limit=limit)
+    return [_member_out(service, member) for member in members]

@@ -9,7 +9,7 @@ from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import ContactLink, ContactStatus, NotificationChannel, UserAccount
+from app.models import ContactLink, ContactStatus, NotificationChannel, UserAccount, OrganizationMembership
 from .audit_service import AuditService
 from .notification_service import NotificationService
 from ..core.redis import RealtimeBroker
@@ -50,6 +50,18 @@ class ContactService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
         if target.id == owner.id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot add yourself as contact")
+
+        # Ensure both users belong to the same organization
+        org_stmt = select(OrganizationMembership.organization_id).where(OrganizationMembership.user_id == owner.id)
+        owner_orgs = {row[0] for row in (await self.session.execute(org_stmt)).all()}
+        if not owner_orgs:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner has no organization")
+
+        target_org_stmt = select(OrganizationMembership.organization_id).where(OrganizationMembership.user_id == target.id)
+        target_orgs = {row[0] for row in (await self.session.execute(target_org_stmt)).all()}
+        common_orgs = owner_orgs & target_orgs
+        if not common_orgs:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Contact outside your organization")
 
         stmt_existing = select(ContactLink).where(
             ContactLink.owner_id == owner.id,

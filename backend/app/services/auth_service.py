@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone
+import re
 import ipaddress
 from secrets import token_urlsafe
 import uuid
@@ -26,17 +27,21 @@ from app.models import (
     NotificationChannel,
     Organization,
     OrganizationMembership,
+    OrganizationRole,
     PasswordResetToken,
     RefreshToken,
     SessionToken,
     UserAccount,
     UserProfile,
+    UserRole,
     UserSecurityState,
     Workspace,
     WorkspaceMembership,
 )
 
 DEFAULT_TIMEZONE = "UTC"
+DEFAULT_WORKSPACE_NAME = "General"
+DEFAULT_WORKSPACE_SLUG = "general"
 
 
 def describe_ip(raw_ip: str) -> tuple[str, str | None]:
@@ -173,20 +178,22 @@ class AuthService:
         if result.scalar_one_or_none():
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
+        normalized_email = email.lower()
         hashed = get_password_hash(password)
         user = UserAccount(
-            email=email.lower(),
+            email=normalized_email,
             hashed_password=hashed,
             is_active=True,
             is_confirmed=False,
+            role=UserRole.SUPERADMIN if self._is_default_admin_email(normalized_email) else UserRole.MEMBER,
         )
         user.profile = UserProfile(display_name=display_name)
 
-        org = Organization(name=f"{display_name or email}'s Organization", slug=str(uuid.uuid4())[:12])
-        membership = OrganizationMembership(organization=org, user=user)
-        workspace = Workspace(organization=org, name="General", slug="general")
+        organization, workspace = await self._ensure_default_organization()
+        membership_role = OrganizationRole.OWNER if self._is_default_admin_email(normalized_email) else OrganizationRole.MEMBER
+        membership = OrganizationMembership(organization=organization, user=user, role=membership_role)
         workspace_membership = WorkspaceMembership(workspace=workspace, membership=membership)
-        workspace.memberships.append(workspace_membership)
+        membership.workspaces.append(workspace_membership)
 
         confirmation_token_value = token_urlsafe(48)
         confirmation_token = EmailConfirmationToken(
@@ -195,14 +202,14 @@ class AuthService:
             expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
         )
 
-        self.session.add_all([user, org, workspace, confirmation_token])
+        self.session.add_all([user, organization, workspace, membership, workspace_membership, confirmation_token])
         await self.session.flush()
         await self.session.refresh(user)
 
-        await self._log("auth.register", user_id=str(user.id), organization_id=str(org.id))
+        await self._log("auth.register", user_id=str(user.id), organization_id=str(organization.id))
         if self.notifications:
             await self.notifications.enqueue_notification(
-                organization_id=str(org.id),
+                organization_id=str(organization.id),
                 user_id=str(user.id),
                 channel=NotificationChannel.EMAIL,
                 payload={
@@ -568,6 +575,45 @@ class AuthService:
             self.session.add(user.security_state)
             await self.session.flush()
         return user.security_state
+
+    def _is_default_admin_email(self, email: str) -> bool:
+        configured = (settings.DEFAULT_ADMIN_EMAIL or "").strip().lower()
+        return bool(configured) and email.lower() == configured
+
+    async def _ensure_default_organization(self) -> tuple[Organization, Workspace]:
+        name = (settings.DEFAULT_ORG_NAME or "Default Organization").strip()
+        slug = self._slugify(settings.DEFAULT_ORG_SLUG or name or "default-org")
+
+        org_stmt = select(Organization).where(Organization.slug == slug)
+        org_result = await self.session.execute(org_stmt)
+        organization = org_result.scalar_one_or_none()
+        if organization is None:
+            organization = Organization(name=name, slug=slug)
+            self.session.add(organization)
+            await self.session.flush()
+        elif organization.name != name:
+            organization.name = name
+            await self.session.flush()
+
+        ws_stmt = select(Workspace).where(
+            Workspace.organization_id == organization.id,
+            Workspace.slug == DEFAULT_WORKSPACE_SLUG,
+        )
+        ws_result = await self.session.execute(ws_stmt)
+        workspace = ws_result.scalar_one_or_none()
+        if workspace is None:
+            workspace = Workspace(
+                organization_id=organization.id,
+                name=DEFAULT_WORKSPACE_NAME,
+                slug=DEFAULT_WORKSPACE_SLUG,
+            )
+            self.session.add(workspace)
+            await self.session.flush()
+        return organization, workspace
+
+    def _slugify(self, value: str) -> str:
+        slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+        return slug or uuid.uuid4().hex[:12]
 
     async def _log(self, action: str, **kwargs) -> None:
         if self.audit:

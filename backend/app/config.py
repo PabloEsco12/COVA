@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     """Typed configuration sourced from environment variables."""
 
     model_config = SettingsConfigDict(
-        env_file=(".env", ".env.local", ".env.dev", ".env.prod"),
+        env_file=(".env", ".env.local", ".env.dev", ".env.prod", ".env.docker"),
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
@@ -42,6 +42,11 @@ class Settings(BaseSettings):
 
     PUBLIC_BASE_URL: str = "http://localhost:8000"
     FRONTEND_ORIGIN: str = "http://localhost:5176"
+
+    # Single-tenant organisation defaults
+    DEFAULT_ORG_NAME: str = "COVA Messages"
+    DEFAULT_ORG_SLUG: str = "cova-messages"
+    DEFAULT_ADMIN_EMAIL: str = "covamessages3@gmail.com"
 
     MEDIA_ROOT: str = "static"
     AVATAR_MAX_BYTES: int = 2_000_000
