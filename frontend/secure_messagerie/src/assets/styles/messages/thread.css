@@ -411,3 +411,27 @@
   font-size: 0.85rem;
   padding-bottom: 0.5rem;
 }
+
+.msg-gif-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.msg-gif-inline {
+  max-width: min(360px, 100%);
+  border-radius: 14px;
+  display: block;
+  background: #0b1220;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.msg-bubble__text {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: inherit;
+  background: transparent;
+  border: none;
+  color: inherit;
+}

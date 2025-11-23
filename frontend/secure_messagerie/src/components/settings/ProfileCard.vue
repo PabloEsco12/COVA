@@ -197,7 +197,7 @@ async function saveProfile() {
     const res = await api.put('/me/profile', payload)
     applyProfileResponse(res.data)
     profileOk.value = true
-    profileMsg.value = 'Profil mis a jour'
+    profileMsg.value = 'Profil mis à jour'
     const normalizedAvatar = normalizeAvatarUrl(res.data.avatar_url, {
       baseUrl: backendBase,
       cacheBust: true,
@@ -215,7 +215,7 @@ async function saveProfile() {
     profileMsg.value =
       e?.response?.data?.detail ||
       e?.response?.data?.message ||
-      'Erreur mise a jour du profil'
+      'Erreur mise à jour du profil'
   } finally {
     savingProfile.value = false
   }

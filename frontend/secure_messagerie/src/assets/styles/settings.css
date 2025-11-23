@@ -58,6 +58,82 @@
 .recovery-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .35rem; padding-left: 0; list-style: none; }
 .recovery-list li { background: #f1f5f9; border: 1px solid #dbeafe; border-radius: .75rem; padding: .6rem .8rem; font-family: 'Fira Code', 'Courier New', monospace; font-size: .85rem; letter-spacing: .08em; text-align: center; color: #0f172a; }
 
+.dark-mode .avatar-settings {
+  background: #0f172a;
+  border-color: rgba(148, 163, 184, 0.25);
+  color: #e2e8f0;
+}
+.dark-mode .avatar-settings .form-control,
+.dark-mode .avatar-settings .form-control:focus {
+  background: #111827;
+  border-color: rgba(148, 163, 184, 0.25);
+  color: #e2e8f0;
+}
+.dark-mode .avatar-settings .btn-outline-danger {
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
+}
+.dark-mode .totp-card {
+  background: linear-gradient(135deg, #0b1220 0%, #0f172a 100%);
+  border-color: rgba(148, 163, 184, 0.25);
+  color: #e2e8f0;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
+}
+.dark-mode .totp-card p,
+.dark-mode .totp-steps,
+.dark-mode .totp-steps li {
+  color: #cbd5e1;
+}
+.dark-mode .totp-steps li.active {
+  color: #60a5fa;
+}
+.dark-mode .totp-enrollment {
+  background: #0f172a;
+  border-color: rgba(148, 163, 184, 0.25);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.08);
+}
+.dark-mode .totp-qr {
+  background: #0b1220;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+}
+.dark-mode .totp-uri {
+  background: #0b1220;
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.35);
+}
+.dark-mode .recovery-list li {
+  background: #0f172a;
+  border-color: rgba(148, 163, 184, 0.2);
+  color: #e2e8f0;
+}
+.dark-mode .organization-admin-card table {
+  color: #e2e8f0;
+}
+.dark-mode .organization-admin-card table thead th {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(148, 163, 184, 0.15);
+}
+.dark-mode .organization-admin-card table tbody tr {
+  background: rgba(15, 23, 42, 0.7);
+}
+.dark-mode .organization-admin-card table tbody td {
+  border-color: rgba(148, 163, 184, 0.12);
+}
+.dark-mode .organization-admin-card table tbody tr:hover {
+  background: rgba(59, 130, 246, 0.08);
+}
+.dark-mode .organization-admin-card .form-control,
+.dark-mode .organization-admin-card .form-select {
+  background: #0f172a;
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.25);
+}
+.dark-mode .organization-admin-card .form-control:focus,
+.dark-mode .organization-admin-card .form-select:focus {
+  border-color: #60a5fa;
+  box-shadow: none;
+}
+
 /* Modal custom leger base sur Bootstrap */
 .custom-modal { position: fixed; top: 0; left: 0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; z-index: 1050; }
 .custom-modal-dialog { max-width: 520px; width: 92%; }

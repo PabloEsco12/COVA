@@ -282,6 +282,93 @@
   }
 }
 
+/* Dark mode overrides */
+body.dark-mode .new-conv__subtitle {
+  color: #cbd5e1;
+}
+body.dark-mode .new-conv__card {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+body.dark-mode .card-header {
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom-color: rgba(148, 163, 184, 0.12);
+}
+body.dark-mode .card-body {
+  color: #e2e8f0;
+}
+body.dark-mode .conv-type {
+  border-color: rgba(148, 163, 184, 0.25);
+  background: rgba(30, 41, 59, 0.6);
+}
+body.dark-mode .conv-type:hover {
+  border-color: #60a5fa;
+  box-shadow: 0 8px 22px rgba(96, 165, 250, 0.2);
+}
+body.dark-mode .conv-type.active,
+body.dark-mode .conv-type.active:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(59, 130, 246, 0.45));
+  border-color: rgba(59, 130, 246, 0.65);
+  box-shadow: 0 12px 28px rgba(59, 130, 246, 0.25);
+}
+body.dark-mode .position-relative input {
+  background: #0f172a;
+  border-color: rgba(148, 163, 184, 0.25);
+  color: #e2e8f0;
+}
+body.dark-mode .position-relative input:focus {
+  border-color: #60a5fa;
+  box-shadow: none;
+}
+body.dark-mode .search-icon {
+  color: #94a3b8;
+}
+body.dark-mode .selected-chips {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.45);
+}
+body.dark-mode .chip {
+  background: linear-gradient(120deg, #2563eb, #60a5fa);
+}
+body.dark-mode .contact-list {
+  border-color: rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.65);
+}
+body.dark-mode .contact-row {
+  background: rgba(30, 41, 59, 0.5);
+  border-color: transparent;
+}
+body.dark-mode .contact-row:hover {
+  background: rgba(59, 130, 246, 0.12);
+}
+body.dark-mode .contact-row.active {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(96, 165, 250, 0.35));
+  border-color: rgba(59, 130, 246, 0.6);
+}
+body.dark-mode .contact-row__badge {
+  background: rgba(59, 130, 246, 0.15);
+  color: #bfdbfe;
+}
+body.dark-mode .info-card,
+body.dark-mode .summary-card {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: #e2e8f0;
+}
+body.dark-mode .info-card__item i {
+  color: #93c5fd;
+}
+body.dark-mode .summary-list dt {
+  color: #94a3b8;
+}
+body.dark-mode .summary-list dd {
+  color: #e2e8f0;
+}
+body.dark-mode .loading-overlay {
+  background: rgba(2, 6, 23, 0.6);
+}
+
 @media (max-width: 992px) {
   .new-conv__grid {
     grid-template-columns: minmax(0, 1fr);

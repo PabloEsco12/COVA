@@ -27,7 +27,7 @@
     <div class="header-actions">
       <div class="chip" :class="isOnline ? 'chip-ok' : 'chip-off'">
         <i :class="isOnline ? 'bi bi-shield-check' : 'bi bi-wifi-off'"></i>
-        <span>{{ isOnline ? 'Canal securise' : 'Hors ligne' }}</span>
+        <span>{{ isOnline ? 'Canal sécurisé' : 'Hors ligne' }}</span>
       </div>
       <div class="chip chip-muted">
         <i class="bi bi-clock-history"></i>
@@ -36,11 +36,11 @@
       <button
         @click="emit('toggle-dark')"
         :class="['btn theme-toggle', isDark ? 'btn-outline-light' : 'btn-outline-secondary']"
-        title="Activer/desactiver le mode sombre"
+        title="Activer/désactiver le mode sombre"
       >
         <i :class="isDark ? 'bi bi-moon-fill' : 'bi bi-brightness-high-fill'"></i>
       </button>
-      <button class="btn btn-outline-danger btn-sm" @click="handleLogout">Deconnexion</button>
+      <button class="btn btn-outline-danger btn-sm" @click="handleLogout">Déconnexion</button>
     </div>
   </header>
 </template>

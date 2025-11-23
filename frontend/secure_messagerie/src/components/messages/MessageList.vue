@@ -176,7 +176,19 @@
 
         <div v-if="message.deleted" class="msg-bubble__deleted">Message supprimé</div>
         <template v-else>
-          <pre class="msg-bubble__body">{{ message.content }}</pre>
+          <div class="msg-bubble__body">
+            <pre v-if="messageText(message)" class="msg-bubble__text">{{ messageText(message) }}</pre>
+            <div v-if="messageGifs(message).length" class="msg-gif-stack">
+              <img
+                v-for="gif in messageGifs(message)"
+                :key="`${message.id}-gif-${gif}`"
+                :src="gif"
+                loading="lazy"
+                class="msg-gif-inline"
+                alt="GIF partagé"
+              />
+            </div>
+          </div>
 
           <div v-if="message.attachments?.length" class="msg-attachments">
             <article v-for="attachment in message.attachments" :key="attachment.id" class="msg-attachment">
@@ -230,6 +242,7 @@
 
 <script setup>
 import { nextTick, onMounted, ref, watch } from 'vue'
+import { detectGifLinks, stripGifLinks } from '@/utils/messageContent'
 
 const props = defineProps({
   messages: { type: Array, default: () => [] },
@@ -399,6 +412,17 @@ function attachmentDescription(attachment) {
   const meta = attachmentMeta(attachment)
   const size = callFormatter('formatFileSize', attachment.sizeBytes)
   return size ? `${meta.label} · ${size}` : meta.label
+}
+
+function messageGifs(message) {
+  if (!message || !message.content) return []
+  return detectGifLinks(message.content)
+}
+
+function messageText(message) {
+  if (!message || !message.content) return ''
+  const gifs = detectGifLinks(message.content)
+  return stripGifLinks(message.content, gifs)
 }
 
 onMounted(scrollToBottom)

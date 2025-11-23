@@ -49,7 +49,7 @@ class ContactService:
         if target is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
         if target.id == owner.id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot add yourself as contact")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Vous ne pouvez  pas vous ajouter vous-même en tant que contact.")
 
         # Ensure both users belong to the same organization
         org_stmt = select(OrganizationMembership.organization_id).where(OrganizationMembership.user_id == owner.id)

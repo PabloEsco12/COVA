@@ -255,8 +255,7 @@ function togglePicker() {
 
   function insertGif(gif) {
     if (!gif?.url) return
-    const base = messageInput.value ? `${messageInput.value.trim()} ` : ''
-    messageInput.value = `${base}${gif.url} `
+    messageInput.value = gif.url
     showPicker.value = false
     gifSearch.value = ''
     gifError.value = ''

@@ -15,7 +15,7 @@ function buildTenorUrl(endpoint, params) {
   return url.toString()
 }
 
-export async function fetchGifs({ query = '', limit = 24 } = {}) {
+export async function fetchGifs({ query = '', limit = 50 } = {}) {
   if (!TENOR_API_KEY) {
     throw new Error('Tenor API key missing (VITE_TENOR_API_KEY).')
   }

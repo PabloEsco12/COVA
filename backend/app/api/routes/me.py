@@ -313,17 +313,17 @@ def _conversation_participants(conversation: Conversation, current_user_id: uuid
 def _build_security_recommendations(stats: OverviewStats, snapshot: dict) -> list[str]:
     recommendations: list[str] = []
     if not snapshot.get("totp_enabled"):
-        recommendations.append("Activez la double authentification pour proteger vos sessions.")
+        recommendations.append("Activez la double authentification pour protéger vos sessions.")
     if not snapshot.get("notification_login"):
-        recommendations.append("Activez les alertes de connexion pour detecter les acces suspects.")
+        recommendations.append("Activez les alertes de connexion pour détecter les accès suspects.")
     if not snapshot.get("has_recovery_codes"):
-        recommendations.append("Generez des codes de recuperation pour recuperer votre compte.")
+        recommendations.append("Générez des codes de récupération pour récupérer votre compte.")
     if stats.devices_at_risk > 0:
-        recommendations.append("Controlez les appareils marques a risque dans la section Appareils.")
+        recommendations.append("Contrôlez les appareils marqués à risque dans la section Appareils.")
     if stats.contacts_pending > 0:
-        recommendations.append("Traitez vos invitations en attente pour garder vos contacts sous controle.")
+        recommendations.append("Traitez vos invitations en attente pour garder vos contacts sous contrôle.")
     if stats.unread_messages > 50:
-        recommendations.append("Archivez ou lisez vos conversations en attente pour rester a jour.")
+        recommendations.append("Archivez ou lisez vos conversations en attente pour rester à jour.")
     return recommendations[:4]
 
 

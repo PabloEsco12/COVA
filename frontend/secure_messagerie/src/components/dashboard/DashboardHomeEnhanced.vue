@@ -125,14 +125,14 @@
           <div class="card h-100">
             <div class="card-header bg-white d-flex align-items-center">
               <i class="bi bi-clock-history me-2 text-primary"></i>
-              <strong>Dernieres conversations</strong>
+              <strong>Dernières conversations</strong>
               <router-link to="/dashboard/messages" class="ms-auto small">
                 Tout voir
               </router-link>
             </div>
             <div class="list-group list-group-flush">
               <div v-if="recentConversations.length === 0" class="p-3 text-muted small">
-                Aucune conversation recemment active.
+                Aucune conversation récemment active.
               </div>
               <button
                 v-for="conversation in recentConversations"
@@ -173,7 +173,7 @@
             <div class="card">
               <div class="card-header bg-white d-flex align-items-center">
                 <i class="bi bi-shield-lock me-2 text-primary"></i>
-                <strong>Profil securite</strong>
+                <strong>Profil à sécuriser</strong>
               </div>
               <div class="card-body">
                 <div class="d-flex align-items-center gap-3 mb-3">
@@ -195,16 +195,15 @@
                   <li class="mt-1">
                     <i :class="security.has_recovery_codes ? 'bi bi-key-fill text-success' : 'bi bi-key text-muted'"></i>
                     <span class="ms-2">
-                      Codes de recuperation {{ security.has_recovery_codes ? 'disponibles' : 'manquants' }}
+                      Codes de récupération {{ security.has_recovery_codes ? 'disponibles' : 'manquants' }}
                     </span>
                   </li>
                   <li v-if="security.last_totp_failure_at" class="mt-1 text-muted">
-                    Dernier echec MFA {{ formatRelative(security.last_totp_failure_at) }}
+                    Dernier échec MFA {{ formatRelative(security.last_totp_failure_at) }}
                   </li>
                 </ul>
               </div>
             </div>
-
             <div class="card">
               <div class="card-header bg-white d-flex align-items-center">
                 <i class="bi bi-list-check me-2 text-primary"></i>
@@ -212,7 +211,7 @@
               </div>
               <div class="card-body">
                 <p v-if="recommendations.length === 0" class="text-muted small mb-0">
-                  Aucun point critique detecte. Continuez a surveiller vos sessions.
+                  Aucun point critique détecté. Continuez à surveiller vos sessions.
                 </p>
                 <ol v-else class="recommendations list-group list-group-numbered">
                   <li v-for="item in recommendations" :key="item" class="list-group-item small">
@@ -420,7 +419,7 @@ function computeGreeting() {
   const hour = new Date().getHours()
   if (hour < 5) return 'Bonsoir'
   if (hour < 12) return 'Bonjour'
-  if (hour < 18) return 'Bon apres-midi'
+  if (hour < 18) return 'Bon après-midi'
   return 'Bonsoir'
 }
 

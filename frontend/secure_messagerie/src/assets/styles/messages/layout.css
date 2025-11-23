@@ -1173,3 +1173,92 @@
   background: rgba(59, 130, 246, 0.18);
   color: #1d4ed8;
 }
+
+/* Dark mode overrides */
+body.dark-mode .msg-shell {
+  background: #0b0f1a;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.55);
+}
+body.dark-mode .msg-nav {
+  background: #0f172a;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+}
+body.dark-mode .msg-nav__eyebrow,
+body.dark-mode .msg-nav__header p {
+  color: #cbd5e1;
+}
+body.dark-mode .msg-nav__header h2 {
+  color: #e2e8f0;
+}
+body.dark-mode .msg-nav__action {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+body.dark-mode .msg-search input {
+  background: #0f172a;
+  border-color: rgba(148, 163, 184, 0.25);
+  color: #e2e8f0;
+}
+body.dark-mode .msg-search i {
+  color: #94a3b8;
+}
+body.dark-mode .msg-filter {
+  border-color: rgba(148, 163, 184, 0.25);
+  color: #cbd5e1;
+}
+body.dark-mode .msg-filter.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #e2e8f0;
+}
+body.dark-mode .msg-nav__item:hover {
+  background: rgba(59, 130, 246, 0.08);
+}
+body.dark-mode .msg-nav__item.active {
+  background: rgba(59, 130, 246, 0.15);
+}
+body.dark-mode .msg-avatar {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+body.dark-mode .msg-item__title {
+  color: #e2e8f0;
+}
+body.dark-mode .msg-item__preview,
+body.dark-mode .msg-item__meta {
+  color: #94a3b8;
+}
+body.dark-mode .msg-empty-row {
+  color: #94a3b8;
+}
+body.dark-mode .msg-main {
+  background: linear-gradient(180deg, #0f172a 0%, #0b1220 40%, #0f172a 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 20px 45px rgba(0, 0, 0, 0.4);
+}
+body.dark-mode .msg-main__header h3,
+body.dark-mode .msg-main__meta {
+  color: #e2e8f0;
+}
+body.dark-mode .msg-main__meta {
+  color: #94a3b8;
+}
+body.dark-mode .msg-empty {
+  background: #0f172a;
+  color: #e2e8f0;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.5);
+}
+body.dark-mode .msg-empty p {
+  color: #cbd5e1;
+}
+body.dark-mode .msg-main__header {
+  border-bottom-color: rgba(148, 163, 184, 0.15);
+}
+body.dark-mode .msg-main__icon {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+}
+body.dark-mode .msg-main__icon.active {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
