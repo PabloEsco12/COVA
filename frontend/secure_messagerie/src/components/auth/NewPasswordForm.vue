@@ -99,7 +99,7 @@
 
     <div class="action-links">
       <router-link to="/login" class="action-link">Retourner à la connexion</router-link>
-      <a class="action-link" href="mailto:support@cova.fr">Besoin d'aide ? Contactez-nous</a>
+      <a class="action-link" href="mailto:support@covamessagerie.be">Besoin d'aide ? Contactez-nous</a>
     </div>
   </div>
 </template>

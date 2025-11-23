@@ -121,7 +121,7 @@
           :add-emoji="addEmoji"
           :insert-gif="insertGif"
           :on-emoji-search="(value) => { emojiSearch.value = value }"
-          :on-gif-search="(value) => { gifSearch.value = value }"
+          :on-gif-search="(value) => { gifSearch.value = value || '' }"
           :attachment-input="attachmentInput"
           :on-attachment-change="onAttachmentChange"
           :sending="sending"

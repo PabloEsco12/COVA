@@ -53,9 +53,9 @@
         </p>
       </div>
       <div class="contact-actions">
-        <a class="btn btn-primary" href="mailto:support@covamessageries.be">
+        <a class="btn btn-primary" href="mailto:support@covamessagerie.be">
           <i class="bi bi-envelope-fill me-2"></i>
-          support@covamessageries.be
+          support@covamessagerie.be
         </a>
         <p class="contact-hint">
           Privilégiez le mail sécurisé pour l’instant. Les canaux chat et téléphone seront annoncés
