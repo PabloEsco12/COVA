@@ -2,11 +2,13 @@ import { computed, reactive, ref, watch } from 'vue'
 import {
   updateConversation,
   leaveConversation,
+  deleteConversation,
   updateConversationMember,
   listConversationInvites,
   createConversationInvite,
   revokeConversationInvite,
 } from '@/services/conversations'
+import { memberUserId } from './mappers'
 
 export function useConversationPanel({
   selectedConversationId,
@@ -31,18 +33,22 @@ export function useConversationPanel({
   const conversationInfoError = ref('')
   const conversationInfoNotice = ref('')
   let conversationNoticeTimer = null
+
   const invites = ref([])
   const loadingInvites = ref(false)
   const inviteForm = reactive({ email: '', role: 'member', expiresInHours: 72 })
   const inviteBusy = ref(false)
   const inviteRevokeBusy = reactive({})
+
   const memberBusy = reactive({})
   const leavingConversation = ref(false)
+  const deletingConversation = ref(false)
+  const showDeleteConfirm = ref(false)
 
   const conversationOwnerSummary = computed(() => {
     const owners =
       (selectedConversation.value?.members || []).filter((member) => member.role === 'owner') || []
-    if (!owners.length) return 'Non défini'
+    if (!owners.length) return 'Non defini'
     return owners.map((member) => member.displayName || member.email || 'Membre').join(', ')
   })
 
@@ -108,7 +114,7 @@ export function useConversationPanel({
       }
       const data = await updateConversation(selectedConversationId.value, payload)
       applyConversationPatch(data)
-      setConversationNotice('Conversation mise à jour.')
+      setConversationNotice('Conversation mise a jour.')
     } catch (err) {
       conversationInfoError.value = extractError(err, "Impossible d'enregistrer la conversation.")
     } finally {
@@ -140,6 +146,42 @@ export function useConversationPanel({
       conversationInfoError.value = extractError(err, 'Impossible de quitter la conversation.')
     } finally {
       leavingConversation.value = false
+    }
+  }
+
+  function openDeleteConfirm() {
+    showDeleteConfirm.value = true
+  }
+
+  function closeDeleteConfirm() {
+    showDeleteConfirm.value = false
+  }
+
+  async function deleteCurrentConversation() {
+    if (!selectedConversationId.value) return
+    showDeleteConfirm.value = false
+    deletingConversation.value = true
+    conversationInfoError.value = ''
+    clearConversationNotice()
+    const convId = selectedConversationId.value
+    try {
+      await deleteConversation(convId)
+      conversations.value = conversations.value.filter((conv) => conv.id !== convId)
+      delete conversationMeta[convId]
+      showConversationPanel.value = false
+      resetComposerState()
+      clearPendingAttachments()
+      resetSearchPanel()
+      disconnectRealtime()
+      selectConversation(null)
+      const fallback = conversations.value[0]
+      if (fallback) {
+        selectConversation(fallback.id)
+      }
+    } catch (err) {
+      conversationInfoError.value = extractError(err, 'Impossible de supprimer la conversation.')
+    } finally {
+      deletingConversation.value = false
     }
   }
 
@@ -178,9 +220,9 @@ export function useConversationPanel({
         invites.value = [mapped, ...invites.value]
       }
       inviteForm.email = ''
-      setConversationNotice('Invitation créée et envoyée.')
+      setConversationNotice('Invitation creee et envoyee.')
     } catch (err) {
-      conversationInfoError.value = extractError(err, "Impossible de créer l'invitation.")
+      conversationInfoError.value = extractError(err, "Impossible de creer l'invitation.")
     } finally {
       inviteBusy.value = false
     }
@@ -194,72 +236,76 @@ export function useConversationPanel({
     try {
       await revokeConversationInvite(selectedConversationId.value, inviteId)
       invites.value = invites.value.filter((invite) => invite.id !== inviteId)
-      setConversationNotice('Invitation révoquée.')
+      setConversationNotice('Invitation revoquee.')
     } catch (err) {
-      conversationInfoError.value = extractError(err, "Impossible de révoquer l'invitation.")
+      conversationInfoError.value = extractError(err, "Impossible de revoquer l'invitation.")
     } finally {
       delete inviteRevokeBusy[inviteId]
     }
   }
 
   async function updateMemberRole(member, role) {
-    if (!selectedConversationId.value || !member?.id || !role || member.role === role) return
+    const userId = memberUserId(member)
+    if (!selectedConversationId.value || !member?.id || !userId || !role || member.role === role) return
     memberBusy[member.id] = true
     conversationInfoError.value = ''
     clearConversationNotice()
     try {
-      const data = await updateConversationMember(selectedConversationId.value, member.id, { role })
+      const data = await updateConversationMember(selectedConversationId.value, userId, { role })
       applyMemberPayload(data)
-      setConversationNotice('Rôle du membre mis à jour.')
+      setConversationNotice('Role du membre mis a jour.')
     } catch (err) {
-      conversationInfoError.value = extractError(err, "Impossible de mettre à jour le membre.")
+      conversationInfoError.value = extractError(err, 'Impossible de mettre a jour le membre.')
     } finally {
       delete memberBusy[member.id]
     }
   }
 
   async function muteMember(member, minutes = 60) {
-    if (!selectedConversationId.value || !member?.id) return
+    const userId = memberUserId(member)
+    if (!selectedConversationId.value || !member?.id || !userId) return
     memberBusy[member.id] = true
     conversationInfoError.value = ''
     clearConversationNotice()
     const mutedUntil = new Date(Date.now() + minutes * 60000).toISOString()
     try {
-      const data = await updateConversationMember(selectedConversationId.value, member.id, { muted_until: mutedUntil })
+      const data = await updateConversationMember(selectedConversationId.value, userId, { muted_until: mutedUntil })
       applyMemberPayload(data)
       setConversationNotice(`Membre mis en sourdine pendant ${minutes} min.`)
     } catch (err) {
-      conversationInfoError.value = extractError(err, "Impossible de mettre le membre en sourdine.")
+      conversationInfoError.value = extractError(err, 'Impossible de mettre le membre en sourdine.')
     } finally {
       delete memberBusy[member.id]
     }
   }
 
   async function unmuteMember(member) {
-    if (!selectedConversationId.value || !member?.id) return
+    const userId = memberUserId(member)
+    if (!selectedConversationId.value || !member?.id || !userId) return
     memberBusy[member.id] = true
     conversationInfoError.value = ''
     clearConversationNotice()
     try {
-      const data = await updateConversationMember(selectedConversationId.value, member.id, { muted_until: null })
+      const data = await updateConversationMember(selectedConversationId.value, userId, { muted_until: null })
       applyMemberPayload(data)
-      setConversationNotice('Sourdine désactivée pour ce membre.')
+      setConversationNotice('Sourdine desactivee pour ce membre.')
     } catch (err) {
-      conversationInfoError.value = extractError(err, "Impossible de rétablir le membre.")
+      conversationInfoError.value = extractError(err, 'Impossible de retablir le membre.')
     } finally {
       delete memberBusy[member.id]
     }
   }
 
   async function removeMember(member) {
-    if (!selectedConversationId.value || !member?.id) return
+    const userId = memberUserId(member)
+    if (!selectedConversationId.value || !member?.id || !userId) return
     memberBusy[member.id] = true
     conversationInfoError.value = ''
     clearConversationNotice()
     try {
-      const data = await updateConversationMember(selectedConversationId.value, member.id, { state: 'left' })
+      const data = await updateConversationMember(selectedConversationId.value, userId, { state: 'left' })
       applyMemberPayload(data)
-      setConversationNotice('Membre retiré de la conversation.')
+      setConversationNotice('Membre retire de la conversation.')
     } catch (err) {
       conversationInfoError.value = extractError(err, 'Impossible de retirer le membre.')
     } finally {
@@ -282,7 +328,7 @@ export function useConversationPanel({
   function formatInviteStatus(invite) {
     if (!invite) return ''
     if (invite.acceptedAt) {
-      return `Acceptée ${formatAbsolute(invite.acceptedAt)}`
+      return `Acceptee ${formatAbsolute(invite.acceptedAt)}`
     }
     if (invite.expiresAt) {
       return `Expire ${formatAbsolute(invite.expiresAt)}`
@@ -331,6 +377,11 @@ export function useConversationPanel({
     closeConversationPanel,
     saveConversationSettings,
     leaveCurrentConversation,
+    openDeleteConfirm,
+    closeDeleteConfirm,
+    deleteCurrentConversation,
+    deletingConversation,
+    showDeleteConfirm,
     syncConversationFormFromSelected,
     loadConversationInvites,
     submitInvite,

@@ -66,6 +66,33 @@
       </div>
     </form>
     <button
+      v-if="canManageConversation"
+      class="btn btn-danger w-100 mb-2"
+      type="button"
+      @click="openDeleteConfirm"
+      :disabled="deletingConversation"
+      title="Supprimer définitivement cette conversation"
+    >
+      <span v-if="deletingConversation" class="spinner-border spinner-border-sm me-2"></span>
+      Supprimer la conversation
+    </button>
+    <div v-if="showDeleteConfirm" class="msg-panel__confirm">
+      <h6>Supprimer définitivement ?</h6>
+      <p class="mb-2">
+        Tous les messages, pièces jointes et journaux de cette conversation seront effacés pour tous les participants.
+        Cette action est irréversible.
+      </p>
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-danger flex-grow-1" type="button" @click="deleteCurrentConversation" :disabled="deletingConversation">
+          <span v-if="deletingConversation" class="spinner-border spinner-border-sm me-2"></span>
+          Oui, supprimer
+        </button>
+        <button class="btn btn-outline-secondary flex-grow-1" type="button" @click="closeDeleteConfirm" :disabled="deletingConversation">
+          Annuler
+        </button>
+      </div>
+    </div>
+    <button
       class="btn btn-outline-danger w-100 mb-3"
       type="button"
       @click="leaveCurrentConversation"
@@ -151,20 +178,27 @@
       </p>
       <ul class="msg-panel__list">
         <li v-for="member in selectedConversation.members" :key="member.id" class="msg-panel__member">
-          <div>
-            <strong>{{ member.displayName || member.email }}</strong>
-            <p class="small mb-0 text-muted">
-              {{ roleLabel(member.role) }}
-              <span v-if="member.state !== 'active'"> · {{ member.state }}</span>
-              <span v-if="member.mutedUntil" class="msg-panel__pill muted">
-                Sourdine {{ formatAbsolute(member.mutedUntil) }}
-              </span>
-            </p>
+          <div class="msg-panel__member-info">
+            <div class="msg-panel__member-header">
+              <div class="msg-panel__avatar">{{ (member.displayName || member.email || 'M')[0] }}</div>
+              <div>
+                <strong>{{ member.displayName || member.email }}</strong>
+                <p class="small mb-0 text-muted">
+                  {{ roleLabel(member.role) }}
+                  <span v-if="member.state !== 'active'"> · {{ member.state }}</span>
+                </p>
+              </div>
+            </div>
+            <p v-if="member.email" class="small text-muted mb-1">{{ member.email }}</p>
+            <span v-if="member.mutedUntil" class="msg-panel__pill muted">
+              Sourdine {{ formatAbsolute(member.mutedUntil) }}
+            </span>
           </div>
           <div
             v-if="canManageConversation && (member.userId || member.id) !== String(currentUserId || '')"
             class="msg-panel__member-actions"
           >
+            <label class="form-label small text-muted mb-1">Rôle</label>
             <select
               class="form-select form-select-sm"
               :value="member.role"
@@ -177,19 +211,11 @@
             </select>
             <button
               type="button"
-              class="btn btn-link p-0"
+              class="btn btn-outline-secondary btn-sm w-100"
               @click="member.mutedUntil ? unmuteMember(member) : muteMember(member)"
               :disabled="memberBusy[member.id]"
             >
-              {{ member.mutedUntil ? 'Réactiver' : 'Sourdine 1h' }}
-            </button>
-            <button
-              type="button"
-              class="btn btn-link text-danger p-0"
-              @click="removeMember(member)"
-              :disabled="memberBusy[member.id]"
-            >
-              Retirer
+              {{ member.mutedUntil ? 'Réactiver' : 'Mettre en sourdine 1h' }}
             </button>
           </div>
         </li>
@@ -208,6 +234,8 @@ const props = defineProps({
   conversationForm: Object,
   savingConversation: Boolean,
   leavingConversation: Boolean,
+  showDeleteConfirm: Boolean,
+  deletingConversation: Boolean,
   loadingInvites: Boolean,
   invites: {
     type: Array,
@@ -254,6 +282,18 @@ const props = defineProps({
     required: true,
   },
   leaveCurrentConversation: {
+    type: Function,
+    required: true,
+  },
+  openDeleteConfirm: {
+    type: Function,
+    required: true,
+  },
+  closeDeleteConfirm: {
+    type: Function,
+    required: true,
+  },
+  deleteCurrentConversation: {
     type: Function,
     required: true,
   },

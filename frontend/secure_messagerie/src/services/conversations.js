@@ -45,6 +45,10 @@ export async function leaveConversation(conversationId) {
   await api.post(`${CONVERSATIONS_BASE}/${conversationId}/leave`)
 }
 
+export async function deleteConversation(conversationId) {
+  await api.delete(`${CONVERSATIONS_BASE}/${conversationId}`)
+}
+
 export async function pinMessage(conversationId, messageId) {
   const { data } = await api.post(`${CONVERSATIONS_BASE}/${conversationId}/messages/${messageId}/pin`)
   return data

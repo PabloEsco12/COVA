@@ -17,6 +17,7 @@ export function useMessageNotifications({
   ensureMeta,
   updateConversationBlockStateByUser,
   generateLocalId,
+  isConversationMuted,
 }) {
   const browserNotificationsEnabled = ref(readBrowserNotificationPreference())
   let notificationPermissionRequestPending = false
@@ -147,6 +148,7 @@ export function useMessageNotifications({
 
   function notifyNewIncomingMessage(message) {
     if (!message || message.sentByMe || message.deleted || message.isSystem) return
+    if (isConversationMuted && isConversationMuted(message.conversationId)) return
     const preview =
       message.preview ||
       (message.content ? String(message.content).slice(0, 140) : 'Nouveau message securise.')
@@ -173,6 +175,7 @@ export function useMessageNotifications({
       return
     }
     const conversationId = event.conversation_id ? String(event.conversation_id) : null
+    if (isConversationMuted && isConversationMuted(conversationId)) return
     if (!conversationId || conversationId === String(selectedConversationId.value)) return
     const meta = ensureMeta(conversationId)
     if (event.preview) meta.lastPreview = event.preview

@@ -274,6 +274,17 @@ async def leave_conversation(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_conversation(
+    conversation_id: uuid.UUID,
+    current_user: UserAccount = Depends(get_current_user),
+    service: ConversationService = Depends(get_conversation_service),
+) -> Response:
+    await service.delete_conversation(conversation_id, actor=current_user)
+    await service.session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post("/{conversation_id}/read", status_code=status.HTTP_204_NO_CONTENT)
 async def mark_read(
     conversation_id: uuid.UUID,

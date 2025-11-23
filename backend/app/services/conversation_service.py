@@ -28,12 +28,15 @@ from app.models import (
     MessagePin,
     MessageReaction,
     MessageType,
+    NotificationChannel,
+    NotificationPreference,
     OrganizationMembership,
     UserAccount,
     Workspace,
     WorkspaceMembership,
 )
 from .audit_service import AuditService
+from .auth_service import quiet_hours_active
 from ..core.redis import RealtimeBroker
 from ..core.storage import ObjectStorage
 from ..config import settings
@@ -190,6 +193,16 @@ class ConversationService:
         membership.muted_until = None
         await self.session.flush()
         await self._log(user, "conversation.leave", resource_id=str(conversation_id))
+
+    async def delete_conversation(self, conversation_id: uuid.UUID, *, actor: UserAccount) -> None:
+        membership = await self._get_membership(conversation_id, actor.id)
+        self._require_owner(membership)
+        conversation = await self.session.get(Conversation, conversation_id)
+        if conversation is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.")
+        await self.session.delete(conversation)
+        await self.session.flush()
+        await self._log(actor, "conversation.delete", resource_id=str(conversation_id))
 
     async def update_member(
         self,
@@ -641,14 +654,29 @@ class ConversationService:
         self.session.add(message)
         await self.session.flush()
 
-        delivery_members_stmt = select(ConversationMember.id, ConversationMember.user_id).where(
-            ConversationMember.conversation_id == conversation_id
+        now = datetime.now(timezone.utc)
+        delivery_members_stmt = (
+            select(
+                ConversationMember.id,
+                ConversationMember.user_id,
+                ConversationMember.state,
+                ConversationMember.muted_until,
+            )
+            .where(ConversationMember.conversation_id == conversation_id)
         )
         result_members = await self.session.execute(delivery_members_stmt)
         members_info = result_members.all()
         member_ids = [row.id for row in members_info]
         member_user_ids = [row.user_id for row in members_info]
-        now = datetime.now(timezone.utc)
+        notify_candidates = []
+        for row in members_info:
+            if row.user_id == author.id:
+                continue
+            if row.state != MembershipState.ACTIVE:
+                continue
+            if row.muted_until and row.muted_until > now:
+                continue
+            notify_candidates.append(row.user_id)
         deliveries: list[MessageDelivery] = []
         for member_id in member_ids:
             if member_id == membership.id:
@@ -690,7 +718,8 @@ class ConversationService:
                 conversation_id=str(conversation_id),
                 payload=payload,
                 author_id=str(author.id),
-                member_user_ids=[str(uid) for uid in member_user_ids],
+                member_user_ids=notify_candidates,
+                now=now,
             )
         return hydrated, payload
 
@@ -1135,20 +1164,61 @@ class ConversationService:
             },
         )
 
+    async def _filter_notification_targets(self, user_ids: list[uuid.UUID], *, now: datetime) -> list[str]:
+        """Filter push notification targets using preferences and quiet hours."""
+        if not user_ids:
+            return []
+        normalized_ids = [uid for uid in dict.fromkeys(user_ids) if uid]
+        if not normalized_ids:
+            return []
+
+        stmt_prefs = (
+            select(NotificationPreference)
+            .where(NotificationPreference.user_id.in_(normalized_ids))
+            .where(NotificationPreference.channel == NotificationChannel.PUSH)
+        )
+        result_prefs = await self.session.execute(stmt_prefs)
+        prefs = {pref.user_id: pref for pref in result_prefs.scalars().all()}
+
+        stmt_profiles = (
+            select(UserAccount)
+            .options(selectinload(UserAccount.profile))
+            .where(UserAccount.id.in_(normalized_ids))
+        )
+        result_profiles = await self.session.execute(stmt_profiles)
+        profiles = {user.id: user.profile for user in result_profiles.scalars().all()}
+
+        eligible: list[str] = []
+        for uid in normalized_ids:
+            pref = prefs.get(uid)
+            profile = profiles.get(uid)
+            if pref:
+                if not pref.is_enabled:
+                    continue
+                if pref.quiet_hours and quiet_hours_active(pref.quiet_hours, now, profile):
+                    continue
+            eligible.append(str(uid))
+        return eligible
+
     async def _push_message_notifications(
         self,
         *,
         conversation_id: str,
         payload: dict,
         author_id: str,
-        member_user_ids: list[str],
+        member_user_ids: list[uuid.UUID],
+        now: datetime | None = None,
     ) -> None:
         if not self.realtime or not member_user_ids:
+            return
+        current_time = now or datetime.now(timezone.utc)
+        target_user_ids = await self._filter_notification_targets(member_user_ids, now=current_time)
+        if not target_user_ids:
             return
         preview = (payload.get("content") or "").strip()
         if not preview and payload.get("attachments"):
             preview = "Message contenant des pièces jointes."
-        created_at = payload.get("created_at") or datetime.now(timezone.utc).isoformat()
+        created_at = payload.get("created_at") or current_time.isoformat()
         message_id = payload.get("id")
         data = {
             "type": "message.received",
@@ -1159,7 +1229,7 @@ class ConversationService:
             "created_at": created_at,
             "author_id": author_id,
         }
-        for user_id in member_user_ids:
+        for user_id in target_user_ids:
             if user_id == author_id:
                 continue
             await self.realtime.publish_user_event(
@@ -1244,7 +1314,7 @@ class ConversationService:
             .order_by(Workspace.created_at.asc())
         )
         result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def _log(self, user: UserAccount, action: str, *, resource_id: str | None = None, metadata: dict | None = None) -> None:
         if self.audit:

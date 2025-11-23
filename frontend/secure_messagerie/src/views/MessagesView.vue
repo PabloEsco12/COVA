@@ -183,6 +183,7 @@
     :conversation-form="conversationForm"
     :saving-conversation="savingConversation"
     :leaving-conversation="leavingConversation"
+    :deleting-conversation="deletingConversation"
     :loading-invites="loadingInvites"
     :invites="invites"
     :invite-form="inviteForm"
@@ -199,6 +200,7 @@
     :close-conversation-panel="closeConversationPanel"
     :save-conversation-settings="saveConversationSettings"
     :leave-current-conversation="leaveCurrentConversation"
+    :delete-current-conversation="deleteCurrentConversation"
     :submit-invite="submitInvite"
     :revoke-invite="revokeInvite"
     :update-member-role="updateMemberRole"
@@ -307,6 +309,17 @@ const selectedConversation = computed(() => {
   if (!selectedConversationId.value) return null
   return conversations.value.find((conv) => conv.id === selectedConversationId.value) || null
 })
+
+const isConversationMuted = (convId) => {
+  const id = convId ? String(convId) : null
+  if (!id || !currentUserId.value) return false
+  const conv = conversations.value.find((item) => item.id === id)
+  if (!conv || !Array.isArray(conv.members)) return false
+  const self = String(currentUserId.value)
+  const me = conv.members.find((member) => memberUserId(member) === self || String(member.userId || member.id) === self)
+  if (!me || !me.mutedUntil) return false
+  return me.mutedUntil.getTime() > Date.now()
+}
 
 const {
   myAvailability,
@@ -419,6 +432,7 @@ const { notifyNewIncomingMessage, handleIncomingNotificationPayload } = useMessa
   ensureMeta,
   updateConversationBlockStateByUser,
   generateLocalId,
+  isConversationMuted,
 })
 const attachStream = (el, stream) => {
   if (!el) return
@@ -494,6 +508,7 @@ const {
   applyPresencePayload,
   resetPresenceState,
   processNotificationPayload,
+  isConversationMuted,
 })
 const {
   callState,
@@ -695,6 +710,8 @@ const {
   inviteRevokeBusy,
   memberBusy,
   leavingConversation,
+  deletingConversation,
+  showDeleteConfirm,
   conversationOwnerSummary,
   roleLabel,
   clearConversationNotice,
@@ -703,6 +720,9 @@ const {
   closeConversationPanel,
   saveConversationSettings,
   leaveCurrentConversation,
+  openDeleteConfirm,
+  closeDeleteConfirm,
+  deleteCurrentConversation,
   syncConversationFormFromSelected,
   loadConversationInvites,
   submitInvite,

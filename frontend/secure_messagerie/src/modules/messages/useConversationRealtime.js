@@ -16,6 +16,7 @@ export function useConversationRealtime({
   applyPresencePayload,
   resetPresenceState,
   processNotificationPayload,
+  isConversationMuted,
 }) {
   const authToken = ref(localStorage.getItem('access_token') || null)
   const socketRef = ref(null)
@@ -76,19 +77,21 @@ export function useConversationRealtime({
     }
 
     const isSameConversation = message.conversationId === selectedConversationId.value
-    const shouldNotify = type === 'message' && !message.sentByMe && !message.isSystem && !message.deleted
+    const shouldProcess = type === 'message' && !message.sentByMe && !message.isSystem && !message.deleted
+    const isMuted = typeof isConversationMuted === 'function' && isConversationMuted(message.conversationId)
+    const allowAlert = shouldProcess && !isMuted
 
     if (isSameConversation) {
       applyMessageUpdate(message)
-      if (shouldNotify) {
+      if (shouldProcess) {
         markConversationAsRead(message.conversationId, [message.id]).catch(() => {})
       }
-    } else if (shouldNotify) {
+    } else if (shouldProcess) {
       incrementUnreadCounter(message.conversationId)
     }
 
     if (
-      shouldNotify &&
+      allowAlert &&
       (!isSameConversation || (typeof document !== 'undefined' && (document.hidden || !document.hasFocus())))
     ) {
       if (typeof notifyNewIncomingMessage === 'function') {

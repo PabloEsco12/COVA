@@ -7,16 +7,10 @@ export function createMessageFormatters({
   function messageStatusLabel(message) {
     if (message.sentByMe) {
       const summary = extractDeliverySummary(message)
-      if (summary.total <= 0) {
-        return 'Envoyé'
-      }
-      if (summary.read >= summary.total) {
-        return 'Lu'
-      }
-      if (summary.delivered > 0) {
-        return 'Distribué'
-      }
-      return 'Envoyé'
+      if (summary.total <= 0) return 'Envoyé'
+      if (summary.read >= summary.total) return 'Lu'
+      if (summary.delivered > 0) return 'Distribué'
+      return 'En cours'
     }
     switch (message.deliveryState) {
       case 'read':
@@ -33,12 +27,8 @@ export function createMessageFormatters({
   function messageStatusClass(message) {
     if (message.sentByMe) {
       const summary = extractDeliverySummary(message)
-      if (summary.total > 0 && summary.read >= summary.total) {
-        return 'state-read'
-      }
-      if (summary.delivered > 0) {
-        return 'state-delivered'
-      }
+      if (summary.total > 0 && summary.read >= summary.total) return 'state-read'
+      if (summary.delivered > 0) return 'state-delivered'
       return 'state-queued'
     }
     switch (message.deliveryState) {
@@ -55,25 +45,9 @@ export function createMessageFormatters({
 
   function messageStatusDetail(message) {
     if (message.deleted) return 'Supprimé'
-    if (message.sentByMe) {
-      const summary = extractDeliverySummary(message)
-      if (!summary.total) {
-        return 'Envoyé'
-      }
-      if (summary.read >= summary.total) {
-        return `Lu par ${summary.read}/${summary.total}`
-      }
-      if (summary.delivered > 0) {
-        return `Distribué à ${summary.delivered}/${summary.total}`
-      }
-      return `En attente (${summary.total})`
-    }
-    if (message.readAt) {
-      return `Lu ${formatTime(message.readAt)}`
-    }
-    if (message.deliveredAt) {
-      return `Distribué ${formatTime(message.deliveredAt)}`
-    }
+    if (message.sentByMe) return ''
+    if (message.readAt) return `Lu ${formatTime(message.readAt)}`
+    if (message.deliveredAt) return `Distribué ${formatTime(message.deliveredAt)}`
     return ''
   }
 

@@ -226,7 +226,7 @@
               <span>{{ reaction.count }}</span>
             </button>
           </div>
-          <p v-if="callFormatter('messageStatusDetail', message)" class="msg-bubble__note">
+          <p v-if="!message.sentByMe && callFormatter('messageStatusDetail', message)" class="msg-bubble__note">
             <i class="bi bi-clock-history" aria-hidden="true"></i>
             <span>{{ callFormatter('messageStatusDetail', message) }}</span>
           </p>
