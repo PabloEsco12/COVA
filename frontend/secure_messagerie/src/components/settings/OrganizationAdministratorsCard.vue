@@ -47,15 +47,40 @@
               <div class="text-muted small">Administrateurs</div>
               <strong>{{ organization.admin_count }}</strong>
             </div>
+            <div>
+              <div class="text-muted small">Dernière mise à jour</div>
+              <strong>{{ lastRefreshLabel }}</strong>
+            </div>
           </div>
 
           <div v-if="!isAdmin" class="alert alert-info mb-0">
             Vous êtes membre de l'organisation <strong>{{ organization.name }}</strong> avec un rôle
-            «&nbsp;{{ roleLabel(organization.membership.role) }}&nbsp;». Les paramètres d'administration ne sont
-            visibles que par les administrateurs.
+            « {{ roleLabel(organization.membership.role) }} ». Les paramètres d'administration ne sont visibles que par les administrateurs.
           </div>
 
           <div v-else>
+            <div class="d-flex flex-wrap align-items-end gap-2 mb-3">
+              <div class="flex-grow-1">
+                <label class="form-label small text-muted mb-1">Rechercher</label>
+                <input
+                  v-model.trim="searchTerm"
+                  type="search"
+                  class="form-control form-control-sm"
+                  placeholder="Nom ou e-mail..."
+                />
+              </div>
+              <div>
+                <label class="form-label small text-muted mb-1">Filtrer par rôle</label>
+                <select v-model="roleFilter" class="form-select form-select-sm">
+                  <option value="all">Tous</option>
+                  <option value="owner">Propriétaire</option>
+                  <option value="admin">Administrateur</option>
+                  <option value="auditor">Auditeur</option>
+                  <option value="member">Membre</option>
+                </select>
+              </div>
+            </div>
+
             <div v-if="members.length === 0" class="text-muted small">Aucun membre trouvé.</div>
 
             <div v-else class="table-responsive">
@@ -68,7 +93,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="member in members" :key="member.membership_id">
+                  <tr v-for="member in filteredMembers" :key="member.membership_id">
                     <td>
                       <div class="fw-semibold">{{ member.display_name || member.email }}</div>
                       <div class="text-muted small">{{ member.email }}</div>
@@ -130,6 +155,9 @@ const refreshing = ref(false)
 const error = ref('')
 const organization = ref(null)
 const members = ref([])
+const searchTerm = ref('')
+const roleFilter = ref('all')
+const lastRefresh = ref(null)
 
 const roleOptions = [
   { value: 'admin', label: 'Administrateur' },
@@ -140,6 +168,21 @@ const roleOptions = [
 const canManageAdmins = computed(() => Boolean(organization.value?.membership?.can_manage_admins))
 const isAdmin = computed(() => Boolean(organization.value?.membership?.is_admin))
 const roleBadgeClass = computed(() => roleBadgeClassFor(organization.value?.membership?.role || 'member'))
+const lastRefreshLabel = computed(() => {
+  if (!lastRefresh.value) return '—'
+  return new Date(lastRefresh.value).toLocaleTimeString()
+})
+
+const filteredMembers = computed(() => {
+  const term = searchTerm.value.trim().toLowerCase()
+  const role = roleFilter.value
+  return members.value.filter((member) => {
+    const matchesRole = role === 'all' || member.role === role
+    const haystack = `${member.display_name || ''} ${member.email || ''}`.toLowerCase()
+    const matchesSearch = !term || haystack.includes(term)
+    return matchesRole && matchesSearch
+  })
+})
 
 onMounted(() => {
   loadMembers()
@@ -162,6 +205,7 @@ async function loadMembers(options = {}) {
       busy: false,
       error: '',
     }))
+    lastRefresh.value = Date.now()
   } catch (err) {
     error.value = resolveError(err) || 'Impossible de charger les membres de votre organisation.'
   } finally {
@@ -239,7 +283,7 @@ function resolveError(err) {
 
 <style scoped>
 .organization-admin-card .summary-line > div {
-  min-width: 120px;
+  min-width: 140px;
 }
 
 .organization-admin-card table td {
