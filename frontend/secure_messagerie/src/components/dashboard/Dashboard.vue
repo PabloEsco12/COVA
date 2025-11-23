@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="dashboard-layout d-flex" :class="{ 'dashboard-layout-dark': isDark }">
     <Sidebar :is-dark="isDark" @toggle-dark="toggleTheme" />
     <div class="flex-grow-1 d-flex flex-column min-vh-100">
@@ -57,24 +57,27 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
-.dashboard-layout {
-  min-height: 100vh; /* permet ?? la page de grandir avec le contenu */
-  background: linear-gradient(135deg, #eef3fc 0%, #e5ebf6 100%);
-  transition: background 0.3s ease;
-  padding: 1.5rem;
-  gap: 1.5rem;
-  align-items: flex-start;
-}
-.dashboard-layout-dark {
-  background: linear-gradient(135deg, #10141d 0%, #0a0c12 100%);
-}
-.main-content {
-  background: #f7f9fb;
-  border-radius: 20px;
-  box-shadow: 0 4px 16px #1959c233;
-  transition: background 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
-}
+<style scoped>
+.dashboard-layout {
+  min-height: 100vh; /* allow the page to grow with the content */
+  background: linear-gradient(135deg, #eef3fc 0%, #e5ebf6 100%);
+  transition: background 0.3s ease;
+  padding: 1.5rem;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.dashboard-layout-dark {
+  background: linear-gradient(135deg, #10141d 0%, #0a0c12 100%);
+}
+
+.main-content {
+  background: #f7f9fb;
+  border-radius: 20px;
+  box-shadow: 0 4px 16px #1959c233;
+  transition: background 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+}
+
 .main-content-dark {
   background: rgba(21, 26, 35, 0.96);
   color: #e9ecef;
