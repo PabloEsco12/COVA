@@ -329,3 +329,12 @@ const faqSections = [
   color: rgba(255, 255, 255, 0.9);
 }
 </style>
+<!--
+############################################################
+# Vue : FaqView
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+# Description:
+# - Page FAQ avec liste de questions/réponses.
+############################################################
+-->

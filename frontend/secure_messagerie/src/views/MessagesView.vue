@@ -1,4 +1,5 @@
-ï»¿<template>
+<!--`n############################################################`n# Vue : MessagesView`n# Auteur : Valentin Masurelle`n# Date   : 2025-05-04`n# Description:`n# - Page principale de messagerie avec sidebar, liste de messages et editeur.`n# - Orchestration des composants de conversation, toasts et fichiers attaches.`n############################################################`n-->
+<template>
 
   <div class="msg-shell">
     <MessageToastStack
@@ -796,7 +797,7 @@ const connectionStatusLabel = computed(() => {
 
     case 'connected':
 
-      return 'Canal temps rÃ©el actif'
+      return 'Canal temps réel actif'
 
     case 'connecting':
 
@@ -936,22 +937,22 @@ function generateCallId() {
 
 function addLocalCallLog(summary) {
   const direction = summary.initiator ? 'sortant' : 'entrant'
-  const kindLabel = summary.kind === 'video' ? 'vidÃ©o' : 'audio'
+  const kindLabel = summary.kind === 'video' ? 'vidéo' : 'audio'
   const outcomeMap = {
-    hangup: 'terminÃ©',
-    decline: 'refusÃ©',
-    canceled: 'annulÃ©',
-    busy: 'occupÃ©',
+    hangup: 'terminé',
+    decline: 'refusé',
+    canceled: 'annulé',
+    busy: 'occupé',
     failed: 'interrompu',
-    ended: 'terminÃ©',
+    ended: 'terminé',
   }
-  const outcome = outcomeMap[summary.reason] || 'terminÃ©'
+  const outcome = outcomeMap[summary.reason] || 'terminé'
   const content = `Appel ${kindLabel} ${direction} ${outcome} - ${summary.remote || 'participant'}`
   messages.value.push({
     id: generateLocalId(),
     conversationId: selectedConversationId.value,
     authorId: null,
-    displayName: 'SystÃ¨me',
+    displayName: 'Système',
     avatarUrl: null,
     content,
     createdAt: new Date(),
@@ -998,6 +999,7 @@ function extractError(err, fallback) {
 </script>
 
 <style src="@/assets/styles/messages.css"></style>
+
 
 
 

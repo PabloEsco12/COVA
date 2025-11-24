@@ -64,3 +64,14 @@ Ou plus simple (automatisé) depuis la racine du repo :
 ./scripts/create_demo.sh
 # Variables optionnelles : ADMIN_EMAIL, ADMIN_PASSWORD, MEMBER_EMAIL, MEMBER_PASSWORD, ORG_NAME, ORG_SLUG
 ```
+# Messagerie sécu (local)
+<!--
+############################################################
+# Fichier : README_local.md (racine)
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - Instructions de lancement en environnement local.
+############################################################
+-->

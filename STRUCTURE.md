@@ -10,3 +10,14 @@ Notes
 -----
 - Tests backend : depuis `backend/`, `pytest` cible automatiquement `backend/tests` (voir `backend/pytest.ini`), prévoir une base Postgres de test (`DATABASE_URL`).
 - Scripts front : privilégier `package.json` pour les commandes liées au front; réserver `scripts/` aux utilitaires ponctuels multi-projet.
+# Structure du projet
+<!--
+############################################################
+# Fichier : STRUCTURE.md (racine)
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - Aperçu synthétique de l'arborescence du dépôt.
+############################################################
+-->

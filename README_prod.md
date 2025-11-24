@@ -96,3 +96,14 @@ Notes
 - Le déploiement est single-tenant : une instance = une organisation.
 - Les rôles owner/admin/member sont gérés côté API (`/api/organizations/current/...`).
 - Pour répliquer sur un autre domaine/organisation : nouveau `.env.prod`, nouveau DNS et relancer le compose.
+# Messagerie sécu (prod)
+<!--
+############################################################
+# Fichier : README_prod.md (racine)
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - Instructions pour le déploiement/ops en production.
+############################################################
+-->

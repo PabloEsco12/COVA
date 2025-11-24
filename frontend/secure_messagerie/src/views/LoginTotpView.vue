@@ -1,4 +1,13 @@
-<!-- src/views/LoginTotpView.vue -->
+<!--
+############################################################
+# Vue : LoginTotpView
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+# Description:
+# - Page pour le challenge TOTP apres login/password.
+# - Monte LoginTotpForm et reprend l'identité depuis sessionStorage.
+############################################################
+-->
 <template>
   <div class="auth-page">
     <div class="auth-orb orb-primary"></div>

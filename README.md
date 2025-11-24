@@ -1,4 +1,16 @@
-# Messagerie sécurisée (COVA)
+<!--
+############################################################
+# Fichier : README.md (racine)
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - Vue d'ensemble du projet Messagerie securisee COVA.
+# - Composants principaux : backend FastAPI, frontend Vue 3.
+############################################################
+-->
+
+# Messagerie securisee (COVA)
 
 Plateforme de messagerie sécurisée avec backend FastAPI et frontend Vue 3 (conversations, appels, pièces jointes, notifications temps réel).
 
@@ -63,3 +75,4 @@ python -m scripts.bootstrap_tenant \
 ## Tests et vérifications
 - Backend : `pytest` (préparer une base de test et lever le skip dans `backend/tests/test_auth_flow.py`).
 - Smoke test front+API : `node scripts/debug-send.js` (Playwright ouvre l’app, se connecte et envoie un message).
+

@@ -14,3 +14,12 @@ import ResetPasswordForm from '@/components/auth/ResetPasswordForm.vue'
 </script>
 
 <style scoped src="@/assets/styles/reset-password.css"></style>
+<!--
+############################################################
+# Vue : ResetPasswordView
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+# Description:
+# - Page pour demander un email de réinitialisation de mot de passe.
+############################################################
+-->

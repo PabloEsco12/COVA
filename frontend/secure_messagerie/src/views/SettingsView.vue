@@ -76,3 +76,12 @@ function onAvatarUpdated(newUrl) {
   avatarUrl.value = newUrl
 }
 </script>
+<!--
+############################################################
+# Vue : SettingsView
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+# Description:
+# - Page des réglages (profil, sécurité, notifications...).
+############################################################
+-->

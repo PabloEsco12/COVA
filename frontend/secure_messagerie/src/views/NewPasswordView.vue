@@ -16,3 +16,12 @@ import NewPasswordForm from '@/components/auth/NewPasswordForm.vue'
 </script>
 
 <style scoped src="@/assets/styles/new-password.css"></style>
+<!--
+############################################################
+# Vue : NewPasswordView
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+# Description:
+# - Page de définition de nouveau mot de passe (token de reset).
+############################################################
+-->

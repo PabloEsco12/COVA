@@ -1,3 +1,12 @@
+<!--
+############################################################
+# Vue : RegisterView
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+# Description:
+# - Page d'inscription affichant l'illustration + formulaire d'inscription.
+############################################################
+-->
 <script setup>
 import AuthIllustration from '@/components/auth/AuthIllustration.vue'
 import RegisterForm from '@/components/auth/RegisterForm.vue'
@@ -80,3 +89,4 @@ import RegisterForm from '@/components/auth/RegisterForm.vue'
   }
 }
 </style>
+

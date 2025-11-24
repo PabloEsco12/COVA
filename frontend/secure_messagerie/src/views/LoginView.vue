@@ -1,4 +1,16 @@
-<!-- src/views/LoginView.vue -->
+<!--
+############################################################
+# Vue : LoginView
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Page de connexion principale avec illustration marketing + formulaire LoginForm.
+# - La partie hero (gauche) est statique; la partie droite est le composant LoginForm.
+############################################################
+-->
+
+<!-- Section principale -->
 <template>
   <div class="auth-page">
     <div class="auth-orb orb-primary"></div>

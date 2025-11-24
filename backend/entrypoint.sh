@@ -21,4 +21,6 @@ exec gunicorn "app.main:app" \
     -b 0.0.0.0:8000 \
     --workers ${WORKERS:-4} \
     --threads ${THREADS:-2} \
-    --timeout ${TIMEOUT:-120}
+    --timeout ${TIMEOUT:-120} \
+    --forwarded-allow-ips="*" \
+    --proxy-headers
