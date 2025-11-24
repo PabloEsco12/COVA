@@ -1,7 +1,5 @@
 version: "3.9"
 
-# Stack production: base de donnees, backend, worker, redis (optionnel), frontend, monitoring.
-
 services:
   db:
     image: postgres:14
@@ -27,6 +25,8 @@ services:
     restart: always
     depends_on:
       db:
+        condition: service_healthy
+      clamav:
         condition: service_healthy
     env_file: .env.prod
     # en prod on n'a plus besoin des variables Flask
@@ -87,6 +87,23 @@ services:
     labels:
       - autoheal=true
 
+  clamav:
+    image: clamav/clamav:stable
+    container_name: securechat_clamav
+    restart: always
+    environment:
+      - CLAMD_PORT=3310
+    volumes:
+      - clamav_data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z -w3 127.0.0.1 3310"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    labels:
+      - autoheal=true
+
   frontend:
     build:
       context: ./frontend/secure_messagerie
@@ -112,8 +129,6 @@ services:
     image: louislam/uptime-kuma:latest
     container_name: uptime_kuma
     restart: always
-    environment:
-      - BASE_PATH=/monitoring
     ports:
       - "127.0.0.1:3001:3001"
     volumes:
@@ -137,15 +152,15 @@ services:
   minio:
     image: minio/minio:latest
     container_name: securechat_minio
-    command: server /data --console-address ":9001"
+    command: server /data --console-address  :9001
     environment:
       - MINIO_ROOT_USER=admin
       - MINIO_ROOT_PASSWORD=changeme123
     volumes:
       - minio_data:/data
     ports:
-      - "127.0.0.1:9000:9000"
-      - "127.0.0.1:9001:9001"
+      - 127.0.0.1:9000:9000
+      - 127.0.0.1:9001:9001
     restart: always
     labels:
       - autoheal=true
@@ -154,3 +169,4 @@ volumes:
   db_data:
   redis_data:
   minio_data:
+  clamav_data:
