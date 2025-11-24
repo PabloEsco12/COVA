@@ -1,3 +1,7 @@
+"""
+Regroupe les routeurs HTTP publics de l'API.
+"""
+
 from fastapi import APIRouter
 
 from .auth import router as auth_router

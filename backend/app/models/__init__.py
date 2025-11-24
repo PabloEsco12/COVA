@@ -1,4 +1,10 @@
-"""Next-generation database schema for the secure messaging platform."""
+"""
+Regroupe les modèles SQLAlchemy du schema v2 de la plateforme de messagerie sécurisée.
+
+Infos utiles:
+- Facilite les imports depuis les autres modules backend.
+- __all__ expose explicitement toutes les entites et enums partageables.
+"""
 
 from .base import Base
 from .audit import AuditLog

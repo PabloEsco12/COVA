@@ -1,4 +1,6 @@
-"""Routes related to the authenticated user's profile."""
+"""
+Routes liees au profil utilisateur (compte courant, profil, devices, overview, securite).
+"""
 
 from __future__ import annotations
 
@@ -108,7 +110,7 @@ def _remove_avatar_file(url: str | None) -> None:
 
 
 async def _reassign_conversations_before_delete(db: AsyncSession, user_id: uuid.UUID) -> None:
-    """Reassign conversations owned by the user or remove them if they are orphaned."""
+    """Reassigne les conversations possedees ou les supprime si orphelines avant suppression de compte."""
     conversation_ids = (
         await db.execute(select(Conversation.id).where(Conversation.created_by == user_id))
     ).scalars().all()
@@ -130,6 +132,7 @@ async def _reassign_conversations_before_delete(db: AsyncSession, user_id: uuid.
 
 
 def _ensure_profile(user: UserAccount, db: AsyncSession) -> UserProfile:
+    """Cree le profil utilisateur si absent et le rattache a la session."""
     profile = user.profile
     if profile is None:
         profile = UserProfile(user_id=user.id)
@@ -146,6 +149,7 @@ def _guess_avatar_filename(url: str | None) -> str | None:
 
 
 def _build_profile_response(user: UserAccount) -> MeProfileOut:
+    """Assemble le schema de profil API a partir des donnees utilisateur."""
     profile = user.profile
     profile_data = profile.profile_data if profile and profile.profile_data else {}
     return MeProfileOut(
@@ -179,6 +183,7 @@ def _build_device_response(device: Device) -> DeviceOut:
 
 
 async def _count_contact_stats(db: AsyncSession, user_id: uuid.UUID) -> tuple[int, int]:
+    """Calcule le nombre total de contacts et le nombre en attente."""
     total_stmt = select(func.count(ContactLink.id)).where(ContactLink.owner_id == user_id)
     pending_stmt = (
         select(func.count(ContactLink.id))
@@ -193,6 +198,7 @@ async def _count_contact_stats(db: AsyncSession, user_id: uuid.UUID) -> tuple[in
 
 
 def _summarize_devices(devices: list[Device]) -> dict[str, object]:
+    """Retourne un snapshot des appareils (total, a risque, dernier vu)."""
     total = len(devices)
     at_risk = 0
     last_seen_at = None
@@ -210,6 +216,7 @@ async def _summarize_conversations(
     conversations: list[Conversation],
     user_id: uuid.UUID,
 ) -> tuple[list[ConversationSummary], int]:
+    """Construit un resume des conversations recentes et le total des non lus."""
     if not conversations:
         return [], 0
 
@@ -258,6 +265,7 @@ async def _summarize_conversations(
 
 
 async def _last_message_map(db: AsyncSession, conversation_ids: list[uuid.UUID]) -> dict[uuid.UUID, object]:
+    """Recupere le dernier message (id/created_at/ciphertext) pour chaque conversation."""
     if not conversation_ids:
         return {}
 
@@ -311,6 +319,7 @@ def _conversation_participants(conversation: Conversation, current_user_id: uuid
 
 
 def _build_security_recommendations(stats: OverviewStats, snapshot: dict) -> list[str]:
+    """Genere des recommandations de securite basees sur l'etat utilisateur."""
     recommendations: list[str] = []
     if not snapshot.get("totp_enabled"):
         recommendations.append("Activez la double authentification pour protéger vos sessions.")
@@ -330,6 +339,7 @@ def _build_security_recommendations(stats: OverviewStats, snapshot: dict) -> lis
 @router.get("/", response_model=MeSummaryOut, include_in_schema=False)
 @router.get("", response_model=MeSummaryOut)
 async def get_me_summary(current_user: UserAccount = Depends(get_current_user)) -> MeSummaryOut:
+    """Retourne un resume minimal de l'utilisateur courant."""
     profile = current_user.profile
     pseudo = profile.display_name if profile and profile.display_name else current_user.email.split("@")[0]
     avatar_url = profile.avatar_url if profile else None
@@ -345,6 +355,7 @@ async def get_me_summary(current_user: UserAccount = Depends(get_current_user)) 
 
 @router.get("/profile", response_model=MeProfileOut)
 async def get_profile(current_user: UserAccount = Depends(get_current_user)) -> MeProfileOut:
+    """Retourne le profil detaille de l'utilisateur."""
     return _build_profile_response(current_user)
 
 
@@ -355,6 +366,7 @@ async def update_profile(
     db: AsyncSession = Depends(get_db),
     audit: AuditService = Depends(get_audit_service),
 ) -> MeProfileOut:
+    """Met a jour les champs du profil et trace l'audit."""
     profile = _ensure_profile(current_user, db)
 
     fields_set = payload.model_fields_set
@@ -411,6 +423,7 @@ async def upload_avatar(
     db: AsyncSession = Depends(get_db),
     audit: AuditService = Depends(get_audit_service),
 ) -> AvatarResponse:
+    """Charge un avatar, le redimensionne et met a jour le profil."""
     data = await file.read()
     if not data:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Avatar file is empty.")
@@ -452,6 +465,7 @@ async def delete_avatar(
     db: AsyncSession = Depends(get_db),
     audit: AuditService = Depends(get_audit_service),
 ) -> AvatarResponse:
+    """Supprime l'avatar de l'utilisateur et le fichier associe."""
     profile = _ensure_profile(current_user, db)
     if not profile.avatar_url:
         return AvatarResponse(avatar_url=None)
@@ -479,6 +493,7 @@ async def get_overview(
     device_service: DeviceService = Depends(get_device_service),
     organization_service: OrganizationService = Depends(get_organization_service),
 ) -> OverviewResponse:
+    """Construit la vue d'ensemble dashboard (profil, stats, securite, org)."""
     profile = _build_profile_response(current_user)
     contacts_total, contacts_pending = await _count_contact_stats(db, current_user.id)
 
@@ -558,6 +573,7 @@ async def list_devices(
     current_user: UserAccount = Depends(get_current_user),
     service: DeviceService = Depends(get_device_service),
 ) -> DeviceListResponse:
+    """Liste les appareils enregistrés de l'utilisateur."""
     devices = await service.list_devices(current_user)
     return DeviceListResponse(devices=[_build_device_response(device) for device in devices])
 
@@ -569,6 +585,7 @@ async def register_device(
     current_user: UserAccount = Depends(get_current_user),
     service: DeviceService = Depends(get_device_service),
 ) -> DeviceOut:
+    """Enregistre ou synchronise un appareil et retourne ses metadonnees."""
     ip_address = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
     device = await service.register_device(
@@ -590,6 +607,7 @@ async def revoke_device(
     current_user: UserAccount = Depends(get_current_user),
     service: DeviceService = Depends(get_device_service),
 ) -> Response:
+    """Revoque un appareil et les sessions associees."""
     await service.revoke_device(current_user, device_id)
     await service.session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -602,6 +620,7 @@ async def delete_account(
     db: AsyncSession = Depends(get_db),
     audit: AuditService = Depends(get_audit_service),
 ) -> Response:
+    """Supprime le compte utilisateur apres verification du mot de passe."""
     if not verify_password(payload.password, current_user.hashed_password):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Mot de passe incorrect.")
 
@@ -627,6 +646,7 @@ async def update_password(
     db: AsyncSession = Depends(get_db),
     audit: AuditService = Depends(get_audit_service),
 ) -> Response:
+    """Change le mot de passe apres validation de l'ancien."""
     if not payload.old_password or not payload.new_password:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Les mots de passe sont requis.")
     if not verify_password(payload.old_password, current_user.hashed_password):
@@ -647,6 +667,7 @@ async def get_security_settings(
     current_user: UserAccount = Depends(get_current_user),
     security: SecurityService = Depends(get_security_service),
 ) -> SecuritySettingsOut:
+    """Retourne les reglages de securite (MFA, alertes)."""
     snapshot = await security.get_security_snapshot(current_user)
     return SecuritySettingsOut(**snapshot)
 
@@ -657,6 +678,7 @@ async def update_security_settings(
     current_user: UserAccount = Depends(get_current_user),
     security: SecurityService = Depends(get_security_service),
 ) -> SecuritySettingsOut:
+    """Met a jour les preferences de securite (alertes de connexion)."""
     updated = await security.update_security_preferences(
         current_user,
         notification_login=payload.notification_login,
@@ -671,6 +693,7 @@ async def list_audit_logs(
     current_user: UserAccount = Depends(get_current_user),
     audit: AuditService = Depends(get_audit_service),
 ) -> list[AuditLogEntry]:
+    """Retourne les derniers evenements d'audit pour l'utilisateur."""
     size = max(1, min(limit, 50))
     entries = await audit.recent_for_user(current_user.id, size)
     return [

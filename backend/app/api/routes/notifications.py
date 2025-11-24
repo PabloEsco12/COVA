@@ -1,4 +1,6 @@
-"""Notification routes."""
+"""
+Routes API pour preferences et notifications (dont alerte de connexion).
+"""
 
 from __future__ import annotations
 
@@ -27,6 +29,7 @@ async def list_preferences(
     current_user: UserAccount = Depends(get_current_user),
     service: NotificationService = Depends(get_notification_service),
 ) -> list[NotificationPreferenceOut]:
+    """Liste les preferences de notification de l'utilisateur courant."""
     prefs = await service.list_preferences(current_user)
     return [NotificationPreferenceOut.model_validate(pref) for pref in prefs]
 
@@ -38,6 +41,7 @@ async def update_preference(
     current_user: UserAccount = Depends(get_current_user),
     service: NotificationService = Depends(get_notification_service),
 ) -> NotificationPreferenceOut:
+    """Cree ou met a jour une preference pour un canal donne."""
     pref = await service.upsert_preference(
         current_user,
         channel,
@@ -56,6 +60,7 @@ async def enqueue_notification(
     current_user: UserAccount = Depends(get_current_user),
     service: NotificationService = Depends(get_notification_service),
 ) -> OutboundNotificationOut:
+    """Mise en file d'une notification manuelle (outbox)."""
     notification = await service.enqueue_notification(
         organization_id=None,
         user_id=str(current_user.id),
@@ -73,6 +78,7 @@ async def send_login_alert_test(
     current_user: UserAccount = Depends(get_current_user),
     service: NotificationService = Depends(get_notification_service),
 ) -> NotificationTestResponse:
+    """Declenche un email de test pour l'alerte de connexion si les preferences le permettent."""
     login_time = datetime.now(timezone.utc)
     ip_address = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")

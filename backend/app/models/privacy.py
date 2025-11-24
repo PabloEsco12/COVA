@@ -1,4 +1,10 @@
-"""Privacy and compliance request models."""
+"""
+Modèles SQLAlchemy pour les demandes de confidentialité/conformité.
+
+Infos utiles:
+- Suivi des demandes d'export ou suppression avec statut et horodatages.
+- Suppressions en cascade sur organisation et utilisateur pour eviter les orphelins.
+"""
 
 from __future__ import annotations
 
@@ -14,7 +20,7 @@ from .enums import PrivacyRequestStatus, PrivacyRequestType
 
 
 class PrivacyRequest(Base):
-    """Tracks user privacy requests like export or deletion."""
+    """Trace les demandes RGPD type export ou suppression."""
 
     __tablename__ = "privacy_requests"
 

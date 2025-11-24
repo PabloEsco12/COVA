@@ -1,4 +1,10 @@
-"""Notification and outbound messaging models."""
+"""
+Modèles SQLAlchemy pour les préférences et notifications sortantes.
+
+Infos utiles:
+- Preferences par utilisateur et canal avec plages silencieuses JSONB.
+- OutboundNotification file les messages à traiter, avec tentative/erreur et statut.
+"""
 
 from __future__ import annotations
 
@@ -14,7 +20,7 @@ from .enums import NotificationChannel
 
 
 class NotificationPreference(Base):
-    """User level notification preferences."""
+    """Preferences de notification au niveau utilisateur."""
 
     __tablename__ = "notification_preferences"
 
@@ -33,7 +39,7 @@ class NotificationPreference(Base):
 
 
 class OutboundNotification(Base):
-    """Notification job queued for delivery."""
+    """Notification en file d'attente pour envoi."""
 
     __tablename__ = "outbound_notifications"
 

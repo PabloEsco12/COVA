@@ -1,4 +1,10 @@
-"""Integrations and automation related models."""
+"""
+Modèles SQLAlchemy pour les intégrations et l'automatisation.
+
+Infos utiles:
+- WebhookEndpoint configure les callbacks par organisation, avec secret et liste d'evenements.
+- BotAgent represente un agent/bot interne avec scopes JSONB et token unique.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +19,7 @@ from .base import Base
 
 
 class WebhookEndpoint(Base):
-    """Third-party webhook endpoint for events."""
+    """Endpoint webhook tiers pour recevoir des evenements."""
 
     __tablename__ = "webhook_endpoints"
     __table_args__ = (
@@ -37,7 +43,7 @@ class WebhookEndpoint(Base):
 
 
 class BotAgent(Base):
-    """Internal automation agent (bot) attached to an organisation."""
+    """Agent/bot interne rattache a une organisation."""
 
     __tablename__ = "bot_agents"
 

@@ -1,5 +1,7 @@
 version: "3.9"
 
+# Stack production: base de donnees, backend, worker, redis (optionnel), frontend, monitoring.
+
 services:
   db:
     image: postgres:14

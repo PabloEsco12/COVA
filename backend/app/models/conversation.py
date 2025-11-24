@@ -1,4 +1,11 @@
-"""Conversation and membership related models."""
+"""
+Modèles SQLAlchemy pour conversations, membres, invitations et appels.
+
+Infos utiles:
+- Les conversations portent metadonnees (archivage, encryption, slow mode) et appartiennent à une organisation/workspace.
+- Gestion des clés d'encryption par génération, enveloppées par membre.
+- Cascade delete active sur messages, membres et sessions d'appel pour éviter les orphelins.
+"""
 
 from __future__ import annotations
 

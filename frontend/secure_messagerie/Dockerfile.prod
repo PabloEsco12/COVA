@@ -1,10 +1,10 @@
+# Dockerfile de prod frontend (build Vite puis Nginx)
 # -------- Build --------
 FROM node:18-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-# Assure-toi que .env.production contient bien: VITE_API_URL=https://covamessagerie.be/api
 RUN npm run build
 
 # -------- Runtime (Nginx) --------

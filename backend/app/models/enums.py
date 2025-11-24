@@ -1,4 +1,10 @@
-"""Enumerations used by the next-generation messaging schema."""
+"""
+Enumerations centrales utilisees par le schema de messagerie.
+
+Infos utiles:
+- StrEnum pour serialiser proprement en JSON.
+- Roles, statuts et types couvrent organisations, conversations, messages et notifications.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +12,7 @@ from enum import Enum
 
 
 class StrEnum(str, Enum):
-    """Enum whose value serialises as a string."""
+    """Enum dont la valeur se serialize directement en chaine."""
 
     def __str__(self) -> str:  # pragma: no cover - convenience
         return str(self.value)

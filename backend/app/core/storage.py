@@ -1,4 +1,11 @@
-"""S3/MinIO object storage helper."""
+"""
+Helper de stockage objet (S3/MinIO) pour les pieces jointes.
+
+Infos utiles:
+- Instancie deux clients: un pour l'upload et un pour signer les URLs publiques.
+- Force l'utilisation de signatures v4 et peut forcer le path-style pour MinIO/compat.
+- Les erreurs reseau boto sont converties en RuntimeError pour remonter clairement a l'API.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +22,7 @@ from ..config import settings
 
 
 class ObjectStorage:
-    """Thin wrapper around boto3 for uploads and signed downloads."""
+    """Fin wrapper boto3 pour upload et generation de liens presignes."""
 
     def __init__(
         self,
@@ -29,6 +36,7 @@ class ObjectStorage:
         force_path_style: bool,
         public_endpoint_url: str | None = None,
     ) -> None:
+        # --- Configuration des clients S3 (upload et signature) ---
         session = boto3.session.Session(
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_key,
@@ -62,6 +70,7 @@ class ObjectStorage:
         content_type: str | None,
         metadata: dict[str, str] | None = None,
     ) -> None:
+        """Charge un flux binaire dans le bucket cible avec metadonnees optionnelles."""
         extra_args: dict[str, str] = {}
         if content_type:
             extra_args["ContentType"] = content_type
@@ -73,6 +82,7 @@ class ObjectStorage:
             raise RuntimeError("Unable to upload attachment") from exc
 
     def generate_presigned_url(self, key: str, *, expires_in: int) -> str:
+        """Genere une URL presignee pour telecharger un objet pendant une duree limitee."""
         try:
             return self.signing_client.generate_presigned_url(
                 "get_object",
@@ -83,15 +93,18 @@ class ObjectStorage:
             raise RuntimeError("Unable to generate download URL") from exc
 
     def object_url(self, key: str) -> str:
+        """Retourne une URL interne de type s3://bucket/key."""
         return f"s3://{self.bucket}/{key}"
 
     def key_from_url(self, storage_url: str) -> str:
+        """Extrait la cle d'objet a partir d'une URL s3://bucket/key."""
         prefix = f"s3://{self.bucket}/"
         if storage_url.startswith(prefix):
             return storage_url[len(prefix) :]
         return storage_url
 
     def generate_key(self, conversation_id: str, *, filename: str | None = None) -> str:
+        """Cree une cle unique pour une conversation, en conservant l'extension du fichier."""
         safe_name = Path(filename or "attachment").name.replace(" ", "_")
         suffix = Path(safe_name).suffix.lower()
         return f"conversations/{conversation_id}/{uuid.uuid4()}{suffix}"
@@ -99,6 +112,7 @@ class ObjectStorage:
 
 @lru_cache()
 def get_storage() -> ObjectStorage | None:
+    """Instancie le stockage objet si toutes les variables requises sont presentes."""
     if not settings.STORAGE_BUCKET:
         return None
     required = [settings.STORAGE_ACCESS_KEY, settings.STORAGE_SECRET_KEY]

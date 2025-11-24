@@ -1,4 +1,10 @@
-"""User schemas for API responses."""
+"""
+Schemas Pydantic pour les utilisateurs (profils, compte courant, mises a jour).
+
+Infos utiles:
+- from_attributes active pour mapper depuis SQLAlchemy.
+- Couvre resume du compte, profil detaille et operations de securite basique.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +15,7 @@ from pydantic import BaseModel, EmailStr
 
 
 class UserBase(BaseModel):
+    """Champs communs exposes sur un utilisateur."""
     id: uuid.UUID
     email: EmailStr
     role: str
@@ -16,6 +23,7 @@ class UserBase(BaseModel):
 
 
 class UserProfileOut(BaseModel):
+    """Profil utilisateur complet (affichage et preferences)."""
     display_name: str | None = None
     avatar_url: str | None = None
     locale: str | None = None
@@ -24,6 +32,7 @@ class UserProfileOut(BaseModel):
 
 
 class UserOut(UserBase):
+    """Utilisateur expose avec statut et profil associe."""
     is_active: bool
     created_at: datetime
     profile: UserProfileOut | None = None
@@ -33,6 +42,7 @@ class UserOut(UserBase):
 
 
 class MeSummaryOut(BaseModel):
+    """Vue resume pour /me (utilisee par l'UI)."""
     id: uuid.UUID
     email: EmailStr
     pseudo: str
@@ -42,6 +52,7 @@ class MeSummaryOut(BaseModel):
 
 
 class MeProfileOut(BaseModel):
+    """Profil detaille de l'utilisateur courant."""
     email: EmailStr
     display_name: str | None = None
     avatar_url: str | None = None
@@ -55,6 +66,7 @@ class MeProfileOut(BaseModel):
 
 
 class MeProfileUpdate(BaseModel):
+    """Payload de mise a jour partielle du profil."""
     display_name: str | None = None
     locale: str | None = None
     timezone: str | None = None
@@ -66,13 +78,16 @@ class MeProfileUpdate(BaseModel):
 
 
 class AvatarResponse(BaseModel):
+    """URL de l'avatar apres upload/mise a jour."""
     avatar_url: str | None = None
 
 
 class AccountDeleteRequest(BaseModel):
+    """Confirmation de suppression de compte (mot de passe requis)."""
     password: str
 
 
 class PasswordUpdateRequest(BaseModel):
+    """Changement de mot de passe (ancien + nouveau)."""
     old_password: str
     new_password: str

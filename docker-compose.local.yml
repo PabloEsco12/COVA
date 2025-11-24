@@ -1,5 +1,7 @@
 version: "3.9"
 
+# Stack locale pour dev: Postgres, Redis, MinIO, ClamAV, backend, worker et frontend.
+
 services:
   db:
     image: postgres:14

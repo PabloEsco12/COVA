@@ -1,4 +1,11 @@
-"""Email sending utilities."""
+"""
+Utilitaires d'envoi d'e-mails asynchrones.
+
+Infos utiles:
+- Resolve l'expediteur depuis la configuration (SMTP_FROM_* ou username).
+- Construit un message texte/HTML et utilise aiosmtplib pour l'envoi.
+- Supporte TLS explicite (STARTTLS) ou implicite selon la configuration.
+"""
 
 from __future__ import annotations
 
@@ -12,6 +19,7 @@ from ..config import Settings
 
 
 def _resolve_sender(settings: Settings) -> tuple[str, str]:
+    """Determine le nom/adresse expediteur a partir des variables SMTP."""
     name = settings.SMTP_FROM_NAME or settings.SMTP_USERNAME or ""
     address = settings.SMTP_FROM_EMAIL or settings.SMTP_USERNAME
     if not address:
@@ -27,12 +35,14 @@ async def send_email(
     text_body: str,
     html_body: str | None = None,
 ) -> None:
+    """Envoie un email format texte/HTML via SMTP asynchrone."""
     recipients = [to] if isinstance(to, str) else list(to)
     if not recipients:
         raise ValueError("No recipients provided")
 
     sender_name, sender_address = _resolve_sender(settings)
 
+    # --- Construction du message ---
     message = EmailMessage()
     message["From"] = formataddr((sender_name, sender_address)) if sender_name else sender_address
     message["To"] = ", ".join(recipients)
@@ -41,6 +51,7 @@ async def send_email(
     if html_body:
         message.add_alternative(html_body, subtype="html")
 
+    # --- Connexion SMTP et envoi ---
     smtp = aiosmtplib.SMTP(
         hostname=settings.SMTP_HOST,
         port=settings.SMTP_PORT,

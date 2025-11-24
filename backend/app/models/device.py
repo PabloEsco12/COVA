@@ -1,4 +1,11 @@
-"""Device and session tracking models."""
+"""
+Modèles SQLAlchemy pour appareils, sessions et abonnements push.
+
+Infos utiles:
+- Les appareils sont identifies par un fingerprint unique par utilisateur.
+- Les sessions conservent les JTI de tokens et métadonnées d'activité.
+- Les abonnements push sont uniques par device/endpoint et stockent le canal.
+"""
 
 from __future__ import annotations
 

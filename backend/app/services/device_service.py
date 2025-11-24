@@ -1,4 +1,10 @@
-﻿"""Device management service."""
+"""Service de gestion des appareils (inscription, synchronisation, revocation).
+
+Infos utiles:
+- Les metadonnees d'appareil arrivent encodees en base64 JSON (push_token).
+- Met a jour les sessions actives associees pour tenir a jour IP et user-agent.
+- La journalisation d'audit est optionnelle via AuditService.
+"""
 
 from __future__ import annotations
 
@@ -17,13 +23,15 @@ from .audit_service import AuditService
 
 
 class DeviceService:
-    """Encapsulates device lifecycle operations."""
+    """Encapsule le cycle de vie des appareils et leurs sessions associees."""
 
     def __init__(self, session: AsyncSession, audit_service: AuditService | None = None) -> None:
+        """Injecte la session SQLAlchemy et le service d'audit."""
         self.session = session
         self.audit = audit_service
 
     async def list_devices(self, user: UserAccount) -> list[Device]:
+        """Retourne les appareils d'un utilisateur avec leurs sessions."""
         stmt = (
             select(Device)
             .options(selectinload(Device.sessions))
@@ -43,6 +51,7 @@ class DeviceService:
         ip_address: str | None,
         user_agent: str | None,
     ) -> Device:
+        """Cree ou met a jour un appareil et synchronise les metadonnees/fiabilite."""
         fingerprint = self._sanitize(device_id, limit=128)
         if not fingerprint:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid device identifier.")
@@ -99,6 +108,7 @@ class DeviceService:
         return device
 
     async def revoke_device(self, user: UserAccount, device_identifier: str) -> None:
+        """Revoque un appareil et invalide les sessions liees."""
         fingerprint = self._sanitize(device_identifier, limit=128)
         stmt = select(Device).where(Device.user_id == user.id)
         if fingerprint:
@@ -121,6 +131,7 @@ class DeviceService:
         await self._log(user, "device.revoke", device_id=str(device.id))
 
     def _decode_metadata(self, payload: str) -> dict[str, Any]:
+        """Decode le token metadata base64 -> JSON; retourne un dict meme en cas d'echec."""
         if not payload:
             return {}
         try:
@@ -134,6 +145,7 @@ class DeviceService:
             return {"raw": payload}
 
     def _build_metadata_blob(self, push_token: str, metadata: dict[str, Any]) -> dict[str, Any]:
+        """Assemble la structure stockee pour un appareil (token + metadonnees)."""
         return {
             "push_token": push_token,
             "metadata": metadata,
@@ -141,6 +153,7 @@ class DeviceService:
         }
 
     def _merge_metadata(self, existing: dict | None, push_token: str, metadata: dict[str, Any]) -> dict[str, Any]:
+        """Fusionne metadonnees deja stockees avec les nouvelles informations."""
         base = dict(existing or {})
         base["push_token"] = push_token
         base["metadata"] = metadata
@@ -148,6 +161,7 @@ class DeviceService:
         return base
 
     def _derive_trust_level(self, metadata: dict[str, Any], fallback: int | None = None) -> int:
+        """Calcule un score de confiance simple a partir du type d'appareil/navigateur."""
         device_type = str(metadata.get("deviceType", "")).lower()
         browser = str(metadata.get("browser", "")).lower()
         trust = 60
@@ -166,6 +180,7 @@ class DeviceService:
         return trust
 
     def _sanitize(self, value: str | None, *, limit: int) -> str | None:
+        """Nettoie une chaine (trim + longueur max) et retourne None si vide."""
         if value is None:
             return None
         cleaned = value.strip()
@@ -174,6 +189,7 @@ class DeviceService:
         return cleaned[:limit]
 
     async def _update_sessions(self, device: Device, *, ip_address: str | None, user_agent: str | None) -> None:
+        """Met a jour les sessions actives liees a l'appareil (IP, user-agent, derniere activite)."""
         if not device.id:
             await self.session.flush()
         stmt = (
@@ -198,6 +214,7 @@ class DeviceService:
         await self.session.flush()
 
     async def _log(self, user: UserAccount, action: str, *, device_id: str, metadata: dict | None = None) -> None:
+        """Relais vers AuditService pour tracer les actions d'appareil."""
         if not self.audit:
             return
         await self.audit.record(

@@ -1,4 +1,10 @@
-"""Contact routes."""
+"""
+Routes API pour la gestion des contacts.
+
+Infos utiles:
+- Utilise ContactService et mappe explicitement les profils pour enrichir la reponse.
+- Commit apres chaque mutation pour conserver le controle transactionnel.
+"""
 
 from __future__ import annotations
 
@@ -20,6 +26,7 @@ router = APIRouter(prefix="/contacts", tags=["contacts"])
 
 
 def _to_contact_out(link) -> ContactOut:
+    """Transforme un lien de contact en schema de sortie enrichi avec profil."""
     contact_user = link.contact
     display_name = None
     avatar_url = None
@@ -63,6 +70,7 @@ async def list_contacts(
     current_user: UserAccount = Depends(get_current_user),
     service: ContactService = Depends(get_contact_service),
 ) -> list[ContactOut]:
+    """Liste les contacts visibles de l'utilisateur courant (filtrable par statut)."""
     contacts = await service.list_contacts(current_user, status=status_filter)
     return [_to_contact_out(link) for link in contacts]
 
@@ -73,6 +81,7 @@ async def create_contact(
     current_user: UserAccount = Depends(get_current_user),
     service: ContactService = Depends(get_contact_service),
 ) -> ContactOut:
+    """Cree une demande de contact et retourne la representation enrichie."""
     contact_link = await service.create_contact(current_user, target_email=payload.email, alias=payload.alias)
     await service.session.commit()
     return _to_contact_out(contact_link)
@@ -85,6 +94,7 @@ async def update_contact_status(
     current_user: UserAccount = Depends(get_current_user),
     service: ContactService = Depends(get_contact_service),
 ) -> ContactOut:
+    """Met a jour le statut d'un contact (block/accept/etc.)."""
     contact_link = await service.update_status(current_user, contact_id, payload.status)
     await service.session.commit()
     return _to_contact_out(contact_link)
@@ -97,6 +107,7 @@ async def update_contact_alias(
     current_user: UserAccount = Depends(get_current_user),
     service: ContactService = Depends(get_contact_service),
 ) -> ContactOut:
+    """Modifie l'alias associe a un contact."""
     contact_link = await service.update_alias(current_user, contact_id, payload.alias)
     await service.session.commit()
     return _to_contact_out(contact_link)
@@ -108,6 +119,7 @@ async def delete_contact(
     current_user: UserAccount = Depends(get_current_user),
     service: ContactService = Depends(get_contact_service),
 ) -> dict[str, str]:
+    """Supprime le lien de contact pour les deux utilisateurs."""
     await service.delete_contact(current_user, contact_id)
     await service.session.commit()
     return {"detail": "Contact deleted"}

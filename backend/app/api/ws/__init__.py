@@ -1,3 +1,7 @@
+"""
+Regroupe les routeurs WebSocket.
+"""
+
 from fastapi import APIRouter
 
 from .conversations import ws_router as conversation_ws_router

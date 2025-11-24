@@ -1,4 +1,11 @@
-"""Conversation routes."""
+"""
+Routes API pour les conversations, messages et invitations.
+
+Infos utiles:
+- Controle l'acces via ConversationService (verifications de membership et roles).
+- Mapping explicite des entites vers schemas pour inclure profils et etats bloques.
+- Commit explicite de la session apres chaque mutation.
+"""
 
 from __future__ import annotations
 
@@ -34,6 +41,7 @@ router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 
 def _member_to_schema(link) -> ConversationMemberOut:
+    """Transforme un membre en schema enrichi avec profil/affichage."""
     user = getattr(link, "user", None)
     profile = getattr(user, "profile", None) if user else None
     display_name = None
@@ -58,6 +66,7 @@ def _member_to_schema(link) -> ConversationMemberOut:
 
 
 def _conversation_to_schema(conversation, *, block_state: dict | None = None) -> ConversationOut:
+    """Assemble la vue conversation pour l'API en injectant etats de blocage."""
     members = [_member_to_schema(member) for member in conversation.members]
     metadata = dict(conversation.extra_metadata or {})
     blocked_view = block_state or {}
@@ -79,6 +88,7 @@ def _invite_to_schema(invite) -> ConversationInviteOut:
 
 
 async def _fetch_conversation_with_members(session: AsyncSession, conversation_id: uuid.UUID) -> Conversation:
+    """Charge une conversation avec ses membres/profils ou leve 404."""
     stmt = (
         select(Conversation)
         .options(
@@ -148,6 +158,7 @@ async def list_messages(
     service: ConversationService = Depends(get_conversation_service),
     limit: int = 50,
 ) -> list[MessageOut]:
+    """Recupere les messages d'une conversation avec pagination simple."""
     membership = await service.ensure_membership(conversation_id, current_user.id)
     messages, _meta = await service.list_messages(conversation_id, limit=limit, member=membership)
     payloads = []
@@ -160,11 +171,12 @@ async def list_messages(
 @router.get("/{conversation_id}/messages/search", response_model=list[MessageOut])
 async def search_conversation_messages(
     conversation_id: uuid.UUID,
-    q: str = Query(..., min_length=1, description="Terme � rechercher"),
+    q: str = Query(..., min_length=1, description="Terme a rechercher"),
     limit: int = Query(50, ge=1, le=200),
     current_user: UserAccount = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ) -> list[MessageOut]:
+    """Recherche plein texte dans une conversation pour l'utilisateur courant."""
     results = await service.search_messages(
         conversation_id=conversation_id,
         user=current_user,
@@ -430,3 +442,6 @@ async def accept_invite(
     hydrated = await _fetch_conversation_with_members(service.session, conversation.id)
     block_state = (await service.get_block_states(current_user, [hydrated])).get(hydrated.id)
     return _conversation_to_schema(hydrated, block_state=block_state)
+
+
+

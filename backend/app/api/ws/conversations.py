@@ -1,4 +1,6 @@
-"""Conversation websocket endpoints."""
+"""
+Endpoints WebSocket pour les conversations (evenements temps reel + presence).
+"""
 
 from __future__ import annotations
 
@@ -28,6 +30,7 @@ async def conversation_ws(
     broker: RealtimeBroker = Depends(get_realtime_broker),
     db: AsyncSession = Depends(get_db),
 ) -> None:
+    """Canal WS de conversation: verifie le token, presence et relaye Pub/Sub Redis."""
     token = websocket.query_params.get("token")
     if not token:
         await websocket.close(code=4401)
@@ -66,6 +69,7 @@ async def conversation_ws(
     presence_seen_key = f"conversation:{conversation_id}:presence:last_seen"
 
     async def build_presence_payload() -> dict | None:
+        """Construit un snapshot de presence (online/offline) pour diffusion."""
         if redis is None:
             return None
         snapshot = await redis.hgetall(presence_seen_key)
@@ -91,6 +95,7 @@ async def conversation_ws(
         }
 
     async def broadcast_presence(include_direct: bool = False) -> None:
+        """Diffuse la presence sur le canal conversation et eventuellement au client courant."""
         if broker is None or redis is None:
             return
         payload = await build_presence_payload()
@@ -102,6 +107,7 @@ async def conversation_ws(
                 await websocket.send_text(json.dumps(payload))
 
     async def mark_presence_online() -> None:
+        """Marque l'utilisateur en ligne et diffuse."""
         if redis is None:
             return
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -112,6 +118,7 @@ async def conversation_ws(
         await broadcast_presence(include_direct=True)
 
     async def mark_presence_offline() -> None:
+        """Marque l'utilisateur hors ligne et diffuse."""
         if redis is None:
             return
         await redis.srem(presence_online_key, str(user_id))
@@ -119,6 +126,7 @@ async def conversation_ws(
         await broadcast_presence()
 
     async def refresh_presence_loop() -> None:
+        """Rafraichit periodiquement le last_seen tant que la connexion reste ouverte."""
         if redis is None:
             return
         try:
@@ -129,6 +137,7 @@ async def conversation_ws(
             pass
 
     async def sender() -> None:
+        """Ecoute le pubsub Redis et pousse vers le WebSocket."""
         if pubsub is None:
             return
         try:
@@ -142,6 +151,7 @@ async def conversation_ws(
     call_events = {"call:offer", "call:answer", "call:candidate", "call:hangup"}
 
     async def receiver() -> None:
+        """Traite les messages entrants du WebSocket et les relaye via Redis si besoin."""
         try:
             while True:
                 try:

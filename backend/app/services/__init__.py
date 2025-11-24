@@ -1,3 +1,11 @@
+"""
+Facade d'import pour les services backend.
+
+Infos utiles:
+- Re-exporte les classes principales pour des imports simplifies dans l'app.
+- N'instancie rien par defaut; chaque service requiert ses dependances (session, etc.).
+"""
+
 from .auth_service import AuthService
 from .contact_service import ContactService
 from .conversation_service import ConversationService

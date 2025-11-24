@@ -1,4 +1,10 @@
-"""Contact and relationship models."""
+"""
+Modèles SQLAlchemy pour les relations de contact.
+
+Infos utiles:
+- ContactLink gère la relation bilatérale interne (owner/contact) avec statut et alias.
+- ContactInvitation permet d'inviter un externe via token unique et expiration.
+"""
 
 from __future__ import annotations
 
@@ -14,7 +20,7 @@ from .enums import ContactStatus
 
 
 class ContactLink(Base):
-    """Mutual relationship between users."""
+    """Relation bilaterale entre utilisateurs au sein de l'organisation."""
 
     __tablename__ = "contact_links"
     __table_args__ = (
@@ -49,7 +55,7 @@ class ContactLink(Base):
 
 
 class ContactInvitation(Base):
-    """Invitation sent to external participants."""
+    """Invitation envoyee a un participant externe (token + expiration)."""
 
     __tablename__ = "contact_invitations"
     __table_args__ = (

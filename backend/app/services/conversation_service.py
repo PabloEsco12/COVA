@@ -1,4 +1,12 @@
-"""Conversation and messaging services."""
+"""
+Service de conversations et de messagerie (creation, invites, messages, notifications).
+
+Infos utiles:
+- Valide les roles de membres (owner/member) avant actions sensibles.
+- Publie des evenements temps reel via RealtimeBroker et des notifications email selon les preferences.
+- S'appuie sur ObjectStorage pour les pieces jointes et sur le decodeur AttachmentService pour les lier.
+- Toutes les horodatations sont gerees en UTC.
+"""
 
 from __future__ import annotations
 
@@ -44,7 +52,7 @@ from .attachment_service import AttachmentDescriptor, AttachmentService
 
 
 class ConversationService:
-    """High level operations for conversations and messages."""
+    """Operations haut niveau sur les conversations, membres et messages."""
 
     def __init__(
         self,
@@ -55,6 +63,7 @@ class ConversationService:
         storage_service: ObjectStorage | None = None,
         attachment_decoder: AttachmentService | None = None,
     ) -> None:
+        """Injecte la session et les integrations (audit, temps reel, stockage, decodeur PJ)."""
         self.session = session
         self.audit = audit_service
         self.realtime = realtime_broker
@@ -62,6 +71,7 @@ class ConversationService:
         self.attachment_decoder = attachment_decoder
 
     async def list_conversations(self, user: UserAccount) -> list[Conversation]:
+        """Liste les conversations actives du user avec prechargement des membres/profils."""
         stmt = (
             select(Conversation)
             .join(ConversationMember, ConversationMember.conversation_id == Conversation.id)
@@ -83,6 +93,7 @@ class ConversationService:
         participant_ids: list[uuid.UUID],
         conv_type: ConversationType,
     ) -> Conversation:
+        """Cree une conversation, ajoute l'owner et les participants valides du meme workspace/org."""
         membership = await self._get_primary_membership(owner.id)
         workspace = await self._get_default_workspace(membership)
 
@@ -135,6 +146,7 @@ class ConversationService:
         topic: str | None = None,
         archived: bool | None = None,
     ) -> Conversation:
+        """Met a jour titre/sujet/archivage apres verification que l'acteur est owner."""
         membership = await self._get_membership(conversation_id, actor.id)
         self._require_owner(membership)
         conversation = await self.session.get(
@@ -175,6 +187,7 @@ class ConversationService:
         return await self._load_conversation_with_members(conversation_id)
 
     async def leave_conversation(self, conversation_id: uuid.UUID, user: UserAccount) -> None:
+        """Permet a un membre de quitter; transfere eventuellement le role owner si necessaire."""
         membership = await self._get_membership(conversation_id, user.id)
         if membership.role == ConversationMemberRole.OWNER:
             if not await self._has_other_active_owner(conversation_id, exclude_user_id=user.id):
@@ -195,6 +208,7 @@ class ConversationService:
         await self._log(user, "conversation.leave", resource_id=str(conversation_id))
 
     async def delete_conversation(self, conversation_id: uuid.UUID, *, actor: UserAccount) -> None:
+        """Supprime une conversation apres verification du role owner."""
         membership = await self._get_membership(conversation_id, actor.id)
         self._require_owner(membership)
         conversation = await self.session.get(Conversation, conversation_id)
@@ -214,6 +228,7 @@ class ConversationService:
         state: MembershipState | None = None,
         muted_until: datetime | None = None,
     ) -> ConversationMember:
+        """Modifie role/statut/mute d'un membre (owner requis) en garantissant la presence d'un owner actif."""
         actor_membership = await self._get_membership(conversation_id, actor.id)
         self._require_owner(actor_membership)
 
@@ -262,6 +277,7 @@ class ConversationService:
         return target
 
     async def list_invites(self, conversation_id: uuid.UUID, actor: UserAccount) -> list[ConversationInvite]:
+        """Liste les invitations d'une conversation (owner uniquement)."""
         membership = await self._get_membership(conversation_id, actor.id)
         self._require_owner(membership)
         stmt = (
@@ -281,6 +297,7 @@ class ConversationService:
         role: ConversationMemberRole,
         expires_in_hours: int,
     ) -> ConversationInvite:
+        """Cree une invitation partageable avec role attribue et expiration configuree."""
         membership = await self._get_membership(conversation_id, actor.id)
         self._require_owner(membership)
         conversation = await self.session.get(Conversation, conversation_id)
@@ -309,6 +326,7 @@ class ConversationService:
         return invite
 
     async def revoke_invite(self, conversation_id: uuid.UUID, invite_id: uuid.UUID, actor: UserAccount) -> None:
+        """Supprime une invitation specifique (owner requis)."""
         membership = await self._get_membership(conversation_id, actor.id)
         self._require_owner(membership)
         stmt = (
@@ -332,6 +350,7 @@ class ConversationService:
         )
 
     async def accept_invite(self, *, token: str, user: UserAccount) -> Conversation:
+        """Accepte une invitation via jeton et active/cree le membre avec le role attendu."""
         stmt = (
             select(ConversationInvite)
             .options(selectinload(ConversationInvite.conversation))
@@ -390,6 +409,7 @@ class ConversationService:
         conversation_id: uuid.UUID,
         message_ids: list[uuid.UUID] | None = None,
     ) -> int:
+        """Marque des messages comme lus pour l'utilisateur (tous ou liste ciblee) et retourne le nombre mis a jour."""
         membership = await self._get_membership(conversation_id, user.id)
         stmt = select(MessageDelivery).where(MessageDelivery.member_id == membership.id)
         if message_ids:
@@ -410,6 +430,7 @@ class ConversationService:
         return updated
 
     async def _mark_delivered(self, member: ConversationMember, messages: list[Message]) -> None:
+        """Passe les livraisons d'un membre a DELIVERED lorsque les messages sont deja disponibles."""
         if not messages:
             return
         now = datetime.now(timezone.utc)
@@ -424,6 +445,7 @@ class ConversationService:
             await self.session.flush()
 
     def _summarize_reactions(self, message: Message, viewer: ConversationMember | None) -> list[dict]:
+        """Agrege les reactions par emoji et signale si le viewer a deja reactionne."""
         reactions = getattr(message, "reactions", []) or []
         summary: dict[str, dict] = {}
         viewer_member_id = viewer.id if viewer else None
@@ -438,12 +460,14 @@ class ConversationService:
         return list(summary.values())
 
     def _match_delivery(self, message: Message, member_id: uuid.UUID) -> MessageDelivery | None:
+        """Trouve en memoire la livraison correspondant a un membre."""
         for delivery in getattr(message, "deliveries", []) or []:
             if delivery.member_id == member_id:
                 return delivery
         return None
 
     async def _fetch_delivery(self, message_id: uuid.UUID, member_id: uuid.UUID) -> MessageDelivery | None:
+        """Charge une livraison ciblee depuis la base (fallback si non prechargee)."""
         stmt = select(MessageDelivery).where(
             MessageDelivery.message_id == message_id,
             MessageDelivery.member_id == member_id,
@@ -452,6 +476,7 @@ class ConversationService:
         return result.scalar_one_or_none()
 
     async def get_unread_summary(self, user: UserAccount) -> dict:
+        """Calcule le nombre total de messages non lus et la repartition par conversation."""
         stmt = (
             select(
                 ConversationMember.conversation_id.label("conversation_id"),
@@ -485,6 +510,7 @@ class ConversationService:
         after: int | None = None,
         member: ConversationMember | None = None,
     ) -> tuple[list[Message], dict]:
+        """Liste les messages avec pagination (before/after) et retourne aussi les metadonnees de navigation."""
         if before and after:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="before et after ne peuvent être combinés.")
         fetch_limit = min(max(limit, 1), 200)
@@ -542,6 +568,7 @@ class ConversationService:
         query: str,
         limit: int = 50,
     ) -> list[dict]:
+        """Recherche plein texte (tsvector simple) dans une conversation pour l'utilisateur connecte."""
         term = (query or "").strip()
         if not term:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Un terme de recherche est requis.")
@@ -591,6 +618,7 @@ class ConversationService:
         reply_to_id: uuid.UUID | None = None,
         forward_message_id: uuid.UUID | None = None,
     ) -> tuple[Message, dict]:
+        """Cree un message, attache les PJ decodees, verifie les blocages et diffuse notifications."""
         membership = await self._get_membership(conversation_id, author.id)
         conversation = await self.session.get(Conversation, conversation_id)
         if conversation is None:
@@ -732,6 +760,7 @@ class ConversationService:
         user: UserAccount,
         content: str,
     ) -> Message:
+        """Edite le contenu d'un message (owner ou auteur), puis diffuse la mise a jour."""
         message = await self._load_message(message_id)
         self._ensure_message_in_conversation(message, conversation_id)
         if message.deleted_at:
@@ -760,6 +789,7 @@ class ConversationService:
         user: UserAccount,
         reason: str | None = None,
     ) -> Message:
+        """Supprime logiquement un message (owner ou auteur) et notifie les abonnes."""
         message = await self._load_message(message_id)
         self._ensure_message_in_conversation(message, conversation_id)
         if message.deleted_at:
@@ -780,6 +810,7 @@ class ConversationService:
         return refreshed
 
     async def _persist_attachments(self, message: Message, descriptors: list[AttachmentDescriptor]) -> None:
+        """Enregistre les metadonnees des pieces jointes associees a un message."""
         if not descriptors:
             return
         entities: list[MessageAttachment] = []
@@ -799,6 +830,7 @@ class ConversationService:
         await self.session.flush()
 
     async def serialize_message(self, message: Message, *, viewer_membership: ConversationMember | None = None) -> dict:
+        """Prepare le payload API d'un message, incluant reactions, pins et etat de livraison."""
         author = message.author
         if author is None and message.author_id:
             author = await self.session.get(UserAccount, message.author_id)
@@ -896,6 +928,7 @@ class ConversationService:
         user: UserAccount,
         membership: ConversationMember | None = None,
     ) -> Message:
+        """Epingle un message (owner requis) et diffuse la mise a jour si changement."""
         membership = membership or await self._get_membership(conversation_id, user.id)
         self._require_owner(membership)
         message = await self._load_message(message_id)
@@ -926,6 +959,7 @@ class ConversationService:
         user: UserAccount,
         membership: ConversationMember | None = None,
     ) -> Message:
+        """Retire l'epingle d'un message (owner requis) et notifie si besoin."""
         membership = membership or await self._get_membership(conversation_id, user.id)
         self._require_owner(membership)
         message = await self._load_message(message_id)
@@ -957,6 +991,7 @@ class ConversationService:
         user: UserAccount,
         membership: ConversationMember,
     ) -> Message:
+        """Ajoute/supprime/bascule une reaction emoji pour le membre, puis diffuse l'etat."""
         message = await self._load_message(message_id)
         self._ensure_message_in_conversation(message, conversation_id)
         stmt = select(MessageReaction).where(
@@ -993,6 +1028,7 @@ class ConversationService:
         return refreshed
 
     async def ensure_membership(self, conversation_id: uuid.UUID, user_id: uuid.UUID) -> ConversationMember:
+        """Expose _get_membership pour les consommateurs externes."""
         return await self._get_membership(conversation_id, user_id)
 
     async def _get_membership(
@@ -1002,6 +1038,7 @@ class ConversationService:
         *,
         active_only: bool = True,
     ) -> ConversationMember:
+        """Charge l'appartenance d'un utilisateur a une conversation (optionnellement active)."""
         stmt = (
             select(ConversationMember)
             .where(
@@ -1021,6 +1058,7 @@ class ConversationService:
         return membership
 
     async def _load_message(self, message_id: uuid.UUID) -> Message:
+        """Charge un message avec toutes ses relations necessaires aux reponses API."""
         stmt = (
             select(Message)
             .where(Message.id == message_id)
@@ -1047,10 +1085,12 @@ class ConversationService:
         return message
 
     def _ensure_message_in_conversation(self, message: Message, conversation_id: uuid.UUID) -> None:
+        """Verifie que le message appartient a la conversation cible, sinon leve 404."""
         if message.conversation_id != conversation_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message introuvable.")
 
     def _serialize_attachment(self, attachment: MessageAttachment) -> dict:
+        """Prepare les metadonnees exposees d'une piece jointe (lien presigne si stockage dispo)."""
         download_url = attachment.storage_url
         if self.storage and attachment.storage_url:
             key = self.storage.key_from_url(attachment.storage_url)
@@ -1072,6 +1112,7 @@ class ConversationService:
         }
 
     def _serialize_reference(self, reference: Message | None) -> dict | None:
+        """Formate une reference de message (reply/forward) avec un extrait en clair."""
         if reference is None:
             return None
         author_name = None
@@ -1093,6 +1134,7 @@ class ConversationService:
         }
 
     def _extract_plaintext(self, message: Message) -> str:
+        """Extrait du texte lisible depuis le champ ciphertext (utilise pour previsualisation)."""
         if isinstance(message.ciphertext, (bytes, bytearray, memoryview)):
             return bytes(message.ciphertext).decode("utf-8", errors="ignore")
         return str(message.ciphertext or "")
@@ -1102,6 +1144,7 @@ class ConversationService:
         viewer: UserAccount,
         conversations: list[Conversation],
     ) -> dict[uuid.UUID, dict[str, bool]]:
+        """Retourne pour chaque conversation directe si elle est bloquee par moi ou par l'autre utilisateur."""
         states: dict[uuid.UUID, dict[str, bool]] = {
             conv.id: {"blocked_by_me": False, "blocked_by_other": False} for conv in conversations
         }
@@ -1153,6 +1196,7 @@ class ConversationService:
         return states
 
     async def _broadcast_message_update(self, message: Message) -> None:
+        """Diffuse une mise a jour de message sur le canal temps reel."""
         if not self.realtime:
             return
         payload = await self.serialize_message(message)
@@ -1165,7 +1209,7 @@ class ConversationService:
         )
 
     async def _filter_notification_targets(self, user_ids: list[uuid.UUID], *, now: datetime) -> list[str]:
-        """Filter push notification targets using preferences and quiet hours."""
+        """Filtre les cibles push selon leurs preferences et plages de silence."""
         if not user_ids:
             return []
         normalized_ids = [uid for uid in dict.fromkeys(user_ids) if uid]
@@ -1209,6 +1253,7 @@ class ConversationService:
         member_user_ids: list[uuid.UUID],
         now: datetime | None = None,
     ) -> None:
+        """Envoie des notifications push aux membres eligibles (hors auteur), avec previsualisation."""
         if not self.realtime or not member_user_ids:
             return
         current_time = now or datetime.now(timezone.utc)
@@ -1241,9 +1286,11 @@ class ConversationService:
             )
 
     def _get_metadata(self, conversation: Conversation) -> dict:
+        """Retourne une copie mutable des metadonnees de conversation."""
         return dict(conversation.extra_metadata or {})
 
     async def _load_conversation_with_members(self, conversation_id: uuid.UUID) -> Conversation:
+        """Charge une conversation avec ses membres/profils pour reponses API."""
         stmt = (
             select(Conversation)
             .where(Conversation.id == conversation_id)
@@ -1260,6 +1307,7 @@ class ConversationService:
     async def _promote_fallback_owner(
         self, conversation_id: uuid.UUID, *, exclude_user_id: uuid.UUID | None
     ) -> ConversationMember | None:
+        """Promouvoit le plus ancien membre actif non owner quand aucun autre owner n'est present."""
         stmt = (
             select(ConversationMember)
             .where(
@@ -1280,6 +1328,7 @@ class ConversationService:
         return candidate
 
     async def _has_other_active_owner(self, conversation_id: uuid.UUID, *, exclude_user_id: uuid.UUID | None) -> bool:
+        """Retourne True si un autre owner actif existe (en excluant eventuellement un utilisateur)."""
         stmt = (
             select(func.count(ConversationMember.id))
             .where(
@@ -1295,10 +1344,12 @@ class ConversationService:
         return int(count or 0) > 0
 
     def _require_owner(self, membership: ConversationMember) -> None:
+        """Leve une 403 si le membre n'est pas owner."""
         if membership.role != ConversationMemberRole.OWNER:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Action reservee au proprietaire.")
 
     async def _get_primary_membership(self, user_id: uuid.UUID) -> OrganizationMembership:
+        """Recupere la premiere appartenance organisationnelle d'un utilisateur (necessaire pour creer une conversation)."""
         stmt = select(OrganizationMembership).where(OrganizationMembership.user_id == user_id)
         result = await self.session.execute(stmt)
         membership = result.scalar_one_or_none()
@@ -1307,6 +1358,7 @@ class ConversationService:
         return membership
 
     async def _get_default_workspace(self, membership: OrganizationMembership) -> Workspace | None:
+        """Renvoie le premier workspace lie a l'appartenance, ou None si absent."""
         stmt = (
             select(Workspace)
             .join(WorkspaceMembership, WorkspaceMembership.workspace_id == Workspace.id)
@@ -1317,6 +1369,7 @@ class ConversationService:
         return result.scalars().first()
 
     async def _log(self, user: UserAccount, action: str, *, resource_id: str | None = None, metadata: dict | None = None) -> None:
+        """Facade vers AuditService pour tracer les evenements conversation/messagerie."""
         if self.audit:
             await self.audit.record(
                 action,

@@ -1,4 +1,6 @@
-"""WebSocket endpoint for user-level realtime notifications."""
+"""
+Endpoint WebSocket pour les notifications temps reel d'un utilisateur.
+"""
 
 from __future__ import annotations
 
@@ -20,6 +22,7 @@ async def notifications_ws(
     websocket: WebSocket,
     broker: RealtimeBroker = Depends(get_realtime_broker),
 ) -> None:
+    """Souscription WS aux evenements user:*:events via Redis Pub/Sub."""
     token = websocket.query_params.get("token")
     if not token:
         await websocket.close(code=4401)
@@ -48,6 +51,7 @@ async def notifications_ws(
     await websocket.send_text(json.dumps({"event": "ready"}))
 
     async def sender() -> None:
+        """Ecoute le pubsub Redis et retransmet au client WS."""
         try:
             async for message in pubsub.listen():
                 if message.get("type") != "message":

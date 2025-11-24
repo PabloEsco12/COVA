@@ -1,4 +1,6 @@
-"""Organisation management routes."""
+"""
+Routes API pour les organisations et leurs membres.
+"""
 
 from __future__ import annotations
 
@@ -22,6 +24,7 @@ router = APIRouter(prefix="/organizations", tags=["organizations"])
 
 
 def _membership_info(service: OrganizationService, membership: OrganizationMembership) -> OrganizationMembershipInfo:
+    """Construit la vue membership (role/admin flags)."""
     return OrganizationMembershipInfo(
         id=membership.id,
         role=membership.role,
@@ -38,6 +41,7 @@ def _organization_summary(
     member_count: int,
     admin_count: int,
 ) -> OrganizationSummary:
+    """Assemble un resume d'organisation avec compteurs et membership courant."""
     organization = membership.organization
     return OrganizationSummary(
         id=organization.id,
@@ -51,6 +55,7 @@ def _organization_summary(
 
 
 def _member_out(service: OrganizationService, membership: OrganizationMembership) -> OrganizationMemberOut:
+    """Expose un membre d'organisation avec profil et droits."""
     user = membership.user
     profile = user.profile if user else None
     return OrganizationMemberOut(
@@ -69,6 +74,7 @@ async def get_current_organization(
     current_user: UserAccount = Depends(get_current_user),
     service: OrganizationService = Depends(get_organization_service),
 ) -> OrganizationSummary:
+    """Retourne l'organisation courante de l'utilisateur avec compteurs membres/admins."""
     membership = await service.get_membership_for_user(current_user.id)
     member_count, admin_count = await service.get_member_counts(membership.organization_id)
     return _organization_summary(
@@ -84,6 +90,7 @@ async def list_current_organization_members(
     current_user: UserAccount = Depends(get_current_user),
     service: OrganizationService = Depends(get_organization_service),
 ) -> OrganizationMemberList:
+    """Liste les membres de l'organisation courante."""
     membership = await service.get_membership_for_user(current_user.id)
     members = await service.list_members(membership.organization_id)
     member_count, admin_count = await service.get_member_counts(membership.organization_id)
@@ -105,9 +112,10 @@ async def update_member_role(
     current_user: UserAccount = Depends(get_current_user),
     service: OrganizationService = Depends(get_organization_service),
     ) -> OrganizationMemberOut:
-        updated = await service.update_role(actor=current_user, membership_id=membership_id, role=payload.role)
-        await service.session.commit()
-        return _member_out(service, updated)
+    """Met a jour le role d'un membre de l'organisation courante."""
+    updated = await service.update_role(actor=current_user, membership_id=membership_id, role=payload.role)
+    await service.session.commit()
+    return _member_out(service, updated)
 
 
 @router.get("/current/members/suggest", response_model=list[OrganizationMemberOut])
@@ -117,6 +125,7 @@ async def suggest_members(
     current_user: UserAccount = Depends(get_current_user),
     service: OrganizationService = Depends(get_organization_service),
 ) -> list[OrganizationMemberOut]:
+    """Suggestion de membres par email/nom d'affichage pour l'organisation courante."""
     membership = await service.get_membership_for_user(current_user.id)
     members = await service.search_members(membership.organization_id, query=q, limit=limit)
     return [_member_out(service, member) for member in members]

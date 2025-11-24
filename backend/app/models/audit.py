@@ -1,4 +1,10 @@
-"""Audit trail models."""
+"""
+Modèles SQLAlchemy pour la journalisation d'audit.
+
+Infos utiles:
+- Les entrées enregistrent contexte ressource, IP/User-Agent et metadonnees JSONB.
+- Horodatage en UTC au moment de l'insertion.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +19,7 @@ from .base import Base
 
 
 class AuditLog(Base):
-    """Structured audit log entry."""
+    """Entree structuree du journal d'audit."""
 
     __tablename__ = "audit_logs"
 

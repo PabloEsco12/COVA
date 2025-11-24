@@ -1,4 +1,11 @@
-"""Contact management service."""
+"""
+Service de gestion des contacts (creation, statut, alias) dans une organisation.
+
+Infos utiles:
+- Verifie que les deux utilisateurs appartiennent a une meme organisation avant de lier.
+- Publie des notifications email et temps reel si les services correspondants sont injectes.
+- Ne fait pas de commit: a integrer dans une transaction FastAPI/SQLAlchemy existante.
+"""
 
 from __future__ import annotations
 
@@ -16,7 +23,7 @@ from ..core.redis import RealtimeBroker
 
 
 class ContactService:
-    """Business logic for contacts."""
+    """Logique metier des contacts et orchestration des notifications associees."""
 
     def __init__(
         self,
@@ -26,12 +33,14 @@ class ContactService:
         notification_service: NotificationService | None = None,
         realtime_broker: RealtimeBroker | None = None,
     ) -> None:
+        """Injecte la session et les services optionnels (audit, notifications email, temps reel)."""
         self.session = session
         self.audit = audit_service
         self.notifications = notification_service
         self.realtime = realtime_broker
 
     async def list_contacts(self, owner: UserAccount, status: ContactStatus | None = None) -> list[ContactLink]:
+        """Retourne la liste des contacts visibles d'un proprietaire, filtreable par statut."""
         stmt = (
             select(ContactLink)
             .options(selectinload(ContactLink.contact).selectinload(UserAccount.profile))
@@ -43,6 +52,7 @@ class ContactService:
         return result.scalars().all()
 
     async def create_contact(self, owner: UserAccount, target_email: str, alias: str | None = None) -> ContactLink:
+        """Cree une demande de contact bilaterale apres verification d'organisation commune."""
         stmt_user = select(UserAccount).where(UserAccount.email == target_email.lower())
         result_user = await self.session.execute(stmt_user)
         target = result_user.scalar_one_or_none()
@@ -118,6 +128,7 @@ class ContactService:
         return await self._get_contact(owner.id, owner_link.id)
 
     async def update_status(self, owner: UserAccount, contact_id: uuid.UUID, status_value: ContactStatus) -> ContactLink:
+        """Met a jour le statut d'un contact et synchronise le lien reciproque + notifications."""
         contact = await self._get_contact(owner.id, contact_id)
         reciprocal = await self._get_contact_between(contact.contact_id, owner.id)
 
@@ -199,6 +210,7 @@ class ContactService:
         return contact
 
     async def update_alias(self, owner: UserAccount, contact_id: uuid.UUID, alias: str | None) -> ContactLink:
+        """Met a jour l'alias d'un contact pour le proprietaire."""
         contact = await self._get_contact(owner.id, contact_id)
         normalized = self._normalize_alias(alias)
         contact.alias = normalized
@@ -207,6 +219,7 @@ class ContactService:
         return contact
 
     async def delete_contact(self, owner: UserAccount, contact_id: uuid.UUID) -> None:
+        """Supprime le lien de contact pour les deux utilisateurs."""
         contact = await self._get_contact(owner.id, contact_id)
         reciprocal_stmt = delete(ContactLink).where(
             or_(
@@ -220,6 +233,7 @@ class ContactService:
     async def _get_contact(
         self, owner_id: uuid.UUID, contact_id: uuid.UUID, raise_not_found: bool = True
     ) -> ContactLink | None:
+        """Recupere un lien de contact pour un owner, avec option de lever une 404 sinon."""
         stmt = (
             select(ContactLink)
             .options(selectinload(ContactLink.contact).selectinload(UserAccount.profile))
@@ -234,6 +248,7 @@ class ContactService:
     async def _get_contact_between(
         self, owner_id: uuid.UUID, target_user_id: uuid.UUID
     ) -> ContactLink | None:
+        """Recupere un lien de contact entre deux utilisateurs si il existe."""
         stmt = (
             select(ContactLink)
             .options(selectinload(ContactLink.contact).selectinload(UserAccount.profile))
@@ -244,12 +259,14 @@ class ContactService:
 
     @staticmethod
     def _normalize_alias(value: str | None) -> str | None:
+        """Nettoie un alias (trim) et retourne None si vide."""
         if value is None:
             return None
         cleaned = value.strip()
         return cleaned or None
 
     async def _log(self, owner: UserAccount, action: str, *, resource_id: str | None = None, metadata: dict | None = None) -> None:
+        """Enveloppe l'appel AuditService pour tracer les actions contact."""
         if self.audit:
             await self.audit.record(
                 action,
@@ -260,6 +277,7 @@ class ContactService:
             )
 
     async def _notify_user_event(self, user_id: uuid.UUID, payload: dict) -> None:
+        """Publie une notification temps reel sur Redis si le broker est injecte."""
         if not self.realtime:
             return
         await self.realtime.publish_user_event(

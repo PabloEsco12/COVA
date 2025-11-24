@@ -1,4 +1,11 @@
-"""Authentication and token related models."""
+"""
+Modèles SQLAlchemy relatifs à l'authentification et aux jetons.
+
+Infos utiles:
+- Tokens de confirmation, reset et refresh stockés avec horodatage UTC.
+- Suppressions en cascade sur l'utilisateur pour éviter les orphelins.
+- UniqueConstraint appliqué sur les valeurs de token pour prévenir les doublons.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +20,7 @@ from .base import Base
 
 
 class EmailConfirmationToken(Base):
-    """Token used to confirm an account e-mail address."""
+    """Jeton de confirmation d'adresse e-mail."""
 
     __tablename__ = "email_confirmation_tokens"
     __table_args__ = (
@@ -35,7 +42,7 @@ class EmailConfirmationToken(Base):
 
 
 class PasswordResetToken(Base):
-    """Token for password reset flow."""
+    """Jeton pour le flux de réinitialisation de mot de passe."""
 
     __tablename__ = "password_reset_tokens"
     __table_args__ = (UniqueConstraint("token", name="uix_password_reset_token"),)
@@ -55,7 +62,7 @@ class PasswordResetToken(Base):
 
 
 class TotpSecret(Base):
-    """Time based OTP secret for MFA."""
+    """Secret TOTP pour l'authentification multi-facteur."""
 
     __tablename__ = "totp_secrets"
 
@@ -72,7 +79,7 @@ class TotpSecret(Base):
 
 
 class RefreshToken(Base):
-    """Persisted refresh/session token."""
+    """Jeton de refresh persistant associé à une session."""
 
     __tablename__ = "refresh_tokens"
 

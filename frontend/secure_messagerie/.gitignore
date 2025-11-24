@@ -1,3 +1,4 @@
+# Ignorer les artefacts locaux (logs, build, outils)
 # Logs
 logs
 *.log

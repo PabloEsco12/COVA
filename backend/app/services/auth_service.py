@@ -1,4 +1,11 @@
-"""Authentication service for FastAPI v2."""
+"""
+Service d'authentification et de gestion des sessions pour FastAPI v2.
+
+Infos utiles:
+- Gere l'inscription, la connexion, le rafraichissement et les controles TOTP.
+- S'appuie sur SQLAlchemy async, AuditService et NotificationService pour les effets externes.
+- Toutes les dates sont manipulees en UTC et les HTTPException remontent jusqu'aux routes FastAPI.
+"""
 
 from __future__ import annotations
 
@@ -45,6 +52,7 @@ DEFAULT_WORKSPACE_SLUG = "general"
 
 
 def describe_ip(raw_ip: str) -> tuple[str, str | None]:
+    """Decrit une adresse IP et retourne une etiquette lisible et une localisation approximative."""
     try:
         parsed = ipaddress.ip_address(raw_ip)
     except ValueError:
@@ -67,6 +75,7 @@ def build_login_alert_payload(
     user_agent: str | None,
     timezone_pref: str | None = None,
 ) -> dict:
+    """Construit le payload d'alerte de connexion pour le canal email."""
     frontend_origin = (settings.FRONTEND_ORIGIN or "").rstrip("/") or "http://localhost:5176"
     security_url = f"{frontend_origin}/dashboard/settings"
     devices_url = f"{frontend_origin}/dashboard/devices"
@@ -99,6 +108,7 @@ def quiet_hours_active(
     now_utc: datetime,
     profile: UserProfile | None,
 ) -> bool:
+    """Determine si une plage de silence est active en tenant compte du fuseau souhaite."""
     start = (quiet_hours.get("start") or "").strip()
     end = (quiet_hours.get("end") or "").strip()
     if not start or not end or start == end:
@@ -120,10 +130,12 @@ def quiet_hours_active(
     local_time = now_utc.astimezone(zone).time()
     if start_time < end_time:
         return start_time <= local_time < end_time
+    # Cas ou la plage deborde apres minuit (ex: 22h-06h).
     return local_time >= start_time or local_time < end_time
 
 
 def should_send_login_alert(user: UserAccount, now_utc: datetime | None = None) -> bool:
+    """Evalue si une alerte de connexion doit partir selon les preferences et horaires de silence."""
     profile = user.profile
     profile_data = dict(profile.profile_data or {}) if profile and profile.profile_data else {}
     notify_login = bool(profile_data.get("notify_login"))
@@ -142,12 +154,14 @@ def should_send_login_alert(user: UserAccount, now_utc: datetime | None = None) 
 
 @dataclass
 class RegisterResult:
+    """Resultat de l'inscription: utilisateur cree et jeton de confirmation eventuel."""
     user: UserAccount
     confirmation_token: str | None
 
 
 @dataclass
 class AuthResult:
+    """Resultat d'authentification incluant tokens d'acces et de rafraichissement."""
     user: UserAccount
     access_token: str
     refresh_token: str
@@ -155,11 +169,11 @@ class AuthResult:
 
 
 class TotpRequiredError(Exception):
-    """Raised when a TOTP challenge must be completed before issuing tokens."""
+    """Declenche un challenge TOTP obligatoire avant d'emettre de nouveaux tokens."""
 
 
 class AuthService:
-    """Handles registration, authentication, and session lifecycle."""
+    """Gere l'inscription, l'authentification, les tokens et le cycle de vie des sessions."""
 
     def __init__(
         self,
@@ -168,15 +182,17 @@ class AuthService:
         audit_service: AuditService | None = None,
         notification_service: NotificationService | None = None,
     ) -> None:
+        """Initialise le service avec la session SQLAlchemy et les services annexes."""
         self.session = session
         self.audit = audit_service
         self.notifications = notification_service
 
     async def register_user(self, email: str, password: str, display_name: str | None = None) -> RegisterResult:
+        """Cree un nouvel utilisateur, son organisation par defaut et envoie l'email de confirmation."""
         stmt = select(UserAccount).where(UserAccount.email == email.lower())
         result = await self.session.execute(stmt)
         if result.scalar_one_or_none():
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="E-mail déjà utilisé")
 
         normalized_email = email.lower()
         hashed = get_password_hash(password)
@@ -189,6 +205,7 @@ class AuthService:
         )
         user.profile = UserProfile(display_name=display_name)
 
+        # Cree l'organisation et l'espace de travail de base si absents.
         organization, workspace = await self._ensure_default_organization()
         membership_role = OrganizationRole.OWNER if self._is_default_admin_email(normalized_email) else OrganizationRole.MEMBER
         membership = OrganizationMembership(organization=organization, user=user, role=membership_role)
@@ -222,6 +239,7 @@ class AuthService:
         return RegisterResult(user=user, confirmation_token=confirmation_token_value)
 
     async def authenticate_user(self, email: str, password: str, totp_code: str | None = None) -> UserAccount:
+        """Valide les identifiants et impose un challenge TOTP si necessaire."""
         stmt = (
             select(UserAccount)
             .options(
@@ -254,6 +272,7 @@ class AuthService:
         user_agent: str | None = None,
         ip_address: str | None = None,
     ) -> AuthResult:
+        """Cree une session, genere les tokens JWT et alerte l'utilisateur si necessaire."""
         now = datetime.now(timezone.utc)
         access_token = create_access_token({"sub": str(user.id)})
         refresh_token_value = token_urlsafe(24)
@@ -303,6 +322,7 @@ class AuthService:
         return AuthResult(user=user, access_token=access_token, refresh_token=refresh_token_value, refresh_expires_at=refresh_expires)
 
     async def refresh_session(self, refresh_token_value: str) -> AuthResult:
+        """Invalide le refresh token fourni et recree un couple de tokens et une session."""
         stmt = (
             select(RefreshToken)
             .options(selectinload(RefreshToken.user).selectinload(UserAccount.profile))
@@ -334,6 +354,7 @@ class AuthService:
         return auth_result
 
     async def revoke_refresh_token(self, refresh_token_value: str) -> None:
+        """Revoque un refresh token et marque la session associee comme invalide."""
         stmt = select(RefreshToken).where(RefreshToken.token_jti == refresh_token_value)
         result = await self.session.execute(stmt)
         token = result.scalar_one_or_none()
@@ -351,6 +372,7 @@ class AuthService:
         await self._log("auth.logout", user_id=str(token.user_id), metadata={"session_id": token.session_id})
 
     async def revoke_all_tokens(self, user: UserAccount) -> int:
+        """Revoque tous les tokens actifs d'un utilisateur et retourne le nombre de tokens touches."""
         now = datetime.now(timezone.utc)
         result = await self.session.execute(
             select(RefreshToken).where(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None))
@@ -368,6 +390,7 @@ class AuthService:
         return len(tokens)
 
     async def resend_confirmation_email(self, email: str) -> str:
+        """Genere un nouveau jeton de confirmation pour un email non confirme et envoie la notification."""
         stmt = (
             select(UserAccount)
             .options(selectinload(UserAccount.profile))
@@ -412,6 +435,7 @@ class AuthService:
         return token_value
 
     async def request_password_reset(self, email: str) -> None:
+        """Cree un jeton de reinitialisation de mot de passe et envoie l'email associe."""
         stmt = select(UserAccount).where(UserAccount.email == email.lower())
         result = await self.session.execute(stmt)
         user = result.scalar_one_or_none()
@@ -450,6 +474,7 @@ class AuthService:
         await self._log("auth.forgot_password_requested", user_id=str(user.id))
 
     async def reset_password(self, token_value: str, new_password: str) -> None:
+        """Valide un token de reinitialisation puis applique le nouveau mot de passe."""
         stmt = (
             select(PasswordResetToken)
             .options(selectinload(PasswordResetToken.user))
@@ -486,6 +511,7 @@ class AuthService:
         await self._log("auth.reset_password", user_id=str(user.id))
 
     async def _enforce_totp_if_required(self, user: UserAccount, totp_code: str | None) -> None:
+        """Valide le TOTP si l'utilisateur l'a active, avec verrouillage temporaire en cas d'echecs repetes."""
         state = await self._ensure_security_state(user)
         if not state.totp_enabled:
             return
@@ -506,6 +532,7 @@ class AuthService:
             state.failed_totp_attempts += 1
             state.last_totp_failure_at = now
             if state.failed_totp_attempts >= 5:
+                # Verrouille temporairement l'authentification apres plusieurs echecs consecutifs.
                 state.totp_locked_until = now + timedelta(minutes=15)
                 state.failed_totp_attempts = 0
             await self.session.flush()
@@ -526,6 +553,7 @@ class AuthService:
         ip_address: str | None,
         user_agent: str | None,
     ) -> None:
+        """Planifie l'envoi d'une alerte de connexion si les preferences l'autorisent."""
         if not self.notifications:
             return
         if not self._should_send_login_alert(user):
@@ -546,6 +574,7 @@ class AuthService:
         )
 
     def _should_send_login_alert(self, user: UserAccount) -> bool:
+        """Wrapper injectable pour faciliter les tests de la logique d'alerte de connexion."""
         return should_send_login_alert(user)
 
     def _build_login_alert_payload(
@@ -557,6 +586,7 @@ class AuthService:
         ip_address: str | None,
         user_agent: str | None,
     ) -> dict:
+        """Assemble les donnees de l'alerte de connexion en injectant les preferences utilisateur."""
         profile = user.profile
         timezone_pref = profile.timezone if profile else None
 
@@ -570,6 +600,7 @@ class AuthService:
         )
 
     async def _ensure_security_state(self, user: UserAccount) -> UserSecurityState:
+        """Garanti l'existence de l'etat de securite utilisateur avant utilisation."""
         if user.security_state is None:
             user.security_state = UserSecurityState(user_id=user.id)
             self.session.add(user.security_state)
@@ -577,10 +608,12 @@ class AuthService:
         return user.security_state
 
     def _is_default_admin_email(self, email: str) -> bool:
+        """Indique si l'adresse correspond a l'administrateur par defaut configure."""
         configured = (settings.DEFAULT_ADMIN_EMAIL or "").strip().lower()
         return bool(configured) and email.lower() == configured
 
     async def _ensure_default_organization(self) -> tuple[Organization, Workspace]:
+        """Cree l'organisation et l'espace par defaut si ils n'existent pas, ou met a jour le nom si besoin."""
         name = (settings.DEFAULT_ORG_NAME or "Default Organization").strip()
         slug = self._slugify(settings.DEFAULT_ORG_SLUG or name or "default-org")
 
@@ -612,14 +645,17 @@ class AuthService:
         return organization, workspace
 
     def _slugify(self, value: str) -> str:
+        """Genere un slug URL-safe, ou un hash court si le resultat est vide."""
         slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
         return slug or uuid.uuid4().hex[:12]
 
     async def _log(self, action: str, **kwargs) -> None:
+        """Delegue la journalisation a l'AuditService si disponible."""
         if self.audit:
             await self.audit.record(action, **kwargs)
 
     async def confirm_email(self, token_value: str) -> UserAccount:
+        """Confirme l'email a partir d'un token valide et marque le compte comme confirme."""
         stmt = (
             select(EmailConfirmationToken)
             .options(selectinload(EmailConfirmationToken.user).selectinload(UserAccount.profile))

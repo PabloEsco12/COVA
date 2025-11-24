@@ -1,4 +1,11 @@
-"""Attachment upload and token management."""
+"""
+Service de gestion des pieces jointes: upload, scan antivirus et jetons d'acces temporaires.
+
+Infos utiles:
+- Stockage externalise via ObjectStorage, avec generation de liens presignes.
+- Scan antivirus optionnel (injection de AntivirusScanner).
+- Limite de taille via settings.ATTACHMENT_MAX_BYTES et jetons JWT signes pour securiser les metadonnees.
+"""
 
 from __future__ import annotations
 
@@ -25,7 +32,7 @@ CHUNK_SIZE = 1024 * 1024
 
 @dataclass
 class AttachmentDescriptor:
-    """Token payload used when persisting attachments."""
+    """Payload issu du jeton d'upload, necessaire pour persister la piece jointe."""
 
     storage_key: str
     storage_url: str
@@ -37,9 +44,10 @@ class AttachmentDescriptor:
 
 
 class AttachmentService:
-    """Handles upload streaming, antivirus checks, and token issuance."""
+    """Gere le flux d'upload, les controles antivirus et l'emission de jetons d'upload."""
 
     def __init__(self, storage: ObjectStorage, scanner: AntivirusScanner | None = None) -> None:
+        """Initialise le service avec le stockage objet et, si present, un scanner antivirus."""
         self.storage = storage
         self.scanner = scanner
 
@@ -51,6 +59,7 @@ class AttachmentService:
         file: UploadFile,
         encryption_metadata: dict | None = None,
     ) -> dict:
+        """Stream le fichier vers le stockage, applique limites/scan, et renvoie le jeton d'upload."""
         if not file.filename:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nom de fichier manquant.")
 
@@ -123,6 +132,7 @@ class AttachmentService:
         conversation_id: uuid.UUID,
         user_id: uuid.UUID,
     ) -> AttachmentDescriptor:
+        """Decode et valide un jeton d'upload pour recuperer les metadonnees du fichier."""
         try:
             payload = jwt.decode(
                 upload_token,
@@ -162,6 +172,7 @@ class AttachmentService:
         sha256_hex: str,
         encryption_metadata: dict | None,
     ) -> str:
+        """Cree un JWT court terme encapsulant les metadonnees de l'upload."""
         expires = datetime.now(timezone.utc) + timedelta(minutes=settings.ATTACHMENT_UPLOAD_TOKEN_TTL_MINUTES)
         payload = {
             "kind": "attachment_upload",

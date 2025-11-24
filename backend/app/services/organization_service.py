@@ -1,4 +1,11 @@
-"""Service utilities to manage organisations and their memberships."""
+"""
+Service utilitaire pour gerer les organisations et leurs memberships.
+
+Infos utiles:
+- Cree et normalise l'organisation/workspace par defaut si absent.
+- Garantit que l'admin par defaut reste OWNER/ADMIN et possede le workspace general.
+- Utilise AuditService quand injecte pour tracer les changements de role.
+"""
 
 from __future__ import annotations
 
@@ -24,22 +31,26 @@ from .audit_service import AuditService
 
 
 class OrganizationService:
-    """Encapsulates common organisation membership operations."""
+    """Regroupe les operations courantes sur les organisations et les memberships."""
 
     def __init__(self, session: AsyncSession, audit_service: AuditService | None = None) -> None:
+        """Injecte la session SQLAlchemy et eventuellement le service d'audit."""
         self.session = session
         self.audit = audit_service
 
     def _is_primary_admin(self, membership: OrganizationMembership) -> bool:
+        """Detecte si le membership correspond a l'admin par defaut configure dans les settings."""
         admin_email = (settings.DEFAULT_ADMIN_EMAIL or "").strip().lower()
         user_email = (membership.user.email if membership.user else "").lower()
         return bool(admin_email) and user_email == admin_email
 
     def _slugify(self, value: str) -> str:
+        """Genere un slug en minuscules (alphanumerique avec tirets)."""
         slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
         return slug or uuid.uuid4().hex[:12]
 
     async def _ensure_default_org(self) -> Organization:
+        """Cree ou met a jour l'organisation par defaut selon la configuration."""
         desired_name = (settings.DEFAULT_ORG_NAME or "Default Organization").strip()
         desired_slug = self._slugify(settings.DEFAULT_ORG_SLUG or desired_name or "default-org")
 
@@ -56,6 +67,7 @@ class OrganizationService:
         return organization
 
     async def _ensure_default_workspace(self, organization: Organization) -> Workspace:
+        """Garanti l'existence du workspace 'general' pour l'organisation donnee."""
         stmt = select(Workspace).where(
             Workspace.organization_id == organization.id,
             Workspace.slug == "general",
@@ -73,6 +85,7 @@ class OrganizationService:
         return workspace
 
     async def _normalize_membership(self, membership: OrganizationMembership) -> OrganizationMembership:
+        """Reassocie le membership a l'organisation/workspace par defaut et ajuste le role si besoin."""
         changed = False
         default_org = await self._ensure_default_org()
         if membership.organization_id != default_org.id:
@@ -117,6 +130,7 @@ class OrganizationService:
         return membership
 
     async def get_membership_for_user(self, user_id: uuid.UUID) -> OrganizationMembership:
+        """Retourne (ou cree) le membership d'un utilisateur en s'assurant des defaults."""
         stmt = (
             select(OrganizationMembership)
             .options(
@@ -148,6 +162,7 @@ class OrganizationService:
         return await self._normalize_membership(membership)
 
     async def get_membership_by_id(self, membership_id: uuid.UUID) -> OrganizationMembership:
+        """Charge un membership par ID avec organisation et profil utilisateur."""
         stmt = (
             select(OrganizationMembership)
             .options(
@@ -163,6 +178,7 @@ class OrganizationService:
         return await self._normalize_membership(membership)
 
     async def list_members(self, organization_id: uuid.UUID) -> list[OrganizationMembership]:
+        """Liste les membres d'une organisation (ordre role puis date d'arrivee)."""
         stmt = (
             select(OrganizationMembership)
             .options(joinedload(OrganizationMembership.user).joinedload(UserAccount.profile))
@@ -178,6 +194,7 @@ class OrganizationService:
         query: str | None = None,
         limit: int = 10,
     ) -> list[OrganizationMembership]:
+        """Recherche des membres par email/nom d'affichage, limitee en taille."""
         size = max(1, min(limit, 50))
         stmt = (
             select(OrganizationMembership)
@@ -200,6 +217,7 @@ class OrganizationService:
         return result.scalars().all()
 
     async def get_member_counts(self, organization_id: uuid.UUID) -> tuple[int, int]:
+        """Retourne le total des membres et le nombre d'admins/owners."""
         stmt = (
             select(
                 func.count(OrganizationMembership.id),
@@ -225,6 +243,7 @@ class OrganizationService:
         membership_id: uuid.UUID,
         role: OrganizationRole,
     ) -> OrganizationMembership:
+        """Met a jour le role d'un membre en respectant les contraintes de l'admin principal."""
         actor_membership = await self.get_membership_for_user(actor.id)
         if not self.can_manage_admins(actor_membership):
             raise HTTPException(
@@ -273,8 +292,10 @@ class OrganizationService:
 
     @staticmethod
     def is_admin_role(role: OrganizationRole) -> bool:
+        """Indique si le role est de type administrateur ou proprietaire."""
         return role in {OrganizationRole.OWNER, OrganizationRole.ADMIN}
 
     @staticmethod
     def can_manage_admins(membership: OrganizationMembership) -> bool:
+        """Verifie si un membership peut gerer les roles admin/owner."""
         return membership.role in {OrganizationRole.OWNER, OrganizationRole.ADMIN}

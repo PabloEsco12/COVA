@@ -1,4 +1,4 @@
-# frontend/secure_messagerie/Dockerfile (LOCAL)
+# Dockerfile de dev frontend (Vite en mode --host)
 FROM node:18-alpine
 
 WORKDIR /app

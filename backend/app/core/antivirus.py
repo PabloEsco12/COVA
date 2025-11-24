@@ -1,4 +1,11 @@
-"""Lightweight antivirus client (ClamAV) integration."""
+"""
+Integration antivirus legere (ClamAV).
+
+Infos utiles:
+- Active uniquement si host et dependance clamd sont disponibles.
+- Cible la protection des uploads en rejetant les fichiers identifies comme malveillants.
+- En cas d'indisponibilite reseau, renvoie une erreur 502 pour signaler le defaut de protection.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +22,7 @@ except ImportError:  # pragma: no cover - optional dependency
 
 
 class AntivirusScanner:
-    """Wrapper around ClamAV. Disabled if configuration missing."""
+    """Wrapper autour de ClamAV. Desactive si la configuration est absente."""
 
     def __init__(self, host: str | None, port: int) -> None:
         self.host = host
@@ -23,6 +30,7 @@ class AntivirusScanner:
         self.enabled = bool(host and clamd)
         self._client = None
 
+    # --- Connexion et client ---
     def _ensure_client(self):
         if not self.enabled:
             return None
@@ -30,6 +38,7 @@ class AntivirusScanner:
             self._client = clamd.ClamdNetworkSocket(host=self.host, port=self.port)  # type: ignore[attr-defined]
         return self._client
 
+    # --- Scan des fichiers ---
     def scan_path(self, path: str) -> None:
         client = self._ensure_client()
         if not client:

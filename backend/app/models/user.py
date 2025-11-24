@@ -1,4 +1,11 @@
-"""User domain models for the v2 schema."""
+"""
+Modèles SQLAlchemy pour comptes utilisateurs, organisations et workspaces.
+
+Infos utiles:
+- UserAccount centralise authentification/role et relations (profil, sécurité, sessions).
+- Organisations et workspaces possèdent des memberships avec contraintes d'unicité.
+- Cascade delete configurée pour éviter les enregistrements orphelins sur de nombreuses relations.
+"""
 
 from __future__ import annotations
 

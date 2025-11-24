@@ -1,4 +1,11 @@
-"""Audit logging service."""
+"""
+Service de journalisation d'audit.
+
+Infos utiles:
+- Stocke les evenements dans la table AuditLog sans commit automatique.
+- Les metadata sont encodees en JSON via jsonable_encoder.
+- Les horodatages sont en UTC.
+"""
 
 from __future__ import annotations
 
@@ -14,7 +21,10 @@ from app.models import AuditLog
 
 
 class AuditService:
+    """Enregistre et consulte les evenements d'audit."""
+
     def __init__(self, session: AsyncSession) -> None:
+        """Injecte une session SQLAlchemy async pour persister les logs."""
         self.session = session
 
     async def record(
@@ -29,6 +39,7 @@ class AuditService:
         user_agent: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
+        """Enregistre un evenement d'audit avec contexte optionnel (ressource, IP, user agent)."""
         details = jsonable_encoder(metadata) if metadata is not None else None
         log = AuditLog(
             organization_id=organization_id,
@@ -44,6 +55,7 @@ class AuditService:
         self.session.add(log)
 
     async def recent_for_user(self, user_id: uuid.UUID, limit: int = 10) -> list[AuditLog]:
+        """Retourne les derniers evenements d'audit d'un utilisateur (ordre antichronologique)."""
         stmt = (
             select(AuditLog)
             .where(AuditLog.user_id == user_id)

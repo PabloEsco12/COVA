@@ -1,4 +1,6 @@
-"""Routes to manage TOTP-based multi-factor authentication."""
+"""
+Routes API pour la MFA basee sur TOTP.
+"""
 
 from __future__ import annotations
 
@@ -22,6 +24,7 @@ async def activate_totp(
     current_user: UserAccount = Depends(get_current_user),
     security: SecurityService = Depends(get_security_service),
 ) -> TotpActivateResponse:
+    """Demarre l'activation TOTP et retourne secret + QR code base64."""
     enrollment = await security.start_totp_enrollment(current_user)
     await security.session.commit()
     return TotpActivateResponse(
@@ -37,6 +40,7 @@ async def confirm_totp(
     current_user: UserAccount = Depends(get_current_user),
     security: SecurityService = Depends(get_security_service),
 ) -> TotpConfirmResponse:
+    """Valide le code TOTP fourni et genere les codes de recuperation."""
     recovery_codes = await security.confirm_totp(current_user, payload.code)
     await security.session.commit()
     return TotpConfirmResponse(
@@ -50,6 +54,7 @@ async def deactivate_totp(
     current_user: UserAccount = Depends(get_current_user),
     security: SecurityService = Depends(get_security_service),
 ) -> TotpDeactivateResponse:
+    """Desactive la double authentification TOTP pour l'utilisateur."""
     await security.deactivate_totp(current_user)
     await security.session.commit()
     return TotpDeactivateResponse(message="Double authentification desactivee.")
