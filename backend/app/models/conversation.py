@@ -1,10 +1,14 @@
 """
-Modèles SQLAlchemy pour conversations, membres, invitations et appels.
-
-Infos utiles:
-- Les conversations portent metadonnees (archivage, encryption, slow mode) et appartiennent à une organisation/workspace.
-- Gestion des clés d'encryption par génération, enveloppées par membre.
-- Cascade delete active sur messages, membres et sessions d'appel pour éviter les orphelins.
+############################################################
+# Modèles : Conversation & Appels
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Conversations avec metadonnees (archivage, encryption, slow mode) liees org/workspace.
+# - Clés d'encryption par génération + enveloppes par membre.
+# - Cascade delete sur messages/membres/appels pour éviter les orphelins.
+############################################################
 """
 
 from __future__ import annotations

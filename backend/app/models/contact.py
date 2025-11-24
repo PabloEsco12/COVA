@@ -1,9 +1,13 @@
 """
-Modèles SQLAlchemy pour les relations de contact.
-
-Infos utiles:
-- ContactLink gère la relation bilatérale interne (owner/contact) avec statut et alias.
-- ContactInvitation permet d'inviter un externe via token unique et expiration.
+############################################################
+# Modèles : Contact
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - ContactLink: relation bilatérale interne (statut, alias, reciproque).
+# - ContactInvitation: invitation externe par token + expiration.
+############################################################
 """
 
 from __future__ import annotations

@@ -1,9 +1,13 @@
 """
-Schemas Pydantic pour les apercus du tableau de bord.
-
-Infos utiles:
-- Regroupe profil, statistiques, securite et conversations recentes.
-- Tous les champs sont prepares pour un affichage direct dans l'UI.
+############################################################
+# Schemas : Overview (dashboard)
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Profil, stats, securite et conversations recentes pour le dashboard.
+# - Champs prepares pour affichage direct dans l'UI.
+############################################################
 """
 
 from __future__ import annotations

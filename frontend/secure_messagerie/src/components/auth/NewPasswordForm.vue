@@ -105,6 +105,7 @@
 </template>
 
 <script setup>
+// Formulaire de creation de nouveau mot de passe a partir d'un token recu par email.
 import { computed, ref } from 'vue'
 import { api } from '@/utils/api'
 import { useRoute } from 'vue-router'
@@ -164,6 +165,7 @@ function evaluateStrength(value) {
 }
 
 async function handleNewPassword() {
+  // Valide le token de reset et enregistre le nouveau mot de passe.
   error.value = ''
   success.value = ''
 
@@ -206,3 +208,5 @@ async function handleNewPassword() {
 </script>
 
 <style scoped src="@/assets/styles/new-password.css"></style>
+
+

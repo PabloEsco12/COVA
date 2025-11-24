@@ -1,10 +1,14 @@
 """
-Modèles SQLAlchemy pour appareils, sessions et abonnements push.
-
-Infos utiles:
-- Les appareils sont identifies par un fingerprint unique par utilisateur.
-- Les sessions conservent les JTI de tokens et métadonnées d'activité.
-- Les abonnements push sont uniques par device/endpoint et stockent le canal.
+############################################################
+# Modèles : Device & Sessions
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Appareils identifies par fingerprint (unique par user).
+# - Sessions stockant JTI tokens et metadonnees d'activité.
+# - Abonnements push uniques par device/endpoint.
+############################################################
 """
 
 from __future__ import annotations

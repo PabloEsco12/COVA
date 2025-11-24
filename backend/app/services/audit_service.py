@@ -1,10 +1,13 @@
 """
-Service de journalisation d'audit.
-
-Infos utiles:
-- Stocke les evenements dans la table AuditLog sans commit automatique.
-- Les metadata sont encodees en JSON via jsonable_encoder.
-- Les horodatages sont en UTC.
+############################################################
+# Service : AuditService (journalisation)
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - Enregistre les evenements dans AuditLog (UTC, metadata JSON).
+# - Pas de commit automatique: a gerer en amont.
+############################################################
 """
 
 from __future__ import annotations

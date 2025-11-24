@@ -1,10 +1,24 @@
 """
-Service d'authentification et de gestion des sessions pour FastAPI v2.
-
-Infos utiles:
-- Gere l'inscription, la connexion, le rafraichissement et les controles TOTP.
-- S'appuie sur SQLAlchemy async, AuditService et NotificationService pour les effets externes.
-- Toutes les dates sont manipulees en UTC et les HTTPException remontent jusqu'aux routes FastAPI.
+############################################################
+# Service : AuthService (authentification & sessions)
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - Gere l'inscription, la connexion, le rafraichissement et les controles TOTP.
+# - Pilote les notifications (emails) et l'audit via services injectes.
+# - Toutes les dates sont manipulees en UTC; lever des HTTPException cote routes.
+#
+# Points de vigilance:
+# - Toujours commit/flush dans les routes après usage pour persister.
+# - Respecter les verrous TOTP (locked_until) et les quiet hours de notifications.
+# - Les tokens sont signes avec les secrets configurees dans settings.
+#
+# Dependances principales:
+# - SQLAlchemy AsyncSession
+# - AuditService, NotificationService
+# - pyotp pour TOTP, security helpers pour hash/JWT
+############################################################
 """
 
 from __future__ import annotations
@@ -50,6 +64,9 @@ DEFAULT_TIMEZONE = "UTC"
 DEFAULT_WORKSPACE_NAME = "General"
 DEFAULT_WORKSPACE_SLUG = "general"
 
+# ===============================
+# Helpers techniques (IP, alertes)
+# ===============================
 
 def describe_ip(raw_ip: str) -> tuple[str, str | None]:
     """Decrit une adresse IP et retourne une etiquette lisible et une localisation approximative."""
@@ -152,6 +169,10 @@ def should_send_login_alert(user: UserAccount, now_utc: datetime | None = None) 
     return True
 
 
+# ===============================
+# DTO / resultats de service
+# ===============================
+
 @dataclass
 class RegisterResult:
     """Resultat de l'inscription: utilisateur cree et jeton de confirmation eventuel."""
@@ -172,6 +193,10 @@ class TotpRequiredError(Exception):
     """Declenche un challenge TOTP obligatoire avant d'emettre de nouveaux tokens."""
 
 
+# ===============================
+# Service principal (AuthService)
+# ===============================
+
 class AuthService:
     """Gere l'inscription, l'authentification, les tokens et le cycle de vie des sessions."""
 
@@ -187,6 +212,7 @@ class AuthService:
         self.audit = audit_service
         self.notifications = notification_service
 
+    # --- Flux d'inscription et connexion ---
     async def register_user(self, email: str, password: str, display_name: str | None = None) -> RegisterResult:
         """Cree un nouvel utilisateur, son organisation par defaut et envoie l'email de confirmation."""
         stmt = select(UserAccount).where(UserAccount.email == email.lower())
@@ -265,6 +291,7 @@ class AuthService:
         await self._log("auth.login_attempt", user_id=str(user.id))
         return user
 
+    # --- Cycle de vie des tokens / sessions ---
     async def issue_tokens(
         self,
         user: UserAccount,

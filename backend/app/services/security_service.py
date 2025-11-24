@@ -1,10 +1,14 @@
 """
-Services d'aide a la securite des comptes (MFA/TOTP, alertes de connexion, codes de secours).
-
-Infos utiles:
-- Utilise TOTP (pyotp) et genere des QR codes base64 pour l'enrollement.
-- Stocke l'etat de securite et le profil utilisateur si absent.
-- Les horodatages sont en UTC et un verouillage TOTP est applique apres plusieurs echecs.
+############################################################
+# Service : SecurityService (MFA/TOTP & preferences)
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - Gere l'enrollement/confirmation/desactivation TOTP et les codes de secours.
+# - Maintient l'etat de securite utilisateur (verrouillage, preferences).
+# - Toutes les horodatations sont en UTC.
+############################################################
 """
 
 from __future__ import annotations

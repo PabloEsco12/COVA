@@ -1,8 +1,13 @@
 """
-Base declarative commune pour les modèles SQLAlchemy de la nouvelle génération.
-
-Infos utiles:
-- Centralise l'héritage des modèles pour partager metadata et config globale.
+############################################################
+# Module : models.base (Declarative Base)
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Base declarative commune pour tous les modèles SQLAlchemy.
+# - Partage la metadata et la configuration globale.
+############################################################
 """
 
 from sqlalchemy.orm import DeclarativeBase

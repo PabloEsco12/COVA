@@ -1,10 +1,14 @@
 """
-Modèles SQLAlchemy pour les messages, livraisons et interactions.
-
-Infos utiles:
-- Messages stockent ciphertext/signature et positions de flux avec index full-text.
-- Livraisons suivent l'etat par membre; reactions et pins sont uniques par combinaison definie.
-- Cascade delete sur livraisons, PJ, reactions pour eviter les orphelins.
+############################################################
+# Modèles : Message (contenu, livraisons, interactions)
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Messages chiffrés avec positions de flux et index full-text.
+# - Livraisons par membre, reactions et pins uniques par combinaison.
+# - Cascade delete sur livraisons/PJ/reactions pour éviter les orphelins.
+############################################################
 """
 
 from __future__ import annotations

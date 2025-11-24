@@ -1,10 +1,14 @@
 """
-Modèles SQLAlchemy pour comptes utilisateurs, organisations et workspaces.
-
-Infos utiles:
-- UserAccount centralise authentification/role et relations (profil, sécurité, sessions).
-- Organisations et workspaces possèdent des memberships avec contraintes d'unicité.
-- Cascade delete configurée pour éviter les enregistrements orphelins sur de nombreuses relations.
+############################################################
+# Modèles : User / Organization / Workspace
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - UserAccount centralise auth/role et relations (profil, securite, sessions).
+# - Organisations et workspaces avec memberships et contraintes d'unicité.
+# - Cascade delete sur de nombreuses relations pour éviter les orphelins.
+############################################################
 """
 
 from __future__ import annotations

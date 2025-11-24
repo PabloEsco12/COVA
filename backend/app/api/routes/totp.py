@@ -1,5 +1,13 @@
 """
-Routes API pour la MFA basee sur TOTP.
+############################################################
+# Routes : MFA/TOTP
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - Active/Confirme/Desactive la MFA TOTP pour l'utilisateur courant.
+# - Commit explicite apres mutation de l'etat de securite.
+############################################################
 """
 
 from __future__ import annotations

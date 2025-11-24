@@ -1,5 +1,18 @@
 """
-Routes liees au profil utilisateur (compte courant, profil, devices, overview, securite).
+############################################################
+# Routes : Me (profil, devices, overview, securite)
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - Gère le compte courant: profil, avatar, devices, overview, audit, securite.
+# - Inclut la suppression de compte et le changement de mot de passe.
+#
+# Points de vigilance:
+# - Toujours rafraichir/commit les entites modifiees.
+# - Nettoyer les fichiers avatars supprimes pour eviter les orphelins.
+# - Respecter les verifications de mot de passe sur suppression/modification.
+############################################################
 """
 
 from __future__ import annotations

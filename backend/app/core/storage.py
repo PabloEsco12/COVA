@@ -1,10 +1,18 @@
 """
-Helper de stockage objet (S3/MinIO) pour les pieces jointes.
-
-Infos utiles:
-- Instancie deux clients: un pour l'upload et un pour signer les URLs publiques.
-- Force l'utilisation de signatures v4 et peut forcer le path-style pour MinIO/compat.
-- Les erreurs reseau boto sont converties en RuntimeError pour remonter clairement a l'API.
+############################################################
+# Module : Storage (S3/MinIO)
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Wrapper boto3 pour uploader et generer des URLs presignees.
+# - Garde deux clients (upload + signature) pour eventuelles differences d'endpoint.
+# - Force les signatures v4 et peut utiliser le path-style pour compatibilite MinIO.
+#
+# Points de vigilance:
+# - Convertit les erreurs boto en RuntimeError pour gestion dans l'API.
+# - Necessite STORAGE_BUCKET + credentials pour etre instancie.
+############################################################
 """
 
 from __future__ import annotations

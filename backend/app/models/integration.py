@@ -1,9 +1,13 @@
 """
-Modèles SQLAlchemy pour les intégrations et l'automatisation.
-
-Infos utiles:
-- WebhookEndpoint configure les callbacks par organisation, avec secret et liste d'evenements.
-- BotAgent represente un agent/bot interne avec scopes JSONB et token unique.
+############################################################
+# Modèles : Integrations (Webhook, Bot)
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - WebhookEndpoint: callbacks tiers par organisation (events + secret).
+# - BotAgent: agent interne avec scopes JSONB et token unique.
+############################################################
 """
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+<!-- Illustration hero pour les pages d'authentification (vue gauche du layout). -->
 <template>
   <section class="auth-illustration">
     <div class="auth-illustration__overlay"></div>
@@ -43,6 +44,7 @@
 </template>
 
 <style scoped>
+/* Bloc hero avec dégradé et badges pour rassurer l'utilisateur. */
 .auth-illustration {
   position: relative;
   border-radius: 36px;

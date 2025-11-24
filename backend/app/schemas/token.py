@@ -1,9 +1,13 @@
 """
-Schemas Pydantic pour les tokens d'acces et leurs payloads.
-
-Infos utiles:
-- TokenPair correspond aux reponses d'authentification/refresh.
-- TokenPayload represente les claims decodes d'un JWT.
+############################################################
+# Schemas : Token (JWT)
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - TokenPair pour les réponses d'auth/refresh.
+# - TokenPayload pour les claims décodés du JWT.
+############################################################
 """
 
 from __future__ import annotations

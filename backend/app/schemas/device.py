@@ -1,9 +1,13 @@
 """
-Schemas Pydantic pour la gestion des appareils.
-
-Infos utiles:
-- L'inscription transporte un push_token base64 contenant les metadonnees d'appareil.
-- from_attributes permet d'hydrater DeviceOut depuis SQLAlchemy.
+############################################################
+# Schemas : Device
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Payload d'inscription (push_token base64) et representations d'appareil.
+# - from_attributes pour hydrater depuis SQLAlchemy.
+############################################################
 """
 
 from __future__ import annotations

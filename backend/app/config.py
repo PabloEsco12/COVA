@@ -1,4 +1,15 @@
-﻿"""Application settings for the FastAPI v2 backend."""
+"""
+############################################################
+# Module : config (Settings Pydantic)
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Parametrage central de l'application via BaseSettings.
+# - Charge depuis .env(.local/.dev/.prod/.docker), non sensible a la casse.
+# - Typage fort pour DB, JWT, SMTP, Storage, AV, CORS, etc.
+############################################################
+"""
 
 from __future__ import annotations
 
@@ -94,4 +105,3 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
-

@@ -1,10 +1,14 @@
 """
-Service utilitaire pour gerer les organisations et leurs memberships.
-
-Infos utiles:
-- Cree et normalise l'organisation/workspace par defaut si absent.
-- Garantit que l'admin par defaut reste OWNER/ADMIN et possede le workspace general.
-- Utilise AuditService quand injecte pour tracer les changements de role.
+############################################################
+# Service : OrganizationService (organisations & memberships)
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - Normalise l'organisation/workspace par defaut et gere les roles.
+# - Garantit les droits de l'admin par defaut.
+# - Optionnellement trace via AuditService.
+############################################################
 """
 
 from __future__ import annotations

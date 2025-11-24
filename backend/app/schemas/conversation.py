@@ -1,10 +1,14 @@
 """
-Schemas Pydantic pour conversations et messages.
-
-Infos utiles:
-- Couvre creation/mise a jour de conversations, invitations, messages et reactions.
-- Utilise from_attributes pour mapper depuis les models SQLAlchemy.
-- Inclut des champs de pagination, etat de livraison et metadonnees de pieces jointes.
+############################################################
+# Schemas : Conversations & Messages
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Creation/maj de conversations, invitations, messages, reactions.
+# - from_attributes pour mapper depuis SQLAlchemy.
+# - Champs de pagination et metadonnees (livraison, PJ, references).
+############################################################
 """
 
 from __future__ import annotations

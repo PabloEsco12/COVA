@@ -1,10 +1,14 @@
 """
-Service de gestion des pieces jointes: upload, scan antivirus et jetons d'acces temporaires.
-
-Infos utiles:
-- Stockage externalise via ObjectStorage, avec generation de liens presignes.
-- Scan antivirus optionnel (injection de AntivirusScanner).
-- Limite de taille via settings.ATTACHMENT_MAX_BYTES et jetons JWT signes pour securiser les metadonnees.
+############################################################
+# Service : AttachmentService (pieces jointes)
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - Gere l'upload, le scan antivirus et l'emission de jetons d'upload/telechargement.
+# - Stockage via ObjectStorage et liens presignes.
+# - Controle la taille/type via settings.
+############################################################
 """
 
 from __future__ import annotations

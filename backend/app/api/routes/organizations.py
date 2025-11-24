@@ -1,5 +1,13 @@
 """
-Routes API pour les organisations et leurs membres.
+############################################################
+# Routes : Organisations (resume, membres, roles)
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - Expose l'organisation courante de l'utilisateur, ses membres et les roles.
+# - Permet la mise a jour des roles (avec controles dans le service).
+############################################################
 """
 
 from __future__ import annotations

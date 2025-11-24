@@ -1,11 +1,19 @@
 """
-Service de conversations et de messagerie (creation, invites, messages, notifications).
-
-Infos utiles:
-- Valide les roles de membres (owner/member) avant actions sensibles.
-- Publie des evenements temps reel via RealtimeBroker et des notifications email selon les preferences.
-- S'appuie sur ObjectStorage pour les pieces jointes et sur le decodeur AttachmentService pour les lier.
-- Toutes les horodatations sont gerees en UTC.
+############################################################
+# Service : ConversationService (conversations, messages, invites)
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - Cree/edite/supprime des conversations, gere membres/invitations.
+# - Gere les messages (pins, reactions, livraisons) et notifications temps reel/email.
+# - Integre les pieces jointes via ObjectStorage + AttachmentService.
+#
+# Points de vigilance:
+# - Verifier les roles (owner) avant operations sensibles.
+# - Toujours respecter les etats (archived, muted_until, memberships ACTIF).
+# - Toutes les horodatations sont en UTC.
+############################################################
 """
 
 from __future__ import annotations
@@ -70,6 +78,7 @@ class ConversationService:
         self.storage = storage_service
         self.attachment_decoder = attachment_decoder
 
+    # --- Listes & creations de conversations ---
     async def list_conversations(self, user: UserAccount) -> list[Conversation]:
         """Liste les conversations actives du user avec prechargement des membres/profils."""
         stmt = (
@@ -501,6 +510,7 @@ class ConversationService:
         ]
         return {"total": total, "conversations": conversations}
 
+    # --- Messages : lecture/post/edition/suppression ---
     async def list_messages(
         self,
         conversation_id: uuid.UUID,

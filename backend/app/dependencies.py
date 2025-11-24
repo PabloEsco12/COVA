@@ -1,4 +1,14 @@
-"""Common FastAPI dependencies for the v2 application."""
+"""
+############################################################
+# Module : dependencies (injectables FastAPI)
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Fournit les Depends communs: session DB, current_user, services, brokers.
+# - Centralise l'initialisation des services applicatifs.
+############################################################
+"""
 
 from __future__ import annotations
 
@@ -27,6 +37,9 @@ from .services.organization_service import OrganizationService
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 
+# ======================
+# Sessions / utilisateur
+# ======================
 async def get_db(session: AsyncSession = Depends(get_session)) -> AsyncSession:
     return session
 
@@ -78,6 +91,9 @@ __all__ = [
 ]
 
 
+# ======================
+# Services applicatifs
+# ======================
 async def get_audit_service(db: AsyncSession = Depends(get_session)) -> AuditService:
     return AuditService(db)
 

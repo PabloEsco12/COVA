@@ -1,9 +1,13 @@
 """
-Enumerations centrales utilisees par le schema de messagerie.
-
-Infos utiles:
-- StrEnum pour serialiser proprement en JSON.
-- Roles, statuts et types couvrent organisations, conversations, messages et notifications.
+############################################################
+# Modèles : Enums
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Enumerations centrales (roles, statuts, types) pour org/conversation/message/notification.
+# - StrEnum pour serialiser proprement en JSON.
+############################################################
 """
 
 from __future__ import annotations

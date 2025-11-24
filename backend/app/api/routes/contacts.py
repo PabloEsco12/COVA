@@ -1,9 +1,18 @@
 """
-Routes API pour la gestion des contacts.
-
-Infos utiles:
-- Utilise ContactService et mappe explicitement les profils pour enrichir la reponse.
-- Commit apres chaque mutation pour conserver le controle transactionnel.
+############################################################
+# Routes : Contacts (liste, creation, statut, alias, suppression)
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - Expose les operations de gestion des contacts pour l'utilisateur courant.
+# - Mappe explicitement les profils pour enrichir la reponse (display_name, avatar, etc.).
+# - Commit explicite apres chaque mutation.
+#
+# Points de vigilance:
+# - Verifier l'appartenance organisationnelle dans le service (create).
+# - Toujours renvoyer ContactOut enrichi pour UI.
+############################################################
 """
 
 from __future__ import annotations
@@ -24,6 +33,10 @@ from app.models import ContactStatus, UserAccount
 
 router = APIRouter(prefix="/contacts", tags=["contacts"])
 
+
+# ============
+# Helpers
+# ============
 
 def _to_contact_out(link) -> ContactOut:
     """Transforme un lien de contact en schema de sortie enrichi avec profil."""

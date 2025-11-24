@@ -1,5 +1,15 @@
 """
-Routes API pour preferences et notifications (dont alerte de connexion).
+############################################################
+# Routes : Notifications (preferences, outbox, tests)
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - CRUD sur les preferences de notifications (email/push).
+# - Mise en file manuelle d'une notification.
+# - Endpoint de test pour alerte de connexion.
+# - Commit explicite apres mutation.
+############################################################
 """
 
 from __future__ import annotations

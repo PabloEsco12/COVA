@@ -95,6 +95,7 @@
 </template>
 
 <script setup>
+// Formulaire de connexion: authentifie par mot de passe, gère le cas TOTP et renvoi de confirmation.
 import { ref, onMounted, watch } from 'vue'
 import { api, backendBase } from '@/utils/api'
 import { clearSession, getAccessToken, isAccessTokenExpired, loginWithPassword, setPresenceStatus } from '@/services/auth'
@@ -125,6 +126,7 @@ const logoutReasons = {
 }
 
 onMounted(() => {
+  // Redirige si une session valide existe déjà.
   const token = getAccessToken()
   if (token) {
     if (isAccessTokenExpired(token)) {
@@ -167,11 +169,12 @@ function clearReasonQuery() {
     delete nextQuery.reason
     router.replace({ path: route.path, query: nextQuery })
   } catch {
-    // ignore
+    // ignore: repli silencieux si navigation impossible
   }
 }
 
 async function handleLogin() {
+  // Authentifie, stocke l'avatar/pseudo et gère les cas TOTP ou erreurs serveur.
   setError('')
   showResend.value = false
   resendError.value = ''
@@ -257,6 +260,7 @@ async function handleLogin() {
 }
 
 async function handleResend() {
+  // Renvoie un email de confirmation pour les comptes non validés.
   if (!email.value) {
     resendError.value = 'Veuillez indiquer votre adresse e-mail.'
     return

@@ -1,4 +1,18 @@
-"""Database session configuration for the FastAPI v2 backend."""
+"""
+############################################################
+# Module : db.session (SQLAlchemy async)
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Construit l'engine async et la factory de sessions.
+# - Adapte l'URL Postgres pour asyncpg ou psycopg_async si besoin.
+#
+# Points de vigilance:
+# - Engine partage avec metadata Base.
+# - Expire_on_commit=False pour conserver les objets hydratés.
+############################################################
+"""
 
 from __future__ import annotations
 

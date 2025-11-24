@@ -1,10 +1,14 @@
 """
-Helpers de securite (hash, JWT) pour le backend v2.
-
-Infos utiles:
-- Bcrypt via passlib pour le hashing des mots de passe.
-- JWT signe avec secret/algorithme definis dans la configuration; expiration paramétrable.
-- Toutes les dates de token sont gerees en UTC.
+############################################################
+# Module : Security (hashing & JWT)
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Hash/verification de mot de passe via passlib (bcrypt).
+# - Generation/decodage de JWT signes (algorithme/secret dans settings).
+# - Expirations gerees en UTC.
+############################################################
 """
 
 from __future__ import annotations

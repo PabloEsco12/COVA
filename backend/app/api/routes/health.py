@@ -1,10 +1,14 @@
 """
-Endpoints de liveness/readiness.
-
-Infos utiles:
-- /health/live verifie uniquement que le process FastAPI repond.
-- /health/ready teste quelques dependances via TCP (db, redis, minio, clamav).
-- HEALTH_DEBUG permet d'afficher les erreurs detaillees sur les checks.
+############################################################
+# Routes : Health (live/ready)
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - /health/live : teste uniquement le process FastAPI.
+# - /health/ready : teste les dependances critiques via TCP (db, redis, minio, clamav).
+# - HEALTH_DEBUG affiche les erreurs detaillees.
+############################################################
 """
 
 from __future__ import annotations

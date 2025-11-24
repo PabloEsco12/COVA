@@ -1,10 +1,20 @@
 """
-Routes API pour les conversations, messages et invitations.
-
-Infos utiles:
-- Controle l'acces via ConversationService (verifications de membership et roles).
-- Mapping explicite des entites vers schemas pour inclure profils et etats bloques.
-- Commit explicite de la session apres chaque mutation.
+############################################################
+# Routes : Conversations & Messages
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - Cree/edite/supprime des conversations et leurs membres/invitations.
+# - Gere les messages (liste, search, post, edit, delete, pin, reactions) et PJ.
+# - Controle d'acces via ConversationService (membership/roles).
+# - Commit explicite apres chaque mutation.
+#
+# Points de vigilance:
+# - Respecter les etats de conversation (archived) et roles owner pour operations sensibles.
+# - Toujours verifier le membership avant d'acceder aux messages.
+# - Parser les metadonnees de chiffrement PJ avec prudence (JSON).
+############################################################
 """
 
 from __future__ import annotations
@@ -39,6 +49,10 @@ from app.models import Conversation, ConversationMember, UserAccount
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
+
+# ============
+# Helpers
+# ============
 
 def _member_to_schema(link) -> ConversationMemberOut:
     """Transforme un membre en schema enrichi avec profil/affichage."""
@@ -108,6 +122,7 @@ async def list_conversations(
     current_user: UserAccount = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ) -> list[ConversationOut]:
+    """Liste les conversations actives de l'utilisateur avec etat de blocage."""
     conversations = await service.list_conversations(current_user)
     block_states = await service.get_block_states(current_user, conversations)
     return [_conversation_to_schema(conv, block_state=block_states.get(conv.id)) for conv in conversations]

@@ -1,9 +1,13 @@
 """
-Modèles SQLAlchemy pour les préférences et notifications sortantes.
-
-Infos utiles:
-- Preferences par utilisateur et canal avec plages silencieuses JSONB.
-- OutboundNotification file les messages à traiter, avec tentative/erreur et statut.
+############################################################
+# Modèles : Notifications (preferences & outbox)
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Preferences par canal avec quiet hours (JSONB).
+# - OutboundNotification pour file d'attente/traitement des envois.
+############################################################
 """
 
 from __future__ import annotations

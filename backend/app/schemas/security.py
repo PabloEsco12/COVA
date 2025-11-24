@@ -1,9 +1,13 @@
 """
-Schemas Pydantic lies aux parametres de securite de compte (TOTP, alertes).
-
-Infos utiles:
-- Utilises pour l'activation/confirmation/desactivation du TOTP.
-- Le QR code de provisioning est fourni en PNG base64.
+############################################################
+# Schemas : Security (TOTP & preferences)
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Reglages de securite (MFA/TOTP, alertes) et codes de recuperation.
+# - QR code de provisioning en PNG base64.
+############################################################
 """
 
 from __future__ import annotations

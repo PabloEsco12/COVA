@@ -1,9 +1,14 @@
-"""Service de gestion des appareils (inscription, synchronisation, revocation).
-
-Infos utiles:
-- Les metadonnees d'appareil arrivent encodees en base64 JSON (push_token).
-- Met a jour les sessions actives associees pour tenir a jour IP et user-agent.
-- La journalisation d'audit est optionnelle via AuditService.
+"""
+############################################################
+# Service : DeviceService (appareils & sessions)
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - Inscription/synchronisation des appareils et mise a jour des sessions associees.
+# - Decode les metadonnees base64 (push_token) et derive un trust_level.
+# - Audit optionnel via AuditService.
+############################################################
 """
 
 from __future__ import annotations

@@ -1,9 +1,13 @@
 """
-Schemas Pydantic pour preferences et notifications sortantes.
-
-Infos utiles:
-- from_attributes actif pour hydrater depuis les entites SQLAlchemy.
-- Couvre la mise a jour des preferences (quiet hours) et la lecture d'envois pending/envoyes.
+############################################################
+# Schemas : Notifications
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Preferences utilisateur (quiet hours) et notifications en file d'attente.
+# - from_attributes pour hydrater depuis SQLAlchemy.
+############################################################
 """
 
 from __future__ import annotations

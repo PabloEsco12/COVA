@@ -1,10 +1,17 @@
 """
-Utilitaires Redis pour les features temps reel.
-
-Infos utiles:
-- Fournit un client partage (mise en cache) et un broker Pub/Sub minimal.
-- Utilise redis.asyncio; si REDIS_URL est absent, les appels deviennent no-op.
-- Payloads pub/sub sont serialises en JSON pour uniformiser la consommation front/back.
+############################################################
+# Module : Redis (Realtime broker)
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Fournit un client Redis partage (cache) et un broker Pub/Sub minimal.
+# - Serialise les payloads en JSON pour l'homogeneite front/back.
+#
+# Points de vigilance:
+# - Si REDIS_URL est absent, les operations sont no-op.
+# - Les subscribers doivent gerer les messages non-JSON (raw).
+############################################################
 """
 
 from __future__ import annotations

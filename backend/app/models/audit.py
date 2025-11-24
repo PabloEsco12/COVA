@@ -1,9 +1,13 @@
 """
-Modèles SQLAlchemy pour la journalisation d'audit.
-
-Infos utiles:
-- Les entrées enregistrent contexte ressource, IP/User-Agent et metadonnees JSONB.
-- Horodatage en UTC au moment de l'insertion.
+############################################################
+# Modèles : Audit
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Entrées d'audit avec contexte ressource, IP/User-Agent, metadata JSONB.
+# - Horodatage en UTC à l'insertion.
+############################################################
 """
 
 from __future__ import annotations

@@ -1,10 +1,17 @@
 """
-Integration antivirus legere (ClamAV).
-
-Infos utiles:
-- Active uniquement si host et dependance clamd sont disponibles.
-- Cible la protection des uploads en rejetant les fichiers identifies comme malveillants.
-- En cas d'indisponibilite reseau, renvoie une erreur 502 pour signaler le defaut de protection.
+############################################################
+# Module : Antivirus (ClamAV)
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Integre ClamAV via clamd si la config est presente.
+# - Rejette les fichiers infectes, remonte 502 en cas d'indispo scanner.
+#
+# Points de vigilance:
+# - Le scanner est desactive si clamd ou host sont absents.
+# - Toujours fermer/supprimer le fichier temporaire cote service appelant.
+############################################################
 """
 
 from __future__ import annotations
@@ -30,7 +37,7 @@ class AntivirusScanner:
         self.enabled = bool(host and clamd)
         self._client = None
 
-    # --- Connexion et client ---
+    # --- Section: Connexion et client ---
     def _ensure_client(self):
         if not self.enabled:
             return None
@@ -38,7 +45,7 @@ class AntivirusScanner:
             self._client = clamd.ClamdNetworkSocket(host=self.host, port=self.port)  # type: ignore[attr-defined]
         return self._client
 
-    # --- Scan des fichiers ---
+    # --- Section: Scan des fichiers ---
     def scan_path(self, path: str) -> None:
         client = self._ensure_client()
         if not client:

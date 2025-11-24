@@ -1,10 +1,19 @@
 """
-Routes d'authentification de l'API v2.
-
-Infos utiles:
-- Couvre inscription/confirmation, login avec TOTP, refresh et revocation de sessions.
-- Commit explicite de la session apres chaque operation pour garder le controle transactionnel.
-- Les tokens renvoient l'expiration en secondes pour l'UI.
+############################################################
+# Routes : Auth (inscription, login, refresh, logout)
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - Endpoints d'inscription/confirmation, login (avec TOTP), refresh et revocation.
+# - Commit explicite de la session apres chaque mutation.
+# - Les tokens renvoient l'expiration en secondes pour le frontend.
+#
+# Points de vigilance:
+# - Gérer le cas TOTP (401 avec require_totp) sans exposer de détails sensibles.
+# - Toujours vider/commit la session après modification de données.
+# - Utiliser UserOut/TokenPair pour garder une réponse homogène.
+############################################################
 """
 
 from __future__ import annotations
@@ -41,6 +50,19 @@ from ...services.auth_service import AuthService, TotpRequiredError
 from app.models import UserAccount
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _build_auth_session(auth_result) -> AuthSession:
+    """Assemble la reponse AuthSession avec expiration en secondes."""
+    expires_in = int((auth_result.refresh_expires_at - datetime.now(timezone.utc)).total_seconds())
+    return AuthSession(
+        tokens=TokenPair(
+            access_token=auth_result.access_token,
+            refresh_token=auth_result.refresh_token,
+            expires_in=expires_in,
+        ),
+        user=UserOut.model_validate(auth_result.user, from_attributes=True),
+    )
 
 
 @router.post("/register", response_model=RegisterResponse, status_code=201)
@@ -129,15 +151,7 @@ async def login(
         ip_address=request.client.host if request.client else None,
     )
     await service.session.commit()
-    expires_in = int((auth_result.refresh_expires_at - datetime.now(timezone.utc)).total_seconds())
-    return AuthSession(
-        tokens=TokenPair(
-            access_token=auth_result.access_token,
-            refresh_token=auth_result.refresh_token,
-            expires_in=expires_in,
-        ),
-        user=UserOut.model_validate(auth_result.user, from_attributes=True),
-    )
+    return _build_auth_session(auth_result)
 
 
 @router.post("/refresh", response_model=AuthSession)
@@ -145,15 +159,7 @@ async def refresh_tokens(payload: RefreshRequest, service: AuthService = Depends
     """Recree un couple de tokens a partir d'un refresh valide."""
     auth_result = await service.refresh_session(payload.refresh_token)
     await service.session.commit()
-    expires_in = int((auth_result.refresh_expires_at - datetime.now(timezone.utc)).total_seconds())
-    return AuthSession(
-        tokens=TokenPair(
-            access_token=auth_result.access_token,
-            refresh_token=auth_result.refresh_token,
-            expires_in=expires_in,
-        ),
-        user=UserOut.model_validate(auth_result.user, from_attributes=True),
-    )
+    return _build_auth_session(auth_result)
 
 
 @router.post("/logout", response_model=LogoutResponse)

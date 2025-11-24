@@ -1,9 +1,13 @@
 """
-Regroupe les modèles SQLAlchemy du schema v2 de la plateforme de messagerie sécurisée.
-
-Infos utiles:
-- Facilite les imports depuis les autres modules backend.
-- __all__ expose explicitement toutes les entites et enums partageables.
+############################################################
+# Package : models (exports des entites SQLAlchemy)
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Facilite les imports des entites/enums du schema v2.
+# - __all__ expose explicitement les objets partageables.
+############################################################
 """
 
 from .base import Base

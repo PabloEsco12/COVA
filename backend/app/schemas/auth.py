@@ -1,10 +1,13 @@
 """
-Schemas Pydantic pour les flux d'authentification.
-
-Infos utiles:
-- Incluent les payloads d'inscription, connexion, rafraichissement et reset mot de passe.
-- Valident longueur des mots de passe et formats d'email via Pydantic/EmailStr.
-- Les reponses portent des messages par defaut utilisables directement par l'API.
+############################################################
+# Schemas : Auth
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Payloads et réponses pour inscription/login/refresh/reset password.
+# - Validation email/mot de passe via Pydantic (EmailStr, Field).
+############################################################
 """
 
 from __future__ import annotations

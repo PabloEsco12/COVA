@@ -1,9 +1,13 @@
 """
-Schemas Pydantic pour les utilisateurs (profils, compte courant, mises a jour).
-
-Infos utiles:
-- from_attributes active pour mapper depuis SQLAlchemy.
-- Couvre resume du compte, profil detaille et operations de securite basique.
+############################################################
+# Schemas : User
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Profils, compte courant, mises a jour (profil, password, avatar).
+# - from_attributes active pour mapper depuis SQLAlchemy.
+############################################################
 """
 
 from __future__ import annotations

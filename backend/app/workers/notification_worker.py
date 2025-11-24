@@ -1,4 +1,18 @@
-"""Notification worker consuming the outbound queue."""
+"""
+############################################################
+# Worker : NotificationWorker (queue outbound)
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Consomme la file outbound_notifications et declenche les envois (email/push).
+# - Tourne en boucle async avec gestion elegante des interruptions (SIGINT/SIGTERM).
+#
+# Points de vigilance:
+# - Nettoyer/mettre a jour les statuts en cas d'erreur pour eviter le stuck.
+# - Respecter les quiet hours/ timezone des utilisateurs pour l'email de login.
+############################################################
+"""
 
 from __future__ import annotations
 
@@ -28,6 +42,9 @@ try:
 except ImportError:
     _COVA_LOGO_B64 = None
 
+# =====================
+# DTOs / Jobs en file
+# =====================
 @dataclass
 class NotificationJob:
     id: uuid.UUID
@@ -37,6 +54,9 @@ class NotificationJob:
     payload: dict[str, Any]
 
 
+# =====================
+# Worker principal
+# =====================
 class NotificationWorker:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -45,6 +65,7 @@ class NotificationWorker:
         self.session_factory = async_sessionmaker(self.engine, expire_on_commit=False, class_=AsyncSession)
         self.running = True
 
+    # --- Cycle principal ---
     async def run(self) -> None:
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
@@ -97,12 +118,14 @@ class NotificationWorker:
             return job
 
     async def _deliver_notification(self, job: NotificationJob) -> None:
+        """Route un job vers le canal cible et met a jour les stats."""
         if job.channel == NotificationChannel.EMAIL:
             await self._send_email(job)
         else:
             print(f"[notification-worker] channel {job.channel} not implemented")
 
     async def _send_email(self, job: NotificationJob) -> None:
+        """Construit et envoie un email selon le payload."""
         if not self.settings.SMTP_HOST:
             raise RuntimeError("SMTP is not configured (missing SMTP_HOST)")
 
@@ -636,3 +659,5 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+

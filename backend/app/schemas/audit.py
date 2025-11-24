@@ -1,9 +1,13 @@
 """
-Schemas Pydantic pour les journaux d'audit.
-
-Infos utiles:
-- Utilises pour serialiser les entrees d'audit exposees par l'API.
-- Config from_attributes activee pour mapper directement depuis les models SQLAlchemy.
+############################################################
+# Schemas : Audit (Pydantic)
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Serialisation des entrees d'audit exposees par l'API.
+# - from_attributes active pour mapper depuis SQLAlchemy.
+############################################################
 """
 
 from __future__ import annotations

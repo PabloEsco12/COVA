@@ -1,9 +1,13 @@
 """
-Modèles SQLAlchemy pour les demandes de confidentialité/conformité.
-
-Infos utiles:
-- Suivi des demandes d'export ou suppression avec statut et horodatages.
-- Suppressions en cascade sur organisation et utilisateur pour eviter les orphelins.
+############################################################
+# Modèles : Privacy (RGPD)
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Suivi des demandes d'export/suppression avec statut et horodatages.
+# - Suppression en cascade org/user pour eviter les orphelins.
+############################################################
 """
 
 from __future__ import annotations

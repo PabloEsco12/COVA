@@ -1,10 +1,17 @@
 """
-Utilitaires d'envoi d'e-mails asynchrones.
-
-Infos utiles:
-- Resolve l'expediteur depuis la configuration (SMTP_FROM_* ou username).
-- Construit un message texte/HTML et utilise aiosmtplib pour l'envoi.
-- Supporte TLS explicite (STARTTLS) ou implicite selon la configuration.
+############################################################
+# Module : Email (SMTP async)
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Resolve l'expediteur via les variables SMTP et envoie via aiosmtplib.
+# - Supporte TLS explicite (STARTTLS) ou implicite selon la config.
+#
+# Points de vigilance:
+# - Lever RuntimeError si l'expediteur n'est pas configure.
+# - Configurer correctement TLS/SSL pour eviter les erreurs de connexion.
+############################################################
 """
 
 from __future__ import annotations

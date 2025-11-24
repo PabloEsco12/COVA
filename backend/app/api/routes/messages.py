@@ -1,5 +1,13 @@
 """
-Endpoints analytics des messages (compteurs de non lus).
+############################################################
+# Routes : Messages (analytics non lus)
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - Expose le compteur de messages non lus (total + par conversation).
+# - Sert l'UI pour les badges de notification.
+############################################################
 """
 
 from __future__ import annotations

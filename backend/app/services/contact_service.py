@@ -1,10 +1,19 @@
 """
-Service de gestion des contacts (creation, statut, alias) dans une organisation.
-
-Infos utiles:
-- Verifie que les deux utilisateurs appartiennent a une meme organisation avant de lier.
-- Publie des notifications email et temps reel si les services correspondants sont injectes.
-- Ne fait pas de commit: a integrer dans une transaction FastAPI/SQLAlchemy existante.
+############################################################
+# Service : ContactService (contacts & invitations)
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - Gere la creation de liens de contact, mise a jour de statut et alias.
+# - Verifie l'appartenance a la meme organisation avant de lier deux utilisateurs.
+# - Peut publier des notifications (email/realtime) si injecte.
+#
+# Points de vigilance:
+# - Aucun commit automatique: a piloter depuis la couche route.
+# - Synchroniser les liens reciproques lors des changements de statut.
+# - Tenir compte des preferences de notification du destinataire.
+############################################################
 """
 
 from __future__ import annotations
@@ -21,6 +30,10 @@ from .audit_service import AuditService
 from .notification_service import NotificationService
 from ..core.redis import RealtimeBroker
 
+
+# ===============================
+# Service principal (ContactService)
+# ===============================
 
 class ContactService:
     """Logique metier des contacts et orchestration des notifications associees."""
@@ -39,6 +52,7 @@ class ContactService:
         self.notifications = notification_service
         self.realtime = realtime_broker
 
+    # --- Lecture ---
     async def list_contacts(self, owner: UserAccount, status: ContactStatus | None = None) -> list[ContactLink]:
         """Retourne la liste des contacts visibles d'un proprietaire, filtreable par statut."""
         stmt = (
@@ -51,6 +65,7 @@ class ContactService:
         result = await self.session.execute(stmt)
         return result.scalars().all()
 
+    # --- Creation / Invitation interne ---
     async def create_contact(self, owner: UserAccount, target_email: str, alias: str | None = None) -> ContactLink:
         """Cree une demande de contact bilaterale apres verification d'organisation commune."""
         stmt_user = select(UserAccount).where(UserAccount.email == target_email.lower())
@@ -127,6 +142,7 @@ class ContactService:
         )
         return await self._get_contact(owner.id, owner_link.id)
 
+    # --- Mise a jour des statuts / alias ---
     async def update_status(self, owner: UserAccount, contact_id: uuid.UUID, status_value: ContactStatus) -> ContactLink:
         """Met a jour le statut d'un contact et synchronise le lien reciproque + notifications."""
         contact = await self._get_contact(owner.id, contact_id)

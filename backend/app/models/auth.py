@@ -1,10 +1,14 @@
 """
-Modèles SQLAlchemy relatifs à l'authentification et aux jetons.
-
-Infos utiles:
-- Tokens de confirmation, reset et refresh stockés avec horodatage UTC.
-- Suppressions en cascade sur l'utilisateur pour éviter les orphelins.
-- UniqueConstraint appliqué sur les valeurs de token pour prévenir les doublons.
+############################################################
+# Modèles : Auth (tokens, TOTP)
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Tokens de confirmation/reset/refresh (UTC, contraintes d'unicité).
+# - Secret TOTP et sessions de refresh liées aux utilisateurs.
+# - Suppr. en cascade sur l'utilisateur pour éviter les orphelins.
+############################################################
 """
 
 from __future__ import annotations

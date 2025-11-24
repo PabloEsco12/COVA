@@ -59,6 +59,7 @@
 </template>
 
 <script setup>
+// Formulaire TOTP appelé après un login/password réussi quand le compte exige 2FA.
 import { onMounted, ref } from 'vue'
 import { loginWithPassword, setPresenceStatus } from '@/services/auth'
 import { useRouter } from 'vue-router'
@@ -75,6 +76,7 @@ const pendingKey = 'pending_totp'
 let pendingAuth = null
 
 onMounted(() => {
+  // Récupère les credentials stockés lors du step password, sinon retour login.
   const raw = sessionStorage.getItem(pendingKey)
   if (!raw) {
     router.replace('/login')

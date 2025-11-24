@@ -1,9 +1,13 @@
 """
-Schemas Pydantic decritant organisations et membres.
-
-Infos utiles:
-- Exposent resume d'organisation, membres et droits (admin/gestion).
-- Utilises par l'API pour lister, afficher et mettre a jour les roles.
+############################################################
+# Schemas : Organization
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Resume d'organisation, membres et droits (admin/gestion).
+# - Utilise pour lister, afficher et mettre a jour les roles.
+############################################################
 """
 
 from __future__ import annotations

@@ -1,10 +1,14 @@
 """
-Service de gestion des notifications (preferences et mise en queue).
-
-Infos utiles:
-- Stocke les preferences par canal (email/push...) dans NotificationPreference.
-- Les notifications sortantes sont inserees en base et consommees par des workers.
-- Pas de commit automatique: a utiliser dans une transaction FastAPI.
+############################################################
+# Service : NotificationService (preferences & outbox)
+# Auteur  : Valentin Masurelle
+# Date    : 2025-05-04
+#
+# Description:
+# - Gere les preferences de notification par canal.
+# - Met en file les notifications sortantes pour traitement par les workers.
+# - Pas de commit automatique.
+############################################################
 """
 
 from __future__ import annotations

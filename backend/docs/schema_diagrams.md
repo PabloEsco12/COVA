@@ -347,5 +347,3 @@ CallSession "1" -- "0..*" CallParticipant
 - **UML** : offre une lecture “objet/service” utile pour relier les modèles
   SQLAlchemy ou les services applicatifs à la structure SQL.
 
-Tu peux importer ces diagrammes dans ton rapport TFE (fichiers Mermaid/PlantUML
-ou versions rendues en PNG via les outils en ligne).

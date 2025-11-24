@@ -1,9 +1,13 @@
 """
-Schemas Pydantic pour l'API de gestion des contacts.
-
-Infos utiles:
-- Incluent creation, mise a jour du statut/alias et representation publique d'un contact.
-- Config from_attributes pour hydrater depuis les models SQLAlchemy.
+############################################################
+# Schemas : Contacts
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Payloads de creation/maj d'alias/statut.
+# - Representation ContactOut hydratee via from_attributes.
+############################################################
 """
 
 from __future__ import annotations

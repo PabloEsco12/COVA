@@ -1,8 +1,12 @@
 """
-Schemas Pydantic pour les statistiques/messages non lus.
-
-Infos utiles:
-- Utilises pour exposer le nombre de messages non lus par conversation et le total.
+############################################################
+# Schemas : Message (analytics non lus)
+# Auteur : Valentin Masurelle
+# Date   : 2025-05-04
+#
+# Description:
+# - Expose le nombre de messages non lus par conversation et le total.
+############################################################
 """
 
 from __future__ import annotations
