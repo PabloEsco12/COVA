@@ -62,6 +62,7 @@ import { ref, onMounted, onBeforeUnmount, defineProps, toRefs, computed, watch }
 import { useRouter } from 'vue-router'
 import { api, backendBase } from '@/utils/api'
 import { computeAvatarInitials, normalizeAvatarUrl } from '@/utils/profile'
+import { loadSession } from '@/services/auth'
 import SidebarFooter from './sidebar/SidebarFooter.vue'
 import SidebarInsights from './sidebar/SidebarInsights.vue'
 import SidebarPrimaryActions from './sidebar/SidebarPrimaryActions.vue'
@@ -123,6 +124,9 @@ const lastAuditText = computed(() => {
   return relative || (ip ? `IP ${ip}` : '')
 })
 
+const userRole = ref(readUserRole())
+const isSuperAdmin = computed(() => (userRole.value || '').toLowerCase() === 'superadmin')
+
 // ===== Liens rapides et sections derivees =====
 const quickLinks = computed(() => [
   {
@@ -159,6 +163,16 @@ const quickLinks = computed(() => [
     hint: 'Sécurité & alertes',
     icon: 'bi bi-gear-fill',
   },
+  ...(isSuperAdmin.value
+    ? [
+        {
+          to: '/dashboard/admin',
+          label: 'Admin utilisateurs',
+          hint: 'Créer / supprimer',
+          icon: 'bi bi-shield-lock-fill',
+        },
+      ]
+    : []),
   {
     to: '/dashboard/faq',
     label: 'FAQ',
@@ -240,6 +254,15 @@ function deriveStatusCode(message, fallback = 'available') {
   if (normalized === 'Ne pas déranger') return 'dnd'
   if (normalized === 'hors ligne' || normalized === 'horsligne') return 'offline'
   return fallback || 'available'
+}
+
+function readUserRole() {
+  try {
+    const session = loadSession()
+    return session?.user?.role || ''
+  } catch {
+    return ''
+  }
 }
 
 function updateStatusMessage(value, { persist = false, code } = {}) {
@@ -381,6 +404,10 @@ const updateNetworkStatus = () => {
   if (typeof navigator !== 'undefined') {
     isOnline.value = navigator.onLine
   }
+}
+
+const refreshUserRole = () => {
+  userRole.value = readUserRole()
 }
 
 const startConversation = () => {
@@ -643,6 +670,8 @@ onMounted(async () => {
     window.addEventListener('storage', handlePendingContactsStorage)
     window.addEventListener('storage', handleStatusStorage)
     window.addEventListener('cova:contacts-pending', handlePendingContactsEvent)
+    window.addEventListener('cova:session-update', refreshUserRole)
+    window.addEventListener('cova:session-clear', refreshUserRole)
   }
 
   await Promise.all([loadUnreadSummary(), loadPendingContactsSummary(), loadProfileStatus()])
@@ -693,6 +722,8 @@ onBeforeUnmount(() => {
     window.removeEventListener('storage', handlePendingContactsStorage)
     window.removeEventListener('storage', handleStatusStorage)
     window.removeEventListener('cova:contacts-pending', handlePendingContactsEvent)
+    window.removeEventListener('cova:session-update', refreshUserRole)
+    window.removeEventListener('cova:session-clear', refreshUserRole)
   }
 })
 

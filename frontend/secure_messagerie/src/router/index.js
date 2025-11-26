@@ -19,6 +19,7 @@ import NewConversationForm from '@/components/messages/new/NewConversationForm.v
 import ContactsView from '@/views/ContactsView.vue'
 import DevicesView from '@/views/DevicesView.vue'
 import SettingsView from '@/views/SettingsView.vue'
+import AdminUsersView from '@/views/AdminUsersView.vue'
 import FaqView from '@/views/FaqView.vue'
 
 const routes = [
@@ -45,6 +46,7 @@ const routes = [
       { path: 'contacts', name: 'dashboard-contacts', component: ContactsView },
       { path: 'devices', name: 'dashboard-devices', component: DevicesView },
       { path: 'settings', name: 'dashboard-settings', component: SettingsView },
+      { path: 'admin', name: 'dashboard-admin-users', component: AdminUsersView },
       { path: 'faq', name: 'dashboard-faq', component: FaqView },
     ],
   },

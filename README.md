@@ -59,7 +59,11 @@ cp ../.env.example .env.development   # ou définir VITE_API_URL manuellement
 npm run dev -- --host --port 5176
 ```
 
-## Bootstrap d’un tenant
+## Administration (API)
+- Superadmin uniquement : `POST /api/admin/users` (email, password, display_name, role optionnel, confirm_now) pour creer un utilisateur deja confirme si souhaite.
+- Superadmin uniquement : `DELETE /api/admin/users/{user_id}` pour supprimer un compte (l'admin principal configure reste protege).
+
+## Bootstrap d'un tenant
 Création organisation + utilisateur propriétaire via le script CLI :
 ```bash
 cd backend

@@ -62,6 +62,11 @@ from ...services.conversation_service import ConversationService
 from ...services.device_service import DeviceService
 from ...services.organization_service import OrganizationService
 from ...services.security_service import SecurityService
+from ...services.user_admin_service import (
+    cleanup_memberships,
+    reassign_conversations_before_delete,
+    remove_avatar_file,
+)
 from ...core.security import get_password_hash, verify_password
 from app.models import (
     ContactLink,
@@ -99,49 +104,6 @@ def _clean(value: str | None) -> str | None:
 def _build_avatar_url(filename: str) -> str:
     base = settings.PUBLIC_BASE_URL.rstrip("/")
     return f"{base}/static/avatars/{filename}"
-
-
-def _avatar_path_from_url(url: str | None) -> Path | None:
-    if not url:
-        return None
-    parsed = urlparse(url)
-    path = parsed.path.lstrip("/")
-    if not path:
-        return None
-    if path.startswith("static/"):
-        path = path[len("static/") :]
-    return MEDIA_ROOT / path
-
-
-def _remove_avatar_file(url: str | None) -> None:
-    path = _avatar_path_from_url(url)
-    if path and path.is_file():
-        try:
-            path.unlink()
-        except OSError:
-            pass
-
-
-async def _reassign_conversations_before_delete(db: AsyncSession, user_id: uuid.UUID) -> None:
-    """Reassigne les conversations possedees ou les supprime si orphelines avant suppression de compte."""
-    conversation_ids = (
-        await db.execute(select(Conversation.id).where(Conversation.created_by == user_id))
-    ).scalars().all()
-    for conv_id in conversation_ids:
-        replacement = (
-            await db.execute(
-                select(ConversationMember.user_id)
-                .where(ConversationMember.conversation_id == conv_id)
-                .where(ConversationMember.user_id != user_id)
-                .limit(1)
-            )
-        ).scalar_one_or_none()
-        if replacement:
-            await db.execute(
-                update(Conversation).where(Conversation.id == conv_id).values(created_by=replacement)
-            )
-        else:
-            await db.execute(delete(Conversation).where(Conversation.id == conv_id))
 
 
 def _ensure_profile(user: UserAccount, db: AsyncSession) -> UserProfile:
@@ -467,7 +429,7 @@ async def upload_avatar(
     await db.refresh(profile)
     current_user.profile = profile
 
-    _remove_avatar_file(previous_url)
+    remove_avatar_file(previous_url)
 
     return AvatarResponse(avatar_url=profile.avatar_url)
 
@@ -492,7 +454,7 @@ async def delete_avatar(
     await db.refresh(profile)
     current_user.profile = profile
 
-    _remove_avatar_file(previous_url)
+    remove_avatar_file(previous_url)
 
     return AvatarResponse(avatar_url=None)
 
@@ -639,7 +601,7 @@ async def delete_account(
 
     avatar_url = current_user.profile.avatar_url if current_user.profile else None
 
-    await _reassign_conversations_before_delete(db, current_user.id)
+    await reassign_conversations_before_delete(db, current_user.id)
     await db.execute(delete(OrganizationMembership).where(OrganizationMembership.user_id == current_user.id))
     await db.execute(delete(ConversationMember).where(ConversationMember.user_id == current_user.id))
 
@@ -647,7 +609,7 @@ async def delete_account(
     await db.delete(current_user)
     await db.commit()
 
-    _remove_avatar_file(avatar_url)
+    remove_avatar_file(avatar_url)
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

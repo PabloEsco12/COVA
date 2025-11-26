@@ -213,8 +213,19 @@ class AuthService:
         self.notifications = notification_service
 
     # --- Flux d'inscription et connexion ---
-    async def register_user(self, email: str, password: str, display_name: str | None = None) -> RegisterResult:
-        """Cree un nouvel utilisateur, son organisation par defaut et envoie l'email de confirmation."""
+    async def register_user(
+        self,
+        email: str,
+        password: str,
+        display_name: str | None = None,
+        *,
+        role: UserRole | None = None,
+        is_confirmed: bool | None = None,
+    ) -> RegisterResult:
+        """Cree un nouvel utilisateur, son organisation par defaut et envoie l'email de confirmation.
+
+        Les options role/is_confirmed permettent aux administrateurs de forcer le role ou la confirmation immediate.
+        """
         stmt = select(UserAccount).where(UserAccount.email == email.lower())
         result = await self.session.execute(stmt)
         if result.scalar_one_or_none():
@@ -222,35 +233,48 @@ class AuthService:
 
         normalized_email = email.lower()
         hashed = get_password_hash(password)
+        desired_role = role or (UserRole.SUPERADMIN if self._is_default_admin_email(normalized_email) else UserRole.MEMBER)
+        confirmed_flag = bool(is_confirmed) if is_confirmed is not None else False
         user = UserAccount(
             email=normalized_email,
             hashed_password=hashed,
             is_active=True,
-            is_confirmed=False,
-            role=UserRole.SUPERADMIN if self._is_default_admin_email(normalized_email) else UserRole.MEMBER,
+            is_confirmed=confirmed_flag,
+            role=desired_role,
         )
         user.profile = UserProfile(display_name=display_name)
 
         # Cree l'organisation et l'espace de travail de base si absents.
         organization, workspace = await self._ensure_default_organization()
-        membership_role = OrganizationRole.OWNER if self._is_default_admin_email(normalized_email) else OrganizationRole.MEMBER
+        membership_role = OrganizationRole.MEMBER
+        if self._is_default_admin_email(normalized_email):
+            membership_role = OrganizationRole.OWNER
+        elif desired_role == UserRole.SUPERADMIN:
+            membership_role = OrganizationRole.ADMIN
         membership = OrganizationMembership(organization=organization, user=user, role=membership_role)
         workspace_membership = WorkspaceMembership(workspace=workspace, membership=membership)
         membership.workspaces.append(workspace_membership)
 
-        confirmation_token_value = token_urlsafe(48)
-        confirmation_token = EmailConfirmationToken(
-            user=user,
-            token=confirmation_token_value,
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
-        )
+        confirmation_token_value = None
+        confirmation_token = None
+        if not confirmed_flag:
+            confirmation_token_value = token_urlsafe(48)
+            confirmation_token = EmailConfirmationToken(
+                user=user,
+                token=confirmation_token_value,
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+            )
 
-        self.session.add_all([user, organization, workspace, membership, workspace_membership, confirmation_token])
+        items_to_add = [user, organization, workspace, membership, workspace_membership]
+        if confirmation_token is not None:
+            items_to_add.append(confirmation_token)
+
+        self.session.add_all(items_to_add)
         await self.session.flush()
-        await self.session.refresh(user)
+        await self.session.refresh(user, attribute_names=["profile"])
 
         await self._log("auth.register", user_id=str(user.id), organization_id=str(organization.id))
-        if self.notifications:
+        if confirmation_token_value and self.notifications:
             await self.notifications.enqueue_notification(
                 organization_id=str(organization.id),
                 user_id=str(user.id),
