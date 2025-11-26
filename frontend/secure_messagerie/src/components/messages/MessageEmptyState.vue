@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: MessageEmptyState
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Etat vide de conversation.
+-->
 <template>
   <div class="msg-empty">
     <h3>Messagerie sécurisée</h3>

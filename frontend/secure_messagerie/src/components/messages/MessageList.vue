@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: MessageList
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Affichage des messages avec grouping, attachments et actions.
+-->
 <template>
   <div class="msg-body">
     <section v-if="pinnedMessages.length" class="msg-pinned card">
@@ -244,6 +251,7 @@
 import { nextTick, onMounted, ref, watch } from 'vue'
 import { detectGifLinks, stripGifLinks } from '@/utils/messageContent'
 
+// ===== Props d'affichage et callbacks =====
 const props = defineProps({
   messages: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
@@ -258,6 +266,7 @@ const props = defineProps({
   isPinning: { type: Function, default: () => false },
 })
 
+// ===== Emissions =====
 const emit = defineEmits([
   'load-older',
   'select-pin',

@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: NewConversationModal
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Modale de création de conversation.
+-->
 <template>
   <div
     class="modal-backdrop-custom"
@@ -69,9 +76,11 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 
+// ===== Props =====
 const props = defineProps({
   busy: { type: Boolean, default: false },
 })
+// ===== Emissions =====
 const emit = defineEmits(['close', 'create'])
 
 const title = ref('')

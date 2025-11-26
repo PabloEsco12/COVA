@@ -1,4 +1,11 @@
-﻿<template>
+﻿<!--
+  ===== Component Header =====
+  Component: MessageComposer
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Zone de composition de message (texte, pièces jointes, actions).
+-->
+<template>
   <div
     v-if="blockedInfo"
     class="msg-composer msg-composer--disabled"
@@ -158,6 +165,7 @@
 </template>
 
 <script setup>
+// ===== Props d'etat et de configuration =====
 const props = defineProps({
   blockedInfo: Object,
   showPicker: Boolean,
@@ -257,6 +265,7 @@ const props = defineProps({
   },
 })
 
+// ===== Emissions =====
 const emit = defineEmits(['update:messageInput'])
 
 function handleComposerInput(event) {

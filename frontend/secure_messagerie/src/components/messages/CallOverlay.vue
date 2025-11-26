@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: CallOverlay
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Superposition d'appel audio/vidéo avec contrôles.
+-->
 <template>
   <div
     v-if="callState.status !== 'idle'"
@@ -101,6 +108,7 @@
 <script setup>
 import { defineProps, defineEmits } from 'vue'
 
+// ===== Props pour l'etat, controles et media refs =====
 defineProps({
   callState: {
     type: Object,
@@ -132,5 +140,6 @@ defineProps({
   },
 })
 
+// ===== Actions utilisateur emises =====
 defineEmits(['accept', 'reject', 'cancel', 'hangup', 'toggle-mic', 'toggle-camera'])
 </script>

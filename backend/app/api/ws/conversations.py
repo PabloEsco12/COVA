@@ -19,11 +19,14 @@ from ...core.redis import RealtimeBroker
 from ...core.security import decode_token
 from ...dependencies import get_realtime_broker, get_db
 from app.models import ConversationMember
+import logging
+
+logger = logging.getLogger(__name__)
 
 ws_router = APIRouter()
 
 
-@ws_router.websocket("/ws/conversations/{conversation_id}")
+@ws_router.websocket("/conversations/{conversation_id}")
 async def conversation_ws(
     websocket: WebSocket,
     conversation_id: uuid.UUID,
@@ -33,12 +36,16 @@ async def conversation_ws(
     """Canal WS de conversation: verifie le token, presence et relaye Pub/Sub Redis."""
     token = websocket.query_params.get("token")
     if not token:
+        logger.warning("WS conversation rejected: missing token (conversation_id=%s)", conversation_id)
         await websocket.close(code=4401)
         return
     try:
         payload = decode_token(token)
         user_id = payload.get("sub")
-    except ValueError:
+    except ValueError as exc:
+        logger.warning(
+            "WS conversation rejected: invalid token (conversation_id=%s, error=%s)", conversation_id, exc
+        )
         await websocket.close(code=4401)
         return
 
@@ -51,6 +58,9 @@ async def conversation_ws(
     result = await db.execute(stmt)
     membership = result.scalar_one_or_none()
     if membership is None:
+        logger.warning(
+            "WS conversation rejected: user %s not member of conversation %s", user_id, conversation_id
+        )
         await websocket.close(code=4403)
         return
 

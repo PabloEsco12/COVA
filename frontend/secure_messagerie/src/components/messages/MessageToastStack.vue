@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: MessageToastStack
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Pile de toasts informatifs liés aux messages.
+-->
 <template>
   <transition-group name="msg-toast" tag="div" class="msg-toast-stack">
     <article
@@ -26,6 +33,7 @@
 <script setup>
 import { defineProps, defineEmits } from 'vue'
 
+// ===== Props =====
 defineProps({
   toasts: {
     type: Array,
@@ -37,5 +45,6 @@ defineProps({
   },
 })
 
+// ===== Emissions =====
 defineEmits(['dismiss', 'open'])
 </script>

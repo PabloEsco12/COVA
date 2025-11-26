@@ -1,4 +1,11 @@
-﻿<template>
+﻿<!--
+  ===== Component Header =====
+  Component: ConversationList
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Liste des conversations avec actions rapides.
+-->
+<template>
   <div class="conv-list-wrap">
     <!-- En-tête -->
     <div class="d-flex align-items-center mb-3">
@@ -113,12 +120,14 @@
 <script setup>
 import { computed, ref } from 'vue'
 
+// ===== Props et etats =====
 const props = defineProps({
   conversations: { type: Array, default: () => [] },
   selectedId: { type: [Number, String, null], default: null },
   loading: { type: Boolean, default: false },
 })
 
+// ===== Emissions =====
 defineEmits(['refresh', 'create', 'select'])
 
 const query = ref('')

@@ -1,4 +1,11 @@
-﻿<template>
+﻿<!--
+  ===== Component Header =====
+  Component: ConversationSidebar
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Barre latérale du panneau de conversation (actions, participants).
+-->
+<template>
   <aside class="msg-nav">
     <header class="msg-nav__header">
       <div>
@@ -91,6 +98,7 @@
 <script setup>
 import { computed } from 'vue'
 
+// ===== Props pour la liste et les filtres =====
 const props = defineProps({
   conversations: { type: Array, default: () => [] },
   selectedId: { type: [String, Number, null], default: null },
@@ -110,8 +118,10 @@ const props = defineProps({
   },
 })
 
+// ===== Emissions =====
 const emit = defineEmits(['select', 'new-conversation', 'avatar-error', 'update:search', 'update:filter'])
 
+// ===== Donnees derivees =====
 const filtersList = computed(() => props.filters)
 const currentFilter = computed(() => props.filter)
 

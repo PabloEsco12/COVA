@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: ConversationPanel
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Panneau principal des messages (header, liste, composer).
+-->
 <template>
   <div v-if="show && selectedConversation" class="msg-panel">
     <div class="msg-panel__header">
@@ -225,6 +232,7 @@
 </template>
 
 <script setup>
+// ===== Props et etat parent =====
 const props = defineProps({
   show: Boolean,
   selectedConversation: Object,

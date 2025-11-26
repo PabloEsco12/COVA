@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: DeleteMessageModal
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Modale de confirmation de suppression de message.
+-->
 <template>
   <CustomModal
     :model-value="visible"
@@ -31,6 +38,7 @@
 <script setup>
 import CustomModal from '@/components/ui/CustomModal.vue'
 
+// ===== Props =====
 defineProps({
   visible: {
     type: Boolean,
@@ -50,5 +58,6 @@ defineProps({
   },
 })
 
+// ===== Emissions =====
 defineEmits(['close', 'confirm', 'update:visible'])
 </script>

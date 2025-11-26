@@ -13,11 +13,14 @@ from starlette.websockets import WebSocketState
 from ...core.redis import RealtimeBroker
 from ...core.security import decode_token
 from ...dependencies import get_realtime_broker
+import logging
+
+logger = logging.getLogger(__name__)
 
 notifications_ws_router = APIRouter()
 
 
-@notifications_ws_router.websocket("/ws/notifications")
+@notifications_ws_router.websocket("/notifications")
 async def notifications_ws(
     websocket: WebSocket,
     broker: RealtimeBroker = Depends(get_realtime_broker),
@@ -25,15 +28,18 @@ async def notifications_ws(
     """Souscription WS aux evenements user:*:events via Redis Pub/Sub."""
     token = websocket.query_params.get("token")
     if not token:
+        logger.warning("WS notifications rejected: missing token")
         await websocket.close(code=4401)
         return
     try:
         payload = decode_token(token)
         user_id = payload.get("sub")
-    except ValueError:
+    except ValueError as exc:
+        logger.warning("WS notifications rejected: invalid token (%s)", exc)
         await websocket.close(code=4401)
         return
     if not user_id:
+        logger.warning("WS notifications rejected: missing sub in token")
         await websocket.close(code=4401)
         return
 

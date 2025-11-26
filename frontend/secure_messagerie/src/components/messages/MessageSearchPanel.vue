@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: MessageSearchPanel
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Panneau de recherche de messages.
+-->
 <template>
   <div v-if="show" class="msg-search-panel">
     <form class="msg-search-panel__form" @submit.prevent="emit('submit')">
@@ -39,6 +46,7 @@
 </template>
 
 <script setup>
+// ===== Props =====
 const props = defineProps({
   show: {
     type: Boolean,
@@ -74,5 +82,6 @@ const props = defineProps({
   },
 })
 
+// ===== Emissions =====
 const emit = defineEmits(['update:query', 'submit', 'close', 'jump'])
 </script>

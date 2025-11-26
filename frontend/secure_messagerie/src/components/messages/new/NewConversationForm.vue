@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: NewConversationForm
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Formulaire de création de nouvelle conversation.
+-->
 <!-- src/components/messages/NewConversationForm.vue -->
 <template>
   <div class="new-conv">

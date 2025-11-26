@@ -201,6 +201,8 @@
     :close-conversation-panel="closeConversationPanel"
     :save-conversation-settings="saveConversationSettings"
     :leave-current-conversation="leaveCurrentConversation"
+    :open-delete-confirm="openDeleteConfirm"
+    :close-delete-confirm="closeDeleteConfirm"
     :delete-current-conversation="deleteCurrentConversation"
     :submit-invite="submitInvite"
     :revoke-invite="revokeInvite"

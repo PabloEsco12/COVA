@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: ForwardPicker
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Sélecteur de conversations pour transférer un message.
+-->
 <template>
   <div
     v-if="open"
@@ -68,6 +75,7 @@
 <script setup>
 import { onMounted, onBeforeUnmount, ref } from 'vue'
 
+// ===== Props et etats =====
 const props = defineProps({
   open: Boolean,
   message: Object,
@@ -89,6 +97,7 @@ const props = defineProps({
   },
 })
 
+// ===== Emissions =====
 const emit = defineEmits(['update:query', 'select', 'cancel'])
 const inputRef = ref(null)
 

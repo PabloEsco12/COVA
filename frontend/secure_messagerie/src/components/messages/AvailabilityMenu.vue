@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: AvailabilityMenu
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Sélecteur de statut de disponibilité avec menu déroulant.
+-->
 <template>
   <div class="availability-menu" ref="menuRef">
     <button
@@ -29,6 +36,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
+// ===== Props et options =====
 const props = defineProps({
   modelValue: { type: String, default: 'available' },
   options: {
@@ -44,6 +52,7 @@ const props = defineProps({
   },
 })
 
+// ===== Emissions et etats locaux =====
 const emit = defineEmits(['update:modelValue'])
 const menuRef = ref(null)
 const open = ref(false)
@@ -61,6 +70,7 @@ function select(value) {
   open.value = false
 }
 
+// ===== Gestion du clic externe =====
 function onClickOutside(event) {
   if (!open.value) return
   if (menuRef.value && !menuRef.value.contains(event.target)) {

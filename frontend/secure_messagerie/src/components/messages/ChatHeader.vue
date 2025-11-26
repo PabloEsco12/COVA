@@ -1,4 +1,11 @@
-﻿<!-- src/components/messages/ChatHeader.vue -->
+﻿<!--
+  ===== Component Header =====
+  Component: ChatHeader
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: En-tête de conversation (actions, titre, recherche).
+-->
+<!-- src/components/messages/ChatHeader.vue -->
 <template>
   <header class="msg-main__header" role="banner" aria-label="En-tête de conversation">
     <div class="msg-main__identity">
@@ -99,6 +106,7 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
+// ===== Props d'affichage et etat =====
 const props = defineProps({
   title: { type: String, default: 'Messagerie' },
   subtitle: { type: String, default: '' },
@@ -118,9 +126,11 @@ const props = defineProps({
   participantStatusLabel: { type: String, default: '' },
 })
 
+// ===== Emissions =====
 const emit = defineEmits(['refresh', 'back', 'info', 'call', 'video'])
 const router = useRouter()
 
+// ===== Libelles derives =====
 const subtitleComputed = computed(() => props.subtitle || 'Discussions sécurisées sur COVA')
 const ariaBackLabel = computed(() => 'Revenir à la page précédente')
 const ariaRefreshLabel = computed(() => (props.loading ? 'Actualisation en cours' : 'Actualiser les messages'))
