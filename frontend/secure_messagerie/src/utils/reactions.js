@@ -1,3 +1,8 @@
+// ===== Reactions Catalog =====
+// Catalogue des emojis et GIFs utilises par les reactions : organise par sections pour l'UI (onglets) et gele pour eviter les mutations.
+
+// ---- Sections d'emojis ----
+// Chaque section contient un identifiant, un libelle affiche et une liste d'emojis Unicode prets a etre rendus.
 const EMOJI_SECTIONS = [
   {
     id: 'popular',
@@ -162,6 +167,8 @@ const EMOJI_SECTIONS = [
   },
 ]
 
+// ---- Bibliotheque GIF par defaut ----
+// Propositions pretes a l'emploi pour alimenter une selection sans dependre d'une API tierce cote client.
 const DEFAULT_GIF_LIBRARY = [
   { label: 'Bravo', url: 'https://media.giphy.com/media/111ebonMs90YLu/giphy.gif' },
   { label: 'Fete', url: 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif' },
@@ -187,6 +194,8 @@ const DEFAULT_GIF_LIBRARY = [
   { label: 'Nope', url: 'https://media.giphy.com/media/xT9IgIc0lryrxvqVGM/giphy.gif' },
 ]
 
+// ---- Exports immuables ----
+// Object.freeze evite que des composants modifient le catalogue global et garantit des references stables.
 export const emojiSections = Object.freeze(EMOJI_SECTIONS)
 export const emojiCatalog = Object.freeze(emojiSections.flatMap((section) => section.items))
 export const defaultGifLibrary = Object.freeze(DEFAULT_GIF_LIBRARY)

@@ -1,3 +1,8 @@
+// ===== Profile Utilities =====
+// Fonctions partagees pour deriver les initiales, normaliser l'URL d'avatar et propager les mises a jour de profil.
+
+// ---- Initiales d'avatar ----
+// Genere deux caracteres lisibles a partir du displayName ou de l'email pour les avatars par defaut.
 export function computeAvatarInitials(options = {}) {
   const { displayName = '', email = '', fallback = 'SC' } = options || {}
   const base = (displayName || '').trim() || (email || '').trim()
@@ -19,6 +24,8 @@ export function computeAvatarInitials(options = {}) {
   return (base.charAt(0) || fallback).toUpperCase()
 }
 
+// ---- Normalisation d'URL ----
+// Convertit une valeur d'avatar en URL exploitable : prefixe avec baseUrl si necessaire et ajoute un cache-bust optionnel.
 export function normalizeAvatarUrl(url, { baseUrl = '', cacheBust = false } = {}) {
   if (!url) {
     return null
@@ -52,6 +59,8 @@ export function normalizeAvatarUrl(url, { baseUrl = '', cacheBust = false } = {}
   return normalized
 }
 
+// ---- Broadcast des changements ----
+// Met a jour le localStorage et emet un CustomEvent pour que l'UI reagisse immediatement aux modifications de profil.
 export function broadcastProfileUpdate(payload = {}) {
   const detail = {}
   if (Object.prototype.hasOwnProperty.call(payload, 'display_name')) {

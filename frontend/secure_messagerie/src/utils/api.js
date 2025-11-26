@@ -1,12 +1,18 @@
+// ===== API Utility =====
+// Point central pour preparer les appels HTTP (URLs normalisees, token, redirections) afin d'offrir un comportement coherent partout.
 import axios from 'axios'
 import router from '@/router'
 import { clearSession, hasStoredSession } from '@/services/auth'
 
+// ---- Construction des URLs backend ----
+// Garantit que l'URL de base se termine toujours par "/api" peu importe la configuration fournie.
 // Normalize API base so it always ends with '/api' (no trailing slash after)
 const raw = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').toString().replace(/\/+$/, '')
 const apiBase = raw.endsWith('/api') ? raw : `${raw}/api`
 const backendBase = apiBase.replace(/\/api$/, '')
 
+// ---- Client Axios partage ----
+// Utilise partout dans l'app pour eviter de repeter la configuration commune.
 const api = axios.create({ baseURL: apiBase })
 const AUTH_EXEMPT_ENDPOINTS = [
   '/auth/login',
@@ -16,6 +22,8 @@ const AUTH_EXEMPT_ENDPOINTS = [
   '/auth/reset-password',
 ]
 
+// ---- Normalisation des chemins ----
+// Convertit une URL relative/absolue en chemin canonique (sans query/hash) pour comparer avec les endpoints proteges.
 function normalizeRequestedPath(config) {
   const target = config?.url || ''
   if (!target) return ''
@@ -31,6 +39,8 @@ function normalizeRequestedPath(config) {
   }
 }
 
+// ---- Exemptions d'auth ----
+// Permet de laisser passer les endpoints publics sans forcer un token, meme si un ancien token est stocke.
 function isAuthExemptRequest(config) {
   const rawPath = normalizeRequestedPath(config)
   if (!rawPath) return false
@@ -44,6 +54,8 @@ function isAuthExemptRequest(config) {
   return AUTH_EXEMPT_ENDPOINTS.includes(canonical)
 }
 
+// ---- Intercepteur requete ----
+// Injecte silencieusement le token s'il existe dans le localStorage sans bloquer la requete en cas d'erreur.
 // Attach token automatically if present (non-blocking)
 api.interceptors.request.use((config) => {
   try {
@@ -59,6 +71,8 @@ api.interceptors.request.use((config) => {
 })
 
 let handlingAuthFailure = false
+// ---- Intercepteur reponse ----
+// Surveille les 401/403 : nettoie la session, choisit la raison et redirige vers /login pour eviter les boucles.
 api.interceptors.response.use(
   (response) => response,
   (error) => {

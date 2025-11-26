@@ -1,9 +1,17 @@
+// ===== Realtime Helpers =====
+// Construit les URLs WebSocket a partir de la config (ou du navigateur) pour garantir des connexions temps reel coherentes.
+
+// ---- Constantes ----
+// Origine HTTP utilisee quand l'app tourne hors navigateur (tests, prerender).
 const DEFAULT_HTTP_ORIGIN = 'http://localhost:8000'
 
+// ---- Utils de normalisation ----
+// Supprime les slashs finaux pour eviter les doubles slashs lors des concatenations.
 function stripTrailingSlash(value) {
   return value.replace(/\/+$/, '')
 }
 
+// Retourne l'origine courante (browser) ou un defaut connu pour reconstruire les URLs.
 function getRuntimeOrigin() {
   if (typeof window !== 'undefined' && window.location?.origin) {
     return window.location.origin
@@ -11,6 +19,7 @@ function getRuntimeOrigin() {
   return DEFAULT_HTTP_ORIGIN
 }
 
+// S'assure que la base API se termine par "/api" pour simplifier la suite des calculs.
 function normalizeApiBase(candidate) {
   const raw = (candidate || '').toString().trim()
   if (!raw) return '/api'
@@ -20,6 +29,8 @@ function normalizeApiBase(candidate) {
 
 let cachedWsBase = ''
 
+// ---- Resolution de l'URL WS ----
+// Utilise VITE_WS_BASE si present, sinon derive la base depuis VITE_API_URL + origine courante, avec fallback robuste.
 export function resolveWsBase() {
   if (cachedWsBase) return cachedWsBase
   const envWsBase = (import.meta.env?.VITE_WS_BASE || '').toString().trim()
@@ -45,6 +56,8 @@ export function resolveWsBase() {
   }
 }
 
+// ---- Construction finale ----
+// Assemble la base WS avec un chemin et des query params optionnels deja filtres pour ignorer les valeurs nulles.
 export function buildWsUrl(path = '', query = undefined) {
   const base = stripTrailingSlash(resolveWsBase())
   const normalizedPath = path ? `/${path.toString().replace(/^\/+/, '')}` : ''
