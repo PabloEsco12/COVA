@@ -132,6 +132,7 @@ services:
       - "5176:5176"
     environment:
       - VITE_API_URL=http://localhost:18000/api
+      - VITE_WS_BASE=ws://localhost:18000/api/ws
     restart: unless-stopped
 
   # UI de monitoring (Uptime Kuma)

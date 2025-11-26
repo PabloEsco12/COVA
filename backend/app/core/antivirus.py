@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+import logging
 
 from fastapi import HTTPException, status
 
@@ -36,6 +37,7 @@ class AntivirusScanner:
         self.port = port
         self.enabled = bool(host and clamd)
         self._client = None
+        self.logger = logging.getLogger(__name__)
 
     # --- Section: Connexion et client ---
     def _ensure_client(self):
@@ -53,7 +55,10 @@ class AntivirusScanner:
         try:
             result = client.scan(path)
         except Exception as exc:  # pragma: no cover - network errors
-            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Antivirus indisponible") from exc
+            # Si le scanner est indisponible, on journalise et on degrade gracieusement
+            self.logger.warning("Antivirus indisponible, scan ignore pour %s : %s", path, exc)
+            self.enabled = False
+            return
         if not result:
             return
         _, (status_label, signature) = next(iter(result.items()))
