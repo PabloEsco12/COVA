@@ -2,7 +2,7 @@
 ############################################################
 # Routes : Health (live/ready)
 # Auteur  : Valentin Masurelle
-# Date    : 2025-05-04
+# Date    : 2025-06-04
 #
 # Description:
 # - /health/live : teste uniquement le process FastAPI.

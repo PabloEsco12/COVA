@@ -2,7 +2,7 @@
 ############################################################
 # Routes : Contacts (liste, creation, statut, alias, suppression)
 # Auteur  : Valentin Masurelle
-# Date    : 2025-05-04
+# Date    : 2025-05-12
 #
 # Description:
 # - Expose les operations de gestion des contacts pour l'utilisateur courant.

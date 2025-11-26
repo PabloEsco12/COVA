@@ -2,7 +2,7 @@
 ############################################################
 # Routes : Me (profil, devices, overview, securite)
 # Auteur  : Valentin Masurelle
-# Date    : 2025-05-04
+# Date    : 2025-06-04
 #
 # Description:
 # - Gère le compte courant: profil, avatar, devices, overview, audit, securite.

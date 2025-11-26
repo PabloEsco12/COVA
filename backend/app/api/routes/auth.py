@@ -2,7 +2,7 @@
 ############################################################
 # Routes : Auth (inscription, login, refresh, logout)
 # Auteur  : Valentin Masurelle
-# Date    : 2025-05-04
+# Date    : 2025-05-12
 #
 # Description:
 # - Endpoints d'inscription/confirmation, login (avec TOTP), refresh et revocation.

@@ -2,7 +2,8 @@
 ############################################################
 # Routes : Conversations & Messages
 # Auteur  : Valentin Masurelle
-# Date    : 2025-05-04
+# Date    : 2025-06-05
+
 #
 # Description:
 # - Cree/edite/supprime des conversations et leurs membres/invitations.
