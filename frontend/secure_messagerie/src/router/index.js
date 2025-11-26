@@ -1,8 +1,9 @@
 // src/router/index.js
+// Configuration centrale du router Vue : routes publiques/privees et garde d'acces
 import { createRouter, createWebHistory } from 'vue-router'
 import { clearSession, getAccessToken, hasStoredSession, isAccessTokenExpired } from '@/services/auth'
 
-// pages publiques
+// Pages publiques (authentification, reset, confirmation)
 import LoginView from '@/views/LoginView.vue'
 import LoginTotpView from '@/views/LoginTotpView.vue'
 import RegisterView from '../views/RegisterView.vue'
@@ -10,7 +11,7 @@ import ResetPasswordView from '@/views/ResetPasswordView.vue'
 import NewPasswordView from '@/views/NewPasswordView.vue'
 import ConfirmEmailView from '@/views/ConfirmEmailView.vue'
 
-// layout / dashboard
+// Layout / dashboard
 import Dashboard from '@/components/dashboard/Dashboard.vue'
 import DashboardHome from '@/components/dashboard/DashboardHomeEnhanced.vue'
 import Messages from '@/views/MessagesView.vue'
@@ -29,7 +30,8 @@ const routes = [
   { path: '/reset-password', name: 'reset-password', component: ResetPasswordView },
   { path: '/new-password', name: 'new-password', component: NewPasswordView },
 
-  // ✅ on accepte les 2 URLs possibles venant du mail
+  // Alias de routes de confirmation pour couvrir les liens d'email legacy/actuels
+  //  on accepte les 2 URLs possibles venant du mail
   { path: '/confirm/:token', name: 'confirm-email', component: ConfirmEmailView },
   { path: '/confirm-email/:token', name: 'confirm-email-alt', component: ConfirmEmailView },
 
@@ -53,7 +55,7 @@ const router = createRouter({
   routes,
 })
 
-// garde de navigation
+// Garde de navigation : force une session valide pour les routes dashboard
 router.beforeEach((to, from, next) => {
   const publicPages = [
     '/login',
@@ -65,7 +67,7 @@ router.beforeEach((to, from, next) => {
 
   const isPublic =
     publicPages.includes(to.path) ||
-    // ✅ on autorise aussi les 2 variantes
+    // Autoriser aussi les 2 variantes de lien de confirmation
     to.path.startsWith('/confirm/') ||
     to.path.startsWith('/confirm-email/')
 
