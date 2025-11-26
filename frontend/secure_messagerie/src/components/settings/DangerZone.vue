@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: DangerZone
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Actions sensibles du compte (revoquer sessions, supprimer compte).
+-->
 <template>
   <div class="danger-zone p-3 border rounded-3">
     <h4 class="text-danger mb-2">
@@ -53,6 +60,7 @@ import { api } from '@/utils/api'
 import { clearSession } from '@/services/auth'
 import CustomModal from '@/components/ui/CustomModal.vue'
 
+// ===== Etats locaux =====
 const loadingDelete = ref(false)
 const deleteError = ref('')
 const showDeleteModal = ref(false)

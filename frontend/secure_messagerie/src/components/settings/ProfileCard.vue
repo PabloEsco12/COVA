@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: ProfileCard
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Edition des informations de profil (nom, titre, dept).
+-->
 <template>
   <div class="card p-3 h-100">
     <h4 class="mb-3">Profil</h4>
@@ -98,12 +105,14 @@ import { ref, onMounted } from 'vue'
 import { api, backendBase } from '@/utils/api'
 import { broadcastProfileUpdate, normalizeAvatarUrl } from '@/utils/profile'
 
+// ===== Emissions et constantes =====
 const emit = defineEmits(['profile-loaded', 'profile-updated'])
 
 const emailDisplay = ref('')
 const DEFAULT_LOCALE = 'fr-BE'
 const DEFAULT_TIMEZONE = 'Europe/Brussels'
 
+// ===== Etats du formulaire profil =====
 const formPseudo = ref('')
 const formJobTitle = ref('')
 const formDepartment = ref('')

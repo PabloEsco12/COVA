@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: NotificationsCard
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Paramètres de notifications (in-app, email, bureau, WSP).
+-->
 <template>
   <div class="card p-3 h-100">
     <div class="d-flex justify-content-between align-items-start mb-3">
@@ -159,6 +166,7 @@
 import { ref, onMounted } from 'vue'
 import { api } from '@/utils/api'
 
+// ===== Etats reactivs (prefs et messages) =====
 const notifLogin = ref(readStoredLoginAlertPref())
 const secMsg = ref('')
 const secMsgType = ref('info')

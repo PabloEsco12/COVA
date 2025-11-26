@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: AvatarCard
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Gestion de l'avatar utilisateur (aperçu, upload, suppression).
+-->
 <template>
   <div class="card p-3 h-100">
     <h4 class="mb-3">Avatar</h4>
@@ -49,6 +56,7 @@ import { computed, ref, watch } from 'vue'
 import { api, backendBase } from '@/utils/api'
 import { computeAvatarInitials, normalizeAvatarUrl, broadcastProfileUpdate } from '@/utils/profile'
 
+// ===== Props et emissions =====
 const props = defineProps({
   email: {
     type: String,
@@ -65,6 +73,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['avatar-updated'])
 
+// ===== Etats locaux =====
 const loadingAvatar = ref(false)
 const avatarMsg = ref('')
 const avatarOk = ref(false)

@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: OrganizationAdministratorsCard
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Gestion des administrateurs d'organisation (listing, ajout, suppression).
+-->
 <template>
   <div class="card organization-admin-card">
     <div class="card-header bg-white d-flex align-items-center gap-2 flex-wrap">
@@ -150,6 +157,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { listOrganizationMembers, updateOrganizationMemberRole } from '@/services/organization'
 
+// ===== Etats reactivs =====
 const loading = ref(true)
 const refreshing = ref(false)
 const error = ref('')

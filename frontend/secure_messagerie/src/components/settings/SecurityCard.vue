@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: SecurityCard
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Paramètres de sécurité (MFA, clés, sessions).
+-->
 <template>
   <div class="card p-3 h-100">
     <!-- Mot de passe -->
@@ -214,6 +221,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { api } from '@/utils/api'
 import CustomModal from '@/components/ui/CustomModal.vue'
 
+// ===== Etats MFA / TOTP =====
 const totpEnabled = ref(false)
 const totpLockedUntil = ref(null)
 const totpEnrollment = reactive({
@@ -231,6 +239,7 @@ const showDeactivateTotpModal = ref(false)
 const deactivateTotpError = ref('')
 const loadingTotp = ref(false)
 
+// ===== Etats changement de mot de passe =====
 const oldPassword = ref('')
 const newPassword = ref('')
 const newPassword2 = ref('')
