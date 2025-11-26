@@ -1,3 +1,10 @@
+// ===== Module Header =====
+// Module: messages/useConversationsState
+// Role: Charge et maintient la liste des conversations + meta (unread, previews, avatars).
+// Notes:
+//  - Encapsule les appels API /conversations et /messages/unread_summary.
+//  - expose applyConversationPatch/applyMemberPayload pour mettre a jour localement depuis d'autres modules.
+
 import { reactive, ref } from 'vue'
 import { api } from '@/utils/api'
 import { normalizeConversation, normalizeMember, memberUserId } from './mappers'
@@ -16,6 +23,7 @@ export function useConversationsState({
   const conversationError = ref('')
   const unreadSummary = ref({ total: 0, conversations: [] })
 
+  // ---- Initialise un container meta pour une conversation si absent ----
   function initializeMeta(conv) {
     if (!conv?.id) return
     if (!conversationMeta[conv.id]) {
@@ -28,11 +36,13 @@ export function useConversationsState({
     }
   }
 
+  // ---- Garantit l'existence du meta (utilise par d'autres composables) ----
   function ensureMeta(convId) {
     initializeMeta({ id: convId, createdAt: new Date(), avatarUrl: null })
     return conversationMeta[convId]
   }
 
+  // ---- Reinjecte le resume unread dans les metas actuels ----
   function applyUnreadMeta() {
     const map = new Map(
       unreadSummary.value.conversations.map((entry) => [String(entry.conversation_id), Number(entry.unread || 0)]),
@@ -43,6 +53,7 @@ export function useConversationsState({
     })
   }
 
+  // ---- Charge le resume des non-lus global depuis l'API ----
   async function loadUnreadSummary() {
     try {
       const { data } = await api.get('/messages/unread_summary')
@@ -62,6 +73,7 @@ export function useConversationsState({
     }
   }
 
+  // ---- Diffuse un snapshot des unread (event window + localStorage) ----
   function emitUnreadSnapshot() {
     if (typeof window === 'undefined') return
     try {
@@ -78,6 +90,7 @@ export function useConversationsState({
     } catch {}
   }
 
+  // ---- Met a jour les compteurs non-lus pour une conversation specifique ----
   function setUnreadForConversation(convId, newCount) {
     const entries = unreadSummary.value.conversations.slice()
     const idx = entries.findIndex((entry) => entry.conversation_id === convId)
@@ -97,6 +110,7 @@ export function useConversationsState({
     emitUnreadSnapshot()
   }
 
+  // ---- Marque comme lu (optimiste) et synchronise avec l'API ----
   async function markConversationAsRead(convId, ids = []) {
     if (!convId) return
     const meta = ensureMeta(convId)
@@ -120,12 +134,14 @@ export function useConversationsState({
     }
   }
 
+  // ---- Incremente les non-lus localement (notification entrante) ----
   function incrementUnreadCounter(convId) {
     const meta = ensureMeta(convId)
     meta.unreadCount = (meta.unreadCount || 0) + 1
     setUnreadForConversation(convId, meta.unreadCount)
   }
 
+  // ---- Ajoute/merge une conversation normalisee dans la liste ----
   function applyConversationPatch(payload) {
     if (!payload) return
     const normalized = normalizeConversation(payload, { selfId: currentUserId.value })
@@ -139,6 +155,7 @@ export function useConversationsState({
     }
   }
 
+  // ---- Met a jour/ajoute un membre dans la conversation selectionnee ----
   function applyMemberPayload(payload) {
     const normalized = normalizeMember(payload)
     if (!normalized) return
@@ -160,6 +177,7 @@ export function useConversationsState({
     target.participants = activeMembers.filter((member) => !selfId || memberUserId(member) !== selfId)
   }
 
+  // ---- Propage les flags de blocage (par utilisateur) sur toutes les conversations directes ----
   function updateConversationBlockStateByUser(userId, flags = {}) {
     if (!userId) return
     const target = String(userId)
@@ -181,6 +199,7 @@ export function useConversationsState({
     meta.avatarUrl = null
   }
 
+  // ---- Charge toutes les conversations et initialise les metas ----
   async function loadConversations() {
     loadingConversations.value = true
     conversationError.value = ''

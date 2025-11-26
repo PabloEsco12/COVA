@@ -1,3 +1,8 @@
+// ===== Module Header =====
+// Module: messages/useComposerContext
+// Role: Gere les modes du composeur (repondre/transfert/edition) et navigation cible.
+// Notes: manipule des refs externes (composerState, forwardPicker) sans toucher a l'API d'envoi.
+
 export function useComposerContext({
   composerState,
   messageInput,
@@ -10,6 +15,7 @@ export function useComposerContext({
   forwardPicker,
   resetComposerState,
 }) {
+  // ---- Passe le composeur en mode reponse ----
   function startReply(message) {
     if (!message) return
     composerState.mode = 'reply'
@@ -18,6 +24,7 @@ export function useComposerContext({
     composerState.targetMessageId = null
   }
 
+  // ---- Passe le composeur en mode transfert (copie le contenu si besoin) ----
   function startForward(message) {
     if (!message) return
     composerState.mode = 'forward'
@@ -29,6 +36,7 @@ export function useComposerContext({
     }
   }
 
+  // ---- Passe le composeur en mode edition d'un message existant ----
   function startEdit(message) {
     if (!message) return
     composerState.mode = 'edit'
@@ -43,6 +51,7 @@ export function useComposerContext({
     resetComposerState()
   }
 
+  // ---- Ouvre la modale de choix de conversation pour le transfert ----
   function initiateForward(message) {
     if (!message) return
     forwardPicker.open = true
@@ -50,12 +59,14 @@ export function useComposerContext({
     forwardPicker.query = ''
   }
 
+  // ---- Ferme la selection de transfert ----
   function cancelForwardSelection() {
     forwardPicker.open = false
     forwardPicker.message = null
     forwardPicker.query = ''
   }
 
+  // ---- Confirme la conversation cible pour un transfert et bascule si besoin ----
   async function confirmForwardTarget(conversationId) {
     if (!forwardPicker.message) {
       cancelForwardSelection()

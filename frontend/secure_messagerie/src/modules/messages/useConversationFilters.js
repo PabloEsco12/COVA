@@ -1,5 +1,11 @@
+// ===== Module Header =====
+// Module: messages/useConversationFilters
+// Role: Calculer les filtres/liste triee des conversations (recherche, type, non lues).
+// Notes: pas d'appel API; se base sur les meta deja chargees et la presence injectee.
+
 import { computed, ref } from 'vue'
 
+// ---- Filtres visibles dans la sidebar ----
 const DEFAULT_FILTERS = [
   { value: 'all', label: 'Toutes', icon: 'bi bi-inbox' },
   { value: 'unread', label: 'Non lues', icon: 'bi bi-envelope-open' },
@@ -7,6 +13,7 @@ const DEFAULT_FILTERS = [
   { value: 'group', label: 'Groupes', icon: 'bi bi-people' },
 ]
 
+// ---- Roles affiches dans le panneau conversation ----
 const DEFAULT_ROLES = [
   { value: 'owner', label: 'Propriétaire' },
   { value: 'moderator', label: 'Modérateur' },
@@ -26,12 +33,14 @@ export function useConversationFilters({
   const conversationFilters = DEFAULT_FILTERS
   const conversationRoles = DEFAULT_ROLES
 
+  // ---- Texte recap du nombre de conversations ----
   const conversationSummary = computed(() => {
     if (loadingConversations.value) return 'Chargement...'
     const count = conversations.value.length
     return count ? `${count} conversation${count > 1 ? 's' : ''}` : 'Aucune conversation'
   })
 
+  // ---- Liste derivee filtre/triee avec meta (unread, preview, presence) ----
   const sortedConversations = computed(() => {
     const term = conversationSearch.value.trim().toLowerCase()
     const presenceMap = conversationPresence?.value ?? conversationPresence ?? {}
@@ -66,6 +75,7 @@ export function useConversationFilters({
     return filtered.sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity))
   })
 
+  // ---- Libelle du filtre actif (affichage bouton) ----
   const activeFilterLabel = computed(() => {
     const option = conversationFilters.find((filter) => filter.value === conversationFilter.value)
     return option ? option.label : 'Toutes'

@@ -1,5 +1,13 @@
+// ===== Module Header =====
+// Module: messages/useMessageNotifications
+// Role: Gestion des notifications toast/navigateur pour messages/contacts et synchro unread.
+// Notes:
+//  - Dependance sur queueToastNotification/openToastConversation pour l'UI.
+//  - Persiste la preference navigateur dans localStorage (notif_browser).
+
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+// ---- Lecture de la preference locale (1 = active) ----
 function readBrowserNotificationPreference() {
   try {
     return localStorage.getItem('notif_browser') === '1'
@@ -38,6 +46,7 @@ export function useMessageNotifications({
     }
   }
 
+  // ---- Affiche une notification navigateur liee a un message ----
   function triggerBrowserNotification(message, body) {
     if (typeof window !== 'undefined' && window.__covaGlobalBrowserNotifications) return
     if (!browserNotificationsEnabled.value || typeof Notification === 'undefined') return
@@ -67,6 +76,7 @@ export function useMessageNotifications({
     }
   }
 
+  // ---- Variante navigateur pour les events generiques (contacts, etc.) ----
   function triggerBrowserNotificationFromEvent(meta) {
     if (typeof window !== 'undefined' && window.__covaGlobalBrowserNotifications) return
     if (!browserNotificationsEnabled.value || typeof Notification === 'undefined') return
@@ -87,6 +97,7 @@ export function useMessageNotifications({
     }
   }
 
+  // ---- Signale au module contacts de rafraichir ses donnees ----
   function notifyPendingContactsRefresh() {
     if (typeof window === 'undefined') return
     window.dispatchEvent(new CustomEvent('cova:contacts-pending', { detail: { refresh: true } }))
@@ -146,6 +157,7 @@ export function useMessageNotifications({
     notifyPendingContactsRefresh()
   }
 
+  // ---- Orchestration des toasts et notif navigateur pour un nouveau message ----
   function notifyNewIncomingMessage(message) {
     if (!message || message.sentByMe || message.deleted || message.isSystem) return
     if (isConversationMuted && isConversationMuted(message.conversationId)) return
@@ -170,6 +182,7 @@ export function useMessageNotifications({
     }
   }
 
+  // ---- Traitement des events message.* en dehors de la conversation active ----
   function handleMessageNotificationEvent(event) {
     if (event?.author_id && currentUserId.value && String(event.author_id) === String(currentUserId.value)) {
       return
@@ -198,6 +211,7 @@ export function useMessageNotifications({
     })
   }
 
+  // ---- Routeur generique des payloads de notification (stream/bridge) ----
   function handleIncomingNotificationPayload(payload, _origin = 'stream') {
     if (!payload || typeof payload !== 'object') return
     switch (payload.type) {

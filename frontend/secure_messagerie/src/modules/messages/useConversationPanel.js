@@ -1,3 +1,10 @@
+// ===== Module Header =====
+// Module: messages/useConversationPanel
+// Role: Actions du panneau conversation (edition, invites, roles, suppression/quitte).
+// Notes:
+//  - Utilise des services conversations.* pour muter/quitter/supprimer/inviter.
+//  - Manipule des refs partages (showConversationPanel, invites, conversationForm) mais ne gere pas l'UI.
+
 import { computed, reactive, ref, watch } from 'vue'
 import {
   updateConversation,
@@ -28,23 +35,27 @@ export function useConversationPanel({
   conversationRoles,
 }) {
   const showConversationPanel = ref(false)
+  // ---- Formulaire et etats d'edition de la conversation ----
   const conversationForm = reactive({ title: '', topic: '', archived: false })
   const savingConversation = ref(false)
   const conversationInfoError = ref('')
   const conversationInfoNotice = ref('')
   let conversationNoticeTimer = null
 
+  // ---- Gestion des invitations (chargement, creation, revocation) ----
   const invites = ref([])
   const loadingInvites = ref(false)
   const inviteForm = reactive({ email: '', role: 'member', expiresInHours: 72 })
   const inviteBusy = ref(false)
   const inviteRevokeBusy = reactive({})
 
+  // ---- Etats de busy pour operations membres/suppression ----
   const memberBusy = reactive({})
   const leavingConversation = ref(false)
   const deletingConversation = ref(false)
   const showDeleteConfirm = ref(false)
 
+  // ---- Info derivee: proprietaires affiches dans la fiche conversation ----
   const conversationOwnerSummary = computed(() => {
     const owners =
       (selectedConversation.value?.members || []).filter((member) => member.role === 'owner') || []

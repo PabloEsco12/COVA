@@ -1,3 +1,10 @@
+// ===== Module Header =====
+// Module: messages/useMessageActions
+// Role: Actions contextuelles sur les messages (reactions, epingles, copie, downloads) + formateurs derives.
+// Notes:
+//  - Supporte les operations optimistes pour les attachments/messages.
+//  - Gere les etats de menus pour eviter l'ouverture simultanee (menu vs picker reaction).
+
 import { reactive, ref } from 'vue'
 import { pinMessage, unpinMessage, updateMessageReaction } from '@/services/conversations'
 import { createMessageFormatters } from './message-formatters'
@@ -24,6 +31,7 @@ export function useMessageActions({
   const optimisticMessageIds = new Set()
   let copyTimer = null
 
+  // ---- Clone minimal d'un message pour les references (reply/forward) ----
   function cloneComposerReference(target) {
     if (!target) return null
     return {
@@ -35,6 +43,7 @@ export function useMessageActions({
     }
   }
 
+  // ---- Mapping d'attachements optimistes (avant retour serveur) ----
   function mapOptimisticAttachments(entries) {
     return entries.map((entry) => ({
       id: entry.descriptor?.id || entry.id,
@@ -97,6 +106,7 @@ export function useMessageActions({
     reactionPickerFor.value = null
   }
 
+  // ---- Pin/unpin distant avec suivi busy par message ----
   async function togglePin(message) {
     if (!selectedConversationId.value) return
     const messageId = message.id
@@ -113,6 +123,7 @@ export function useMessageActions({
     }
   }
 
+  // ---- Ajout/suppression d'une reaction (unlike si deja presente) ----
   async function toggleReaction(message, emoji) {
     if (!selectedConversationId.value || !emoji) return
     const key = `${message.id}:${emoji}`
@@ -127,6 +138,7 @@ export function useMessageActions({
     }
   }
 
+  // ---- Copie du contenu texte dans le presse-papiers (avec feedback temporaire) ----
   async function copyMessage(message) {
     if (!message?.content) return
     try {
@@ -144,11 +156,13 @@ export function useMessageActions({
     }
   }
 
+  // ---- Ouverture du telechargement d'une piece jointe ----
   function downloadAttachment(attachment) {
     if (!attachment || !attachment.downloadUrl) return
     window.open(attachment.downloadUrl, '_blank', 'noopener')
   }
 
+  // ---- Formateurs derives (temps, statut, securite) ----
   const messageFormatters = createMessageFormatters({
     formatTime,
     formatAbsolute,

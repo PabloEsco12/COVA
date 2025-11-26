@@ -1,3 +1,8 @@
+// ===== Module Header =====
+// Module: messages/useMessageToasts
+// Role: Gestion des toasts (file d'attente, auto-dismiss) et navigation vers la conversation cible.
+// Notes: stocke les timers dans une Map pour nettoyer a l'unmount.
+
 import { nextTick, onBeforeUnmount, ref } from 'vue'
 
 export function useMessageToasts({
@@ -6,9 +11,11 @@ export function useMessageToasts({
   ensureMessageVisible,
   generateLocalId,
 }) {
+  // ---- File des toasts affiches + timers d'auto-fermeture ----
   const messageToasts = ref([])
   const toastTimers = new Map()
 
+  // ---- Supprime un toast et nettoie son timer ----
   function dismissToast(id) {
     messageToasts.value = messageToasts.value.filter((toast) => toast.id !== id)
     if (toastTimers.has(id)) {
@@ -17,6 +24,7 @@ export function useMessageToasts({
     }
   }
 
+  // ---- Action principale sur un toast (ouvre conversation ou route cible) ----
   async function openToastConversation(toast) {
     if (toast?.targetRoute) {
       router.push(toast.targetRoute).catch(() => {})
@@ -32,6 +40,7 @@ export function useMessageToasts({
     }
   }
 
+  // ---- Ajout d'un toast (limite a 4) et planification d'auto-dismiss ----
   function queueToastNotification({ title, body, conversationId, messageId, targetRoute }) {
     const toast = {
       id: generateLocalId(),

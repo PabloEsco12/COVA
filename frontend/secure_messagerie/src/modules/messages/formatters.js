@@ -2,28 +2,34 @@
 // Module: messages/formatters
 // Author: Valentin Masurelle
 // Date: 2025-11-26
-// Role: Helpers pour formatter statuts/labels liés aux messages et contenus enrichis (gif/strip links).
+// Role: Helpers pour formatter statuts/labels lies aux messages et contenus enrichis (gif/strip links).
 // Usage:
-//  - Fonctions pures importées dans les composables et composants pour un affichage cohérent.
-//  - Centralise l'usage de detectGifLinks/stripGifLinks pour éviter la duplication de logique UI.
+//  - Fonctions pures importees dans les composables et composants pour un affichage coherent.
+//  - Centralise l'usage de detectGifLinks/stripGifLinks pour eviter la duplication de logique UI.
+//  - Rassemble tous les formateurs (horodatage, tailles, apercus) pour garder un rendu stable.
+//  - Aucun acces DOM : les helpers sont testables en unitaires et peuvent etre reutilises cote serveur.
 
 import { detectGifLinks, stripGifLinks } from '@/utils/messageContent'
 
+// ---- Horodatage court (HH:MM) pour bulles/messages envoyes ----
 export function formatTime(date) {
   if (!(date instanceof Date)) return ''
   return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
 }
 
+// ---- Horodatage court pour les listes (accepte Date ou timestamp) ----
 export function formatListTime(date) {
   const value = date instanceof Date ? date : new Date(date || Date.now())
   return value.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
 }
 
+// ---- Date absolue (dateStyle + timeStyle) pour les infobulles ou historiques ----
 export function formatAbsolute(date) {
   if (!(date instanceof Date)) return ''
   return date.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
+// ---- Humanisation des tailles d'attachement (Ko/Mo/Go) ----
 export function formatFileSize(bytes) {
   if (typeof bytes !== 'number' || Number.isNaN(bytes)) return ''
   if (bytes < 1024) return `${bytes} o`
@@ -37,6 +43,7 @@ export function formatFileSize(bytes) {
   return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[unit]}`
 }
 
+// ---- Apercu de message: extrait textuel ou fallback (GIF, PJ, contenu brut) ----
 export function messagePreviewText(message) {
   if (!message) return ''
   if (message.excerpt) return message.excerpt
@@ -57,6 +64,7 @@ export function messagePreviewText(message) {
   return ''
 }
 
+// ---- Normalisation robuste du resume d'acheminement (totaux/delivre/lu) ----
 export function extractDeliverySummary(message) {
   const summary = message.deliverySummary || {}
   return {

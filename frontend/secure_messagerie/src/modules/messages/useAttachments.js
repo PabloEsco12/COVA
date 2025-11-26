@@ -1,3 +1,9 @@
+// ===== Module Header =====
+// Module: messages/useAttachments
+// Role: Piloter la selection et l'upload des pieces jointes du composeur (queue + erreurs).
+// Usage: manipule des refs externes (pendingAttachments, attachmentError) et des callbacks fournis par le caller.
+// Notes: aucune dependance UI (DOM uniquement pour trouver l'input file si non fourni).
+
 import { reactive } from 'vue'
 
 export function useAttachments({
@@ -8,6 +14,7 @@ export function useAttachments({
   uploadAttachment,
   extractError,
 }) {
+  // ---- Ouvre le picker et valide qu'une conversation est ciblee ----
   function triggerAttachmentPicker() {
     attachmentError.value = ''
     if (!selectedConversationId.value) {
@@ -27,12 +34,14 @@ export function useAttachments({
     inputEl.click()
   }
 
+  // ---- Convertit l'evenement file en queue d'upload ----
   function onAttachmentChange(event) {
     const files = Array.from(event.target?.files || [])
     if (!files.length) return
     files.forEach((file) => queueAttachment(file))
   }
 
+  // ---- Ajoute un fichier dans pendingAttachments puis lance l'upload ----
   function queueAttachment(file) {
     if (!file) return
     const entry = reactive({
@@ -50,6 +59,7 @@ export function useAttachments({
     uploadAttachmentFile(entry)
   }
 
+  // ---- Upload vers l'API et mise a jour de la progression/erreur ----
   async function uploadAttachmentFile(entry) {
     if (!selectedConversationId.value) {
       entry.status = 'error'
@@ -74,10 +84,12 @@ export function useAttachments({
     }
   }
 
+  // ---- Retrait d'un fichier en attente ----
   function removeAttachment(entryId) {
     pendingAttachments.value = pendingAttachments.value.filter((item) => item.id !== entryId)
   }
 
+  // ---- Nettoyage complet des fichiers en attente et des erreurs ----
   function clearPendingAttachments() {
     pendingAttachments.value = []
     attachmentError.value = ''

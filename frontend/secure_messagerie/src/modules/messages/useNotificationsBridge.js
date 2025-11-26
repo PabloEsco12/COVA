@@ -1,4 +1,10 @@
+// ===== Module Header =====
+// Module: messages/useNotificationsBridge
+// Role: Dedoublonner et router les payloads de notification (stream + broadcast).
+// Notes: utilise un Set partage (notificationDedupSet) pour eviter les doublons.
+
 export function useNotificationsBridge({ notificationDedupSet, handleIncomingNotificationPayload }) {
+  // ---- Construit une empreinte simple pour dedoublonner les notifications ----
   function makeNotificationFingerprint(payload) {
     if (!payload || typeof payload !== 'object') return `generic:${Date.now()}`
     const parts = [
@@ -17,6 +23,7 @@ export function useNotificationsBridge({ notificationDedupSet, handleIncomingNot
     return parts.join(':')
   }
 
+  // ---- Dedoublonne puis forward vers le handler fourni ----
   function processNotificationPayload(payload, origin = 'stream') {
     if (!payload || typeof payload !== 'object') return
     const key = makeNotificationFingerprint(payload)

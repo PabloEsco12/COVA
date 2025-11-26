@@ -1,8 +1,17 @@
+// ===== Module Header =====
+// Module: messages/mappers
+// Role: Normaliser les payloads backend (membres, conversations, messages, fichiers) pour l'UI.
+// Notes:
+//  - Functions pures (pas d'acces DOM) utilisables dans des tests unitaires.
+//  - Garantit des identifiants stringifies et des dates instancies (new Date()).
+//  - Centralise la logique d'initialisation pour eviter les null checks repetes dans les composants.
+
 import { backendBase } from '@/utils/api'
 import { detectGifLinks, stripGifLinks } from '@/utils/messageContent'
 import { normalizeAvatarUrl } from '@/utils/profile'
 import { generateLocalId } from './id'
 
+// ---- Recuperation robuste de l'ID utilisateur dans une structure membre ----
 export function memberUserId(member) {
   if (!member) return null
   if (member.userId) return String(member.userId)
@@ -11,6 +20,7 @@ export function memberUserId(member) {
   return member.id ? String(member.id) : null
 }
 
+// ---- Initiales derivees d'un nom/label (fallback "C") ----
 export function computeInitials(label = '') {
   if (!label) return 'C'
   const tokens = String(label)
@@ -24,6 +34,7 @@ export function computeInitials(label = '') {
   return initials || 'C'
 }
 
+// ---- Normalisation des membres: IDs stringifies, dates typées, avatar et statut ----
 export function normalizeMember(member, { baseUrl = backendBase } = {}) {
   if (!member) return null
   const userId = member.user_id || member.userId || member.contact_user_id || null
@@ -47,6 +58,7 @@ export function normalizeMember(member, { baseUrl = backendBase } = {}) {
   }
 }
 
+// ---- Normalisation des conversations: participants actifs, avatar, titre ----
 export function normalizeConversation(payload, { selfId, baseUrl = backendBase } = {}) {
   if (!payload) return null
   const members = Array.isArray(payload.members)
@@ -90,6 +102,7 @@ export function normalizeConversation(payload, { selfId, baseUrl = backendBase }
   }
 }
 
+// ---- Mapping des pieces jointes (IDs/fichiers, meta et chiffrement) ----
 export function mapAttachmentPayload(raw) {
   if (!raw) return null
   return {
@@ -103,6 +116,7 @@ export function mapAttachmentPayload(raw) {
   }
 }
 
+// ---- Mapping des references (reponse/transfert) ----
 export function mapReferencePayload(raw) {
   if (!raw) return null
   return {
@@ -115,6 +129,7 @@ export function mapReferencePayload(raw) {
   }
 }
 
+// ---- Normalisation principale des messages: contenu, meta livraison, reactions ----
 export function normalizeMessage(payload, { selfId, baseUrl = backendBase } = {}) {
   const convId = String(payload.conversation_id || payload.conv_id || '')
   const authorId = payload.author_id ? String(payload.author_id) : null

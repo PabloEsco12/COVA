@@ -1,3 +1,10 @@
+// ===== Module Header =====
+// Module: messages/useMessagesLifecycle
+// Role: Abonne les evenements globaux (route, DOM, notifications) et orchestre les resets/chargements du module messages.
+// Notes:
+//  - Ne manipule pas l'API directement; pilote d'autres composables (search, composer, realtime, appels).
+//  - Ajoute/retire des listeners globaux au montage/demontage du layout conversation.
+
 import { nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
 
 export function useMessagesLifecycle({
@@ -36,11 +43,13 @@ export function useMessagesLifecycle({
 }) {
   let typingCleanupTimer = null
 
+  // ---- Diffuse l'ID de conversation active pour d'autres modules ----
   const emitActiveConversation = (convId) => {
     if (typeof window === 'undefined') return
     window.dispatchEvent(new CustomEvent('cova:active-conversation', { detail: { convId } }))
   }
 
+  // ---- Reception des notifications globales (pont avec l'UI) ----
   const handleGlobalNotificationEvent = (event) => {
     const payload = event?.detail
     if (!payload) return
@@ -67,6 +76,7 @@ export function useMessagesLifecycle({
     closeTransientMenus()
   }
 
+  // ---- Ferme menus/forward sur Escape ----
   const handleDocumentKeydown = (event) => {
     if (event.key !== 'Escape') return
     if (forwardPicker.open) {

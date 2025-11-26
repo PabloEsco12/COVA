@@ -1,3 +1,10 @@
+// ===== Module Header =====
+// Module: messages/useCallControls
+// Role: Piloter les appels WebRTC (audio/video): etat local, signaux, peer connection, toggles UI.
+// Notes:
+//  - State centralise (callState/callControls) pour le panneau d'appel et les boutons.
+//  - Ne gere pas l'UI, seulement les flux et les signaux envoyes via sendCallSignal.
+//  - Requiert l'injection des callbacks reseau (ensurePeerConnectionReady, attachStream, notifyIncomingSummary).
 import { computed, reactive, ref, watch } from 'vue'
 
 export function useCallControls({
@@ -15,6 +22,7 @@ export function useCallControls({
   const localVideoRef = ref(null)
   const remoteAudioRef = ref(null)
   const remoteVideoRef = ref(null)
+  // ---- Etat principal de l'appel (phase, ids, flux locaux/distants) ----
   const callState = reactive({
     status: 'idle',
     callId: null,
@@ -26,16 +34,20 @@ export function useCallControls({
     localStream: null,
     remoteStream: null,
   })
+  // ---- Etat des controles UI (micro/camera) ----
   const callControls = reactive({
     micEnabled: true,
     cameraEnabled: true,
   })
+  // ---- File d'attente des ICE recues avant creation du peer ----
   const pendingIceCandidates = []
   let peerConnection = null
+  // ---- Configuration STUN par defaut (no TURN pour simplifier la demo) ----
   const rtcConfig = {
     iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
   }
 
+  // ---- Libelles derives pour l'UI ----
   const remoteDisplayName = computed(() => {
     if (callState.remoteUserId) {
       return displayNameForUser(callState.remoteUserId)
@@ -43,6 +55,7 @@ export function useCallControls({
     return 'Participant'
   })
 
+  // Affichage du statut courant de l'appel (header composant)
   const callStatusLabel = computed(() => {
     switch (callState.status) {
       case 'incoming':
@@ -58,6 +71,7 @@ export function useCallControls({
     }
   })
 
+  // ---- Logging securise (evite crash console) ----
   function callLog(...args) {
     try {
       console.info('[call]', ...args)
@@ -66,6 +80,7 @@ export function useCallControls({
     }
   }
 
+  // ---- Stoppe proprement les tracks d'un MediaStream ----
   function stopStream(stream) {
     if (!stream) return
     stream.getTracks().forEach((track) => {
@@ -77,6 +92,7 @@ export function useCallControls({
     })
   }
 
+  // ---- Centralise la mise a jour des erreurs visuelles ----
   function setCallError(err) {
     if (!err) {
       callState.error = ''
@@ -90,6 +106,7 @@ export function useCallControls({
     callLog('call error', callState.error)
   }
 
+  // ---- Stoppe et nettoie le generateur sonore (incoming/outgoing) ----
   function stopRingtone(handles) {
     const { intervalRef, oscillatorRef, gainRef } = handles
     try {
@@ -111,6 +128,7 @@ export function useCallControls({
     gainRef.value = null
   }
 
+  // ---- Genere une sonnerie "maison" pour incoming/outgoing ----
   function startRingtone(handles, mode = 'outgoing') {
     const { contextRef, intervalRef, oscillatorRef, gainRef } = handles
     try {
@@ -152,6 +170,7 @@ export function useCallControls({
     intervalRef: ref(null),
   }
 
+  // ---- Creation/renouvellement du RTCPeerConnection et wiring des handlers ----
   async function createPeerConnection(stream) {
     if (peerConnection) {
       try {
@@ -221,6 +240,7 @@ export function useCallControls({
     return { type: desc.type, sdp: desc.sdp }
   }
 
+  // ---- Demande d'acces audio/video (avec contraintes anti-bruit) ----
   async function requestMedia(kind = 'audio') {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
       throw new Error('Votre navigateur ne permet pas les appels sécurisés.')
@@ -236,6 +256,7 @@ export function useCallControls({
     return navigator.mediaDevices.getUserMedia(constraints)
   }
 
+  // ---- Trouve l'interlocuteur par defaut (autre membre actif de la conversation) ----
   function getDefaultCallTarget() {
     const conv = selectedConversation.value
     if (!conv || !Array.isArray(conv.members)) return null
@@ -247,6 +268,7 @@ export function useCallControls({
     )
   }
 
+  // ---- Initie un appel sortant (genere offre + sonnerie) ----
   async function startCall(kind = 'audio') {
     callLog('startCall requested', kind)
     callState.error = ''
@@ -300,6 +322,7 @@ export function useCallControls({
     }
   }
 
+  // ---- Accepte un appel entrant (offre -> reponse, fallback audio si video refuse) ----
   async function acceptIncomingCall() {
     const offer = callState.incomingOffer
     if (!offer) return
@@ -350,6 +373,7 @@ export function useCallControls({
     }
   }
 
+  // ---- Termine l'appel et nettoie les flux/handlers (optionnellement notifie le pair) ----
   function endCall(silent = false, options = {}) {
     callLog('endCall', { silent, options, callId: callState.callId })
     stopRingtone(ringtoneHandles)
@@ -398,6 +422,7 @@ export function useCallControls({
     }
   }
 
+  // ---- Ajoute les ICE candidates recues avant l'init du peer ----
   function flushPendingCandidates() {
     if (!peerConnection || !pendingIceCandidates.length) return
     while (pendingIceCandidates.length) {
@@ -411,6 +436,7 @@ export function useCallControls({
     }
   }
 
+  // ---- Reception d'une offre entrante (prepare l'appel entrant) ----
   function handleIncomingOffer(data) {
     const fromUserId = data.from_user_id ? String(data.from_user_id) : null
     if (callState.status !== 'idle') {
@@ -440,6 +466,7 @@ export function useCallControls({
     })
   }
 
+  // ---- Reception d'une reponse a notre offre ----
   function handleIncomingAnswer(data) {
     if (!callState.callId || callState.callId !== data.call_id || !peerConnection) return
     callLog('answer received', data.call_id)
@@ -459,6 +486,7 @@ export function useCallControls({
     }
   }
 
+  // ---- Reception d'une ICE candidate ----
   function handleIncomingCandidate(data) {
     if (!callState.callId || callState.callId !== data.call_id) return
     const candidate = data.candidate
@@ -474,12 +502,14 @@ export function useCallControls({
     }
   }
 
+  // ---- Fin d'appel distante ----
   function handleIncomingHangup(data) {
     if (!callState.callId || data.call_id !== callState.callId) return
     callLog('remote hangup', data.call_id, data.reason || '')
     endCall(true)
   }
 
+  // ---- Bascule micro (et applique sur les tracks locales) ----
   function toggleMicrophone() {
     callControls.micEnabled = !callControls.micEnabled
     if (callState.localStream) {
@@ -489,6 +519,7 @@ export function useCallControls({
     }
   }
 
+  // ---- Bascule camera (uniquement en mode video) ----
   function toggleCamera() {
     if (callState.kind !== 'video') return
     callControls.cameraEnabled = !callControls.cameraEnabled
@@ -499,6 +530,7 @@ export function useCallControls({
     }
   }
 
+  // ---- Router des evenements temps reel (offer/answer/candidate/hangup) ----
   function handleCallSignal(evt) {
     const data = evt?.payload || {}
     const convId = data.conversation_id || evt.conversation_id
@@ -524,12 +556,14 @@ export function useCallControls({
     }
   }
 
+  // ---- Associe les streams actuels aux refs audio/video (DOM) ----
   function ensureAttachTargets() {
     attachStream(localVideoRef.value, callState.localStream || null)
     attachStream(remoteVideoRef.value, callState.remoteStream || null)
     attachStream(remoteAudioRef.value, callState.remoteStream || null)
   }
 
+  // ---- Permet de forcer une verification externe du peer (ex: onMounted) ----
   function ensurePeerReady() {
     ensurePeerConnectionReady(peerConnection)
   }

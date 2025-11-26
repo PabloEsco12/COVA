@@ -1,3 +1,10 @@
+// ===== Module Header =====
+// Module: messages/useConversationRealtime
+// Role: Ouvre le socket conversation + flux notifications; route les evenements (messages, typing, presence, appels).
+// Notes:
+//  - Exige un token (authToken) et des callbacks injectes pour appliquer les payloads.
+//  - Fournit sendCallSignal/setCallEventHandler pour brancher la logique WebRTC du module appel.
+
 import { ref, watch } from 'vue'
 import { useNotificationsStream } from '@/composables/useNotificationsStream'
 import { createConversationSocket } from '@/services/realtime'
@@ -36,6 +43,7 @@ export function useConversationRealtime({
     } catch {}
   }
 
+  // ---- Emission de signaux d'appel (offer/answer/candidate/hangup) vers le socket ----
   function sendCallSignal(event, payload = {}) {
     if (!socketRef.value || !selectedConversationId.value) return
     try {
@@ -60,6 +68,7 @@ export function useConversationRealtime({
     }
   }
 
+  // ---- Traitement des messages recues via websocket (message, presence, typing) ----
   function handleIncomingRealtime(payload) {
     const type = typeof payload?.event === 'string' ? payload.event : 'message'
     const message = normalizeMessage(payload, { selfId: currentUserId.value })
@@ -100,6 +109,7 @@ export function useConversationRealtime({
     }
   }
 
+  // ---- Ferme proprement le socket (option preserve presence/conversation) ----
   function disconnectRealtime(options = {}) {
     const { preserveConversation = false, preservePresence = false } = options
     if (socketRef.value) {
@@ -118,6 +128,7 @@ export function useConversationRealtime({
     }
   }
 
+  // ---- Ouvre le socket conversation et route les evenements ----
   function connectRealtime(convId, options = {}) {
     const targetId = convId ? String(convId) : null
     if (!targetId || !authToken.value) {

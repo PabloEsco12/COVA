@@ -1,3 +1,10 @@
+// ===== Module Header =====
+// Module: messages/usePresenceStatus
+// Role: Agreger la presence (snapshot realtime, statut manuel) et l'etat de saisie pour la conversation.
+// Notes:
+//  - Melange des sources: payloads realtime, status message local, fallback offline.
+//  - Expose des helpers pour afficher la presence/typing dans l'UI et pour mettre a jour le statut utilisateur.
+
 import { computed, reactive, ref, watch } from 'vue'
 
 import { api } from '@/utils/api'
@@ -55,6 +62,7 @@ export function usePresenceStatus({
   const typingTimestamps = reactive({})
   const typingUsers = ref([])
 
+  // ---- Map rapide userId -> entree de presence ----
   const presenceByUserId = computed(() => {
     const map = new Map()
     const snapshot = presenceSnapshot.value?.users || []
@@ -65,6 +73,7 @@ export function usePresenceStatus({
     return map
   })
 
+  // ---- Texte de presence affiche sous l'entete de conversation ----
   const presenceSummary = computed(() => {
     const conv = selectedConversation.value
     if (!conv || !Array.isArray(conv.members)) return ''
@@ -109,6 +118,7 @@ export function usePresenceStatus({
     return STATUS_LABELS.offline
   })
 
+  // ---- Presence principale (participant cible) pour l'affichage avatar ----
   const primaryParticipantPresence = computed(() => {
     const conv = selectedConversation.value
     if (!conv) {
@@ -124,6 +134,7 @@ export function usePresenceStatus({
     return memberPresence(target.userId || target.id)
   })
 
+  // ---- Texte de saisie en cours (typing...) ----
   const typingIndicatorText = computed(() => {
     if (!typingUsers.value.length) return ''
     const selfId = currentUserId.value ? String(currentUserId.value) : null
@@ -293,6 +304,7 @@ export function usePresenceStatus({
     return OFFLINE_ENTRY
   }
 
+  // ---- Applique un payload de presence realtime (users + last_seen) ----
   function applyPresencePayload(payload) {
     if (!payload) return
     const incomingConvId = payload.conversation_id ? String(payload.conversation_id) : null
@@ -355,6 +367,7 @@ export function usePresenceStatus({
     typingUsers.value = []
   }
 
+  // ---- Purge des indicateurs "typing" trop anciens ----
   function cleanupRemoteTyping() {
     const now = Date.now()
     let changed = false
@@ -369,6 +382,7 @@ export function usePresenceStatus({
     }
   }
 
+  // ---- Reception des evenements typing start/stop ----
   function handleRealtimeTyping(evt) {
     const eventName = evt?.event
     const userIdRaw = evt?.payload?.user_id
@@ -442,6 +456,7 @@ export function usePresenceStatus({
     refreshManualPresenceForAll()
   }
 
+  // ---- Charge le statut (message) de l'utilisateur courant depuis /me/profile ----
   async function loadAvailabilityStatus() {
     try {
       const { data } = await api.get('/me/profile')
@@ -455,6 +470,7 @@ export function usePresenceStatus({
     }
   }
 
+  // ---- Mise a jour du statut (message/code) cote API + broadcast local ----
   async function onAvailabilityChange(value) {
     if (value === myAvailability.value) return
     const next = STATUS_PRESETS[value] ? value : 'available'
@@ -472,6 +488,7 @@ export function usePresenceStatus({
     }
   }
 
+  // ---- Mise a jour reactivement lors d'un event profile-update ----
   function handleProfileBroadcast(event) {
     const detail = event?.detail || {}
     if (Object.prototype.hasOwnProperty.call(detail, 'status_message')) {

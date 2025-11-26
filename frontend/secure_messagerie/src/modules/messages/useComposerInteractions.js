@@ -1,3 +1,10 @@
+// ===== Module Header =====
+// Module: messages/useComposerInteractions
+// Role: Centralise les interactions du composeur (emoji/GIF, typing, envoi, edition, blocage).
+// Notes:
+//  - Rely sur de nombreux callbacks externes (API, sockets, normalisation) pour rester stateless.
+//  - Orchestration des etats du picker (emoji/GIF) et de l'envoi optimiste avec attachments.
+//  - Ne touche pas a l'UI directement, uniquement aux refs/composables passes en param.
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { api } from '@/utils/api'
 import { editConversationMessage } from '@/services/conversations'
@@ -54,6 +61,7 @@ export function useComposerInteractions({
     return typeof value === 'string' && UUID_PATTERN.test(value)
   }
 
+  // ---- Vue derivee: sections emoji filtrees par la recherche ----
   const filteredEmojiSections = computed(() => {
     const term = emojiSearch.value.trim().toLowerCase()
     if (!term) return emojiSections
@@ -73,8 +81,10 @@ export function useComposerInteractions({
     ]
   })
 
+  // ---- Fallback GIFs si aucune recherche en cours ----
   const displayedGifs = computed(() => (gifResults.value.length ? gifResults.value : gifLibrary))
 
+  // ---- Informations de blocage (conversation) pour bloquer l'envoi ----
   const composerBlockedInfo = computed(() => {
     const conv = selectedConversation.value
     if (!conv) return null
@@ -97,6 +107,7 @@ export function useComposerInteractions({
   })
   const isComposerBlocked = computed(() => Boolean(composerBlockedInfo.value))
 
+  // ---- Flag d'activation du bouton envoyer (contenu ou PJ ou mode reponse/transfert) ----
   const canSend = computed(() => {
     if (isComposerBlocked.value) return false
     const value = messageInput.value.trim()
@@ -125,7 +136,7 @@ export function useComposerInteractions({
     }, 350)
   })
 
-  watch(
+watch(
     () => composerBlockedInfo.value?.state,
     (state, previous) => {
       if (state && state !== previous) {
@@ -136,6 +147,7 @@ export function useComposerInteractions({
     },
   )
 
+// ---- Charge les GIFs (API ou fallback local) avec debounce ----
 async function loadGifResults(query = '') {
   if (!showPicker.value || pickerMode.value !== 'gif') {
     return
@@ -158,6 +170,7 @@ async function loadGifResults(query = '') {
   }
 }
 
+// ---- Reinitialise l'etat du picker emoji/GIF ----
 function resetPickerState() {
   showPicker.value = false
   pickerMode.value = 'emoji'
@@ -168,6 +181,7 @@ function resetPickerState() {
   gifResults.value = gifLibrary.slice()
 }
 
+// ---- Ouvre/ferme le picker (emoji par defaut) ----
 function togglePicker() {
   showPicker.value = !showPicker.value
   if (showPicker.value) {
@@ -178,8 +192,9 @@ function togglePicker() {
   } else {
     resetPickerState()
   }
-}
+  }
 
+  // ---- Change le mode du picker (emoji vs gif) et initie les recherches ----
   function setPickerMode(mode) {
     pickerMode.value = mode
     showPicker.value = true
@@ -197,6 +212,7 @@ function togglePicker() {
     }
   }
 
+  // ---- Gestion du signal "typing" local avec timer d'inactivite ----
   function handleTypingActivity() {
     if (!selectedConversationId.value || !socketRef.value) {
       stopLocalTyping()
@@ -282,6 +298,7 @@ function togglePicker() {
     })
   }
 
+  // ---- Envoi principal (optimiste) du message avec PJ/reponse/transfert ----
   async function sendMessage() {
     if (!selectedConversationId.value || !canSend.value) return
     if (composerState.mode === 'edit' && composerState.targetMessageId) {
@@ -386,6 +403,7 @@ function togglePicker() {
     }
   }
 
+  // ---- Soumission d'une edition de message existant ----
   async function submitMessageEdit() {
     if (
       !selectedConversationId.value ||

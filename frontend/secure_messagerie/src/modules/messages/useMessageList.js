@@ -1,3 +1,10 @@
+// ===== Module Header =====
+// Module: messages/useMessageList
+// Role: Charger et maintenir la liste des messages + pagination (before/after) pour la conversation courante.
+// Notes:
+//  - Encapsule les en-tetes de pagination renvoyes par l'API.
+//  - Expose applyMessageUpdate/applyLocalReadReceipt pour synchroniser les changements en temps reel.
+
 import { nextTick, reactive, ref } from 'vue'
 import { api } from '@/utils/api'
 import { normalizeMessage } from './mappers'
@@ -12,6 +19,7 @@ export function useMessageList({
 }) {
   const messageErrorRef = messageError ?? ref('')
   const scrollToBottomFn = typeof scrollToBottom === 'function' ? scrollToBottom : () => {}
+  // ---- Store local des messages + pagination (before/after) ----
   const messages = ref([])
   const pagination = reactive({
     beforeCursor: null,
@@ -30,6 +38,7 @@ export function useMessageList({
     hasAfter: 'x-pagination-has-after',
   }
 
+  // ---- Lecture defensive d'un header (case-insensitive, objets ou Headers) ----
   function readHeader(headers, name) {
     if (!headers) return null
     if (typeof headers.get === 'function') {
@@ -43,6 +52,7 @@ export function useMessageList({
     return exact ? headers[exact] : null
   }
 
+  // ---- Met a jour les curseurs de pagination selon les en-tetes de reponse ----
   function updatePaginationFromHeaders(headers, context = {}) {
     const beforeHeader = readHeader(headers, paginationHeaderKeys.before)
     const afterHeader = readHeader(headers, paginationHeaderKeys.after)
@@ -153,6 +163,7 @@ export function useMessageList({
     }
   }
 
+  // ---- Charge plus d'anciens messages (scroll infini) ----
   async function loadOlderMessages() {
     if (
       loadingOlderMessages.value ||
@@ -175,6 +186,7 @@ export function useMessageList({
     }
   }
 
+  // ---- Charge en arriere-plan jusqu'a trouver le message cible (pour focus) ----
   async function ensureMessageVisible(messageId, streamPosition) {
     if (messages.value.some((msg) => msg.id === messageId)) return
 
@@ -199,6 +211,7 @@ export function useMessageList({
     }
   }
 
+  // ---- Merge ou ajoute un message (utilise par temps reel / reponses API) ----
   function applyMessageUpdate(nextMessage) {
     const idx = messages.value.findIndex((msg) => msg.id === nextMessage.id)
     if (idx === -1) {
@@ -233,6 +246,7 @@ export function useMessageList({
     return merged
   }
 
+  // ---- Marque localement comme lus (sans attendre la reponse serveur) ----
   function applyLocalReadReceipt(convId, ids = []) {
     const targetIds =
       Array.isArray(ids) && ids.length ? new Set(ids.map((id) => String(id))) : null
