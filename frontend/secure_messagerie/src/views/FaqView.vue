@@ -1,5 +1,14 @@
+<!--
+===== Vue Overview : FaqView =====
+- Role: presente la FAQ complete de COVA avec regroupement par themes (compte, conversations, notifications).
+- Donnees: tableau statique faqSections dans le script setup pour eviter des requetes reseau et garantir la rapidite.
+- UX: hero d'introduction, sections detaillees avec <details> pour l'accessibilite clavier et lecture progressive.
+- Accessibilite: balises semanticques (header, section, article, summary) et icones aria-hidden pour aider les lecteurs d'ecran.
+- Maintenance: ajouter une question revient a enrichir faqSections; la structure du template se met automatiquement a jour.
+-->
 <template>
   <div class="faq-page">
+    <!-- Hero: mise en avant du centre d'aide et du ton rassurant -->
     <header class="faq-hero">
       <p class="eyebrow">Centre d'aide</p>
       <h1>Questions fréquentes</h1>
@@ -9,6 +18,7 @@
       </p>
     </header>
 
+    <!-- Sections principales: chaque bloc regroupe un theme avec ses questions/reponses -->
     <section class="faq-content">
       <article
         v-for="section in faqSections"
@@ -44,6 +54,7 @@
       </article>
     </section>
 
+    <!-- Assistance directe: invite a contacter le support si la FAQ ne suffit pas -->
     <section class="faq-help">
       <div>
         <h3>Besoin d'une assistance personnalisée ?</h3>
@@ -67,6 +78,10 @@
 </template>
 
 <script setup>
+// ===== Donnees statiques pour la FAQ =====
+// - Chaque section contient un titre, une description et des items.
+// - Les items gerent question, reponse (tableau pour multi-paragraphes) et une liste optionnelle.
+// - Ajouter ou mettre a jour une entree ici met a jour automatiquement le rendu dans le template.
 const faqSections = [
   {
     title: 'Compte & sécurité',

@@ -1,5 +1,6 @@
 <!-- src/views/ResetPasswordView.vue -->
 <template>
+  <!-- Layout: page de demande de reset avec fond visuel et formulaire dedie -->
   <div class="auth-page reset-page">
     <!-- on laisse le décor ici -->
     <div class="auth-orb orb-primary"></div>

@@ -1,7 +1,16 @@
+<!--
+===== Vue Overview : MessagesView =====
+- Role: tableau de bord complet des conversations avec gestion temps reel.
+- Architecture: assemble la sidebar, la zone principale, les panneaux et pickers relies aux composables messages.
+- Flux: combine etats locaux, websocket et appels API pour synchroniser messages, presence, appels et toasts.
+- Maintenance: chaque section du template correspond a un sous-composant specialise pour limiter le couplage.
+-->
 <!--`n############################################################`n# Vue : MessagesView`n# Auteur : Valentin Masurelle`n# Date   : 2025-05-04`n# Description:`n# - Page principale de messagerie avec sidebar, liste de messages et editeur.`n# - Orchestration des composants de conversation, toasts et fichiers attaches.`n############################################################`n-->
 <template>
 
+  <!-- Layout racine: shell principal avec toasts et colonnes -->
   <div class="msg-shell">
+    <!-- Pile de toasts pour notifier les evenements conversation -->
     <MessageToastStack
       :toasts="messageToasts"
       :formatter="formatTime"
@@ -9,8 +18,10 @@
       @open="openToastConversation"
     />
 
+    <!-- Grille principale: sidebar de navigation + contenu conversation -->
     <div class="msg-layout">
 
+      <!-- Sidebar: liste des conversations, filtres et actions de creation -->
       <ConversationSidebar
         :conversations="sortedConversations"
         :selected-id="selectedConversationId"
@@ -27,8 +38,10 @@
         @avatar-error="onAvatarFailure"
       />
 
+      <!-- Zone principale: header conversation, recherche, liste et editeur -->
       <section class="msg-main">
 
+        <!-- Etat vide: invite a creer ou selectionner une conversation -->
         <MessageEmptyState v-if="!selectedConversation" @new="goToNewConversation" />
         <template v-else>
         <ChatHeader
@@ -78,6 +91,7 @@
           @close="closeSearchPanel"
           @jump="jumpToSearchResult"
         />
+        <!-- Liste des messages (pagination, reactions, pins) -->
         <MessageList
           ref="messageListRef"
           :messages="messages"
@@ -107,6 +121,7 @@
           @download-attachment="downloadAttachment"
         />
 
+        <!-- Editeur principal: texte, emoji, gifs, pieces jointes -->
         <MessageComposer
           v-model:message-input="messageInput"
           :blocked-info="composerBlockedInfo"
@@ -146,6 +161,7 @@
           :send-message="sendMessage"
         />
 
+        <!-- Modale de confirmation pour suppression de message -->
         <DeleteMessageModal
           v-model:visible="deleteDialog.visible"
           :preview="deleteDialogPreview"
@@ -155,6 +171,7 @@
           @confirm="performDeleteMessage"
         />
 
+        <!-- Overlay d'appel audio/visio pour les interactions temps reel -->
         <CallOverlay
           :call-state="callState"
           :call-controls="callControls"
@@ -175,6 +192,7 @@
 
     </section>
   </div>
+  <!-- Panneau lateral: informations conversation et gestion membres -->
   <ConversationPanel
     :show="showConversationPanel"
     :selected-conversation="selectedConversation"
@@ -213,6 +231,7 @@
   />
 
 
+  <!-- Selection de cible pour le transfert de message -->
   <ForwardPicker
     ref="forwardPickerRef"
     :open="forwardPicker.open"
@@ -229,6 +248,7 @@
 </template>
 <script setup>
 
+// ===== Imports UI et composables messages =====
 import { computed, reactive, ref } from 'vue'
 
 import { useRoute, useRouter } from 'vue-router'
@@ -274,7 +294,7 @@ import { useComposerInteractions } from '@/modules/messages/useComposerInteracti
 import { useConversationRealtime } from '@/modules/messages/useConversationRealtime'
 import { useMessagesLifecycle } from '@/modules/messages/useMessagesLifecycle'
 
-
+// ===== Etats globaux et navigation =====
 const selectedConversationId = ref(null)
 const currentUserId = ref(localStorage.getItem('user_id') || null)
 const notificationDedupSet = new Set()
@@ -308,11 +328,13 @@ const {
   extractError,
 })
 
+// ----- Conversation selectionnee et helpers derives -----
 const selectedConversation = computed(() => {
   if (!selectedConversationId.value) return null
   return conversations.value.find((conv) => conv.id === selectedConversationId.value) || null
 })
 
+// ----- Utilitaires d'etat: conversation muette, presence membre -----
 const isConversationMuted = (convId) => {
   const id = convId ? String(convId) : null
   if (!id || !currentUserId.value) return false
@@ -324,6 +346,7 @@ const isConversationMuted = (convId) => {
   return me.mutedUntil.getTime() > Date.now()
 }
 
+// ===== Presence et statut temps reel =====
 const {
   myAvailability,
   conversationPresence,
@@ -348,6 +371,7 @@ const {
   formatAbsolute,
 })
 
+// ===== Filtres et tri des conversations =====
 const {
   conversationSearch,
   conversationFilter,
@@ -363,6 +387,7 @@ const {
   defaultPresenceLabel: STATUS_LABELS.offline,
 })
 
+// ===== Composer: message, pieces jointes et contextes =====
 const {
   messageInput,
   sending,
@@ -384,6 +409,7 @@ const {
   onAfterSend: () => {},
   scrollToBottom,
 })
+// ----- Gestion des pieces jointes (file picker + upload) -----
 const {
   triggerAttachmentPicker,
   onAttachmentChange,
@@ -399,6 +425,7 @@ const {
   uploadAttachment,
   extractError,
 })
+// ===== Liste des messages et pagination =====
 const {
   messages,
   pagination,
@@ -419,6 +446,7 @@ const {
   messageError,
 })
 messageReadBridge.applyLocalReadReceipt = applyLocalReadReceipt
+// ----- Toasts de nouveaux messages et navigation rapide -----
 const { messageToasts, queueToastNotification, dismissToast, openToastConversation } =
   useMessageToasts({
     router,
@@ -426,6 +454,7 @@ const { messageToasts, queueToastNotification, dismissToast, openToastConversati
     ensureMessageVisible,
     generateLocalId,
   })
+// ----- Notifications push + deduplication -----
 const { notifyNewIncomingMessage, handleIncomingNotificationPayload } = useMessageNotifications({
   selectedConversationId,
   currentUserId,
@@ -437,6 +466,7 @@ const { notifyNewIncomingMessage, handleIncomingNotificationPayload } = useMessa
   generateLocalId,
   isConversationMuted,
 })
+// ----- Utilitaires media: attache flux audio/video aux balises -----
 const attachStream = (el, stream) => {
   if (!el) return
   if ('srcObject' in el) {
@@ -450,12 +480,14 @@ const attachStream = (el, stream) => {
     el.play().catch(() => {})
   }
 }
+// ===== Transfert de message: etat du picker =====
 const forwardPicker = reactive({
   open: false,
   message: null,
   query: '',
 })
 const forwardPickerRef = ref(null)
+// ----- Gestion du contexte (reponse, transfert, edition) -----
 const {
   startReply,
   startForward,
@@ -476,6 +508,7 @@ const {
   forwardPicker,
   resetComposerState,
 })
+// ----- Modale de suppression et callbacks -----
 const { deleteDialog, deleteDialogPreview, confirmDeleteMessage, closeDeleteDialog, performDeleteMessage } =
   useDeleteMessage({
     selectedConversationId,
@@ -484,10 +517,12 @@ const { deleteDialog, deleteDialogPreview, confirmDeleteMessage, closeDeleteDial
   normalizeMessage,
   extractError,
 })
+// ----- Passerelle notifications navigateur -> etat local -----
 const { processNotificationPayload } = useNotificationsBridge({
   notificationDedupSet,
   handleIncomingNotificationPayload,
 })
+// ===== Canal temps reel (WebSocket) pour messages/presence/appels =====
 const {
   socketRef,
   connectionStatus,
@@ -513,6 +548,7 @@ const {
   processNotificationPayload,
   isConversationMuted,
 })
+// ===== Appels audio/visio: controle et affichage =====
 const {
   callState,
   callControls,
@@ -545,6 +581,7 @@ const {
 })
 setCallEventHandler(handleCallSignal)
 
+// ===== Recherche plein texte dans une conversation =====
 const {
   showSearchPanel,
   messageSearch,
@@ -563,6 +600,7 @@ const {
   scrollToMessage,
 })
 
+// ===== Actions sur messages (reactions, pins, copie, telechargements) =====
 const {
   cloneComposerReference,
   mapOptimisticAttachments,
@@ -599,6 +637,7 @@ const {
   extractDeliverySummary,
 })
 
+// Palette d'emoji par defaut pour les reactions rapides
 const reactionPalette = [
   '\u{1F44D}',
   '\u{2764}\u{FE0F}',
@@ -612,7 +651,9 @@ const reactionPalette = [
   '\u{2757}',
 ]
 
+// Reference DOM de la liste pour le scroll et le focus
 const messageListRef = ref(null)
+// ===== Interactions du composer (emoji, gif, saisie, envoi) =====
 const {
   filteredEmojiSections,
   displayedGifs,
@@ -670,6 +711,7 @@ const {
 })
 setStopLocalTyping(stopLocalTyping)
 
+// ----- Informations derivees pour droits et affichage d'entete -----
 const conversationOwners = computed(() => {
   const conv = selectedConversation.value
   if (!conv || !Array.isArray(conv.members)) return []
@@ -700,6 +742,7 @@ const currentMembership = computed(() => {
 
 const isConversationOwner = computed(() => currentMembership.value?.role === 'owner')
 const canManageConversation = computed(() => isConversationOwner.value)
+// ===== Panneau d'information conversation (roles, invites, moderation) =====
 const {
   showConversationPanel,
   conversationForm,
@@ -755,6 +798,7 @@ const {
 // readyAttachments / hasAttachmentInProgress provided by useMessageComposer
 
 
+// ----- Messages epingles affiches en haut de la liste -----
 const pinnedMessages = computed(() => {
   return messages.value
     .filter((message) => message.pinned)
@@ -772,6 +816,7 @@ const pinnedMessages = computed(() => {
 
 
 
+// ----- Etiquettes de statut de connexion temps reel -----
 const connectionStatusClass = computed(() => {
 
   switch (connectionStatus.value) {
@@ -818,6 +863,7 @@ const connectionStatusLabel = computed(() => {
 })
 
 
+// ===== Gestion du cycle de vie (routing, selection, nettoyage) =====
 useMessagesLifecycle({
   route,
   router,
@@ -853,6 +899,7 @@ useMessagesLifecycle({
   messageMenuOpen,
 })
 
+// ----- Liste des conversations eligibles pour le transfert -----
 const forwardPickerTargets = computed(() => {
   const query = forwardPicker.query.trim().toLowerCase()
   return conversations.value
@@ -888,6 +935,7 @@ const forwardPickerTargets = computed(() => {
 })
 
 
+// ===== Navigation et chargement d'une conversation =====
 async function selectConversation(convId) {
   const id = String(convId)
   if (!conversations.value.some((conv) => conv.id === id)) return
@@ -910,10 +958,12 @@ async function selectConversation(convId) {
   }
 }
 
+// ----- Utilitaires de scroll pour maintenir la vue a jour -----
 function scrollToBottom() {
   messageListRef.value?.scrollToBottom?.()
 }
 
+// Redirection vers la creation d'une nouvelle conversation
 function goToNewConversation() {
 
   router.push({ path: '/dashboard/messages/new' }).catch(() => {})
@@ -923,6 +973,7 @@ function goToNewConversation() {
 
 
 
+// Reinitialise le composer (nouveau message / reponse / transfert)
 function resetComposerState() {
   composerState.mode = 'new'
   composerState.targetMessageId = null
@@ -930,6 +981,7 @@ function resetComposerState() {
   composerState.forwardFrom = null
 }
 
+// Genere un identifiant local pour suivre les appels en cours
 function generateCallId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID()
@@ -937,6 +989,7 @@ function generateCallId() {
   return `call_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 }
 
+// Ajoute une entree systeme dans le flux lorsqu'un appel change d'etat
 function addLocalCallLog(summary) {
   const direction = summary.initiator ? 'sortant' : 'entrant'
   const kindLabel = summary.kind === 'video' ? 'vidéo' : 'audio'
@@ -970,6 +1023,7 @@ function addLocalCallLog(summary) {
 
 
 
+// Scroll jusqu'a un message cible (pin, recherche, toast)
 function scrollToMessage(messageId) {
   if (messageListRef.value?.scrollToMessage) {
     messageListRef.value.scrollToMessage(messageId)
@@ -985,6 +1039,7 @@ function scrollToMessage(messageId) {
   }
 }
 
+// Normalise les messages d'erreur en provenance des appels API ou exceptions
 function extractError(err, fallback) {
   if (!err) return fallback
   if (typeof err === 'string') return err

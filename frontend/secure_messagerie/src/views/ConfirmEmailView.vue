@@ -1,6 +1,13 @@
 <!-- src/views/ConfirmEmailView.vue -->
+<!--
+===== Vue Overview : ConfirmEmailView =====
+- Role: affiche la carte de confirmation d'email apres inscription ou demande utilisateur.
+- Layout: conteneur simple avec fond dedie pour aligner ConfirmEmailCard au centre de la page.
+- Styles: importe confirm.css pour isoler la charte graphique de cette page specifique.
+- Navigation: aucune logique ici; la carte gere seule les appels reseau et les messages a l'utilisateur.
+-->
 <template>
-  <!-- on laisse le fond ici -->
+  <!-- Section principale: garde uniquement le fond et delegue l'affichage a la carte -->
   <div class="confirm-bg">
     <ConfirmEmailCard />
   </div>

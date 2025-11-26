@@ -12,6 +12,7 @@
 
 <!-- Section principale -->
 <template>
+  <!-- Layout: hero marketing a gauche, formulaire LoginForm a droite -->
   <div class="auth-page">
     <div class="auth-orb orb-primary"></div>
     <div class="auth-orb orb-secondary"></div>

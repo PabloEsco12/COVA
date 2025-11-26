@@ -9,6 +9,7 @@
 ############################################################
 -->
 <template>
+  <!-- Layout: fond d'authentification + colonne gauche marketing + formulaire TOTP -->
   <div class="auth-page">
     <div class="auth-orb orb-primary"></div>
     <div class="auth-orb orb-secondary"></div>

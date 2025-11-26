@@ -5,6 +5,8 @@
 # Date   : 2025-05-04
 # Description:
 # - Page d'inscription affichant l'illustration + formulaire d'inscription.
+# - AuthIllustration gere le discours marketing; RegisterForm gere les appels API et validations.
+# - La grille garde deux colonnes sur desktop et se replie en mobile pour conserver la lisibilite.
 ############################################################
 -->
 <script setup>
@@ -13,6 +15,7 @@ import RegisterForm from '@/components/auth/RegisterForm.vue'
 </script>
 
 <template>
+  <!-- Layout: fond decoratif + deux colonnes (illustration / formulaire) -->
   <div class="auth-page signup-page">
     <!-- bulles décoratives -->
     <div class="auth-orb orb-primary"></div>

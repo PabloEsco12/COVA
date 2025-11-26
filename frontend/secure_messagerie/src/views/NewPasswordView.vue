@@ -1,5 +1,6 @@
 <!-- src/views/NewPasswordView.vue -->
 <template>
+  <!-- Layout: ecran de creation de nouveau mot de passe apres lien de reset -->
   <div class="reset-page">
     <div class="reset-decor">
       <span class="orb orb--one"></span>

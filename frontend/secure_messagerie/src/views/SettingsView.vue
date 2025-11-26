@@ -1,3 +1,10 @@
+<!--
+===== Vue Overview : SettingsView =====
+- Role: regroupe les cartes de configuration (profil, securite, notifications, avatar, administrateurs).
+- UX: structure en sections verticales avec separateurs pour clarifier les zones fonctionnelles.
+- Donnees partagees: email/displayName/avatarUrl stockes ici pour alimenter AvatarCard apres chargement du profil.
+- Extensibilite: ajouter une nouvelle carte se fait en l'inserant dans les lignes existantes sans logique supplementaire.
+-->
 <template>
   <div class="p-4">
     <h2 class="mb-4">
