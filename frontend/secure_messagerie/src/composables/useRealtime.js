@@ -1,3 +1,13 @@
+// ===== Composable Header =====
+// Composable: useRealtime
+// Author: Valentin Masurelle
+// Date: 2025-11-26
+// Role: WebSocket temps réel (messages, typing, présence) avec reconnect/backoff/heartbeat.
+// Usage:
+//  - Créer avec l'ID de conversation et des handlers (onMessageNew/onTyping/etc.).
+//  - send/sendTypingStart/sendTypingStop pour émettre des événements.
+//  - updateConversation reconnecte proprement sur une nouvelle conversation.
+//  - Heartbeat périodique pour garder la socket active derrière les proxys.
 // src/composables/useRealtime.js
 import { ref, onBeforeUnmount, onMounted, watch } from 'vue'
 import { buildWsUrl } from '@/utils/realtime'

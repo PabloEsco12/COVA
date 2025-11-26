@@ -1,3 +1,9 @@
+// ===== Module Header =====
+// Module: messages/constants
+// Author: Valentin Masurelle
+// Date: 2025-11-26
+// Role: Constantes (statuts, presets, options) réutilisées dans les composables/messages pour éviter les chaînes en dur.
+
 export const PRESENCE_STALE_MS = 60000
 
 export const STATUS_LABELS = {

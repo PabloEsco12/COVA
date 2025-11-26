@@ -1,3 +1,13 @@
+// ===== Composable Header =====
+// Composable: useConversationSearch
+// Author: Valentin Masurelle
+// Date: 2025-11-26
+// Role: Encapsule la logique de recherche dans une conversation (appel API + fallback local).
+// Usage:
+//  - Fournir les refs/messages/handlers issus du parent (MessagesView).
+//  - Expose showSearchPanel + messageSearch pour piloter l'UI de recherche.
+//  - performMessageSearch() tente d'abord l'API, sinon filtre localement.
+//  - jumpToSearchResult() sélectionne la conversation si besoin puis scrolle sur le message.
 import { nextTick, reactive, ref, watch } from 'vue'
 import { searchConversationMessages as fetchConversationMessages } from '@/services/conversations'
 

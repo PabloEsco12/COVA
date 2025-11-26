@@ -1,3 +1,13 @@
+// ===== Composable Header =====
+// Composable: useTyping
+// Author: Valentin Masurelle
+// Date: 2025-11-26
+// Role: Gestion de l'état "en train d'écrire" (typing) avec WS et cleanup automatique.
+// Usage:
+//  - Fournir conversationId, myUserId et éventuellement un realtime existant (useRealtime).
+//  - Expose sendTypingStart/Stop pour signaler l'état courant.
+//  - typingUsers/isTyping reflètent les utilisateurs actifs côté conversation.
+//  - Nettoyage périodique des frappes expirées, reconnexion si conversation change.
 // src/composables/useTyping.js
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRealtime } from './useRealtime'

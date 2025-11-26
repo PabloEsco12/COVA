@@ -1,3 +1,12 @@
+// ===== Module Header =====
+// Module: messages/formatters
+// Author: Valentin Masurelle
+// Date: 2025-11-26
+// Role: Helpers pour formatter statuts/labels liés aux messages et contenus enrichis (gif/strip links).
+// Usage:
+//  - Fonctions pures importées dans les composables et composants pour un affichage cohérent.
+//  - Centralise l'usage de detectGifLinks/stripGifLinks pour éviter la duplication de logique UI.
+
 import { detectGifLinks, stripGifLinks } from '@/utils/messageContent'
 
 export function formatTime(date) {

@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: CustomModal
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Modale générique avec slots (titre, corps, footer) et support v-model.
+-->
 <template>
   <div v-if="modelValue">
     <!-- backdrop comme avant -->
@@ -31,6 +38,7 @@
 </template>
 
 <script setup>
+// ===== Props / Emissions =====
 const props = defineProps({
   modelValue: {
     type: Boolean,
@@ -43,6 +51,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:modelValue'])
 
+// ===== Actions =====
 function close() {
   emit('update:modelValue', false)
 }

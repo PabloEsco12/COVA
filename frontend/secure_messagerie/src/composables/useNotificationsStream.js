@@ -1,3 +1,13 @@
+// ===== Composable Header =====
+// Composable: useNotificationsStream
+// Author: Valentin Masurelle
+// Date: 2025-11-26
+// Role: Gestion d'un flux WebSocket pour les notifications utilisateur (reconnexion/backoff).
+// Usage:
+//  - Appeler useNotificationsStream({ token, onNotification, onStatus }).
+//  - updateToken(nextToken) pour rafraîchir le JWT (déclenche reconnexion automatique).
+//  - connect/disconnect contrôlent manuellement la socket ; connected indique l'état.
+//  - Backoff exponentiel et reconnexion planifiée en cas de fermeture ou d'erreur réseau.
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { buildWsUrl } from '@/utils/realtime'
 

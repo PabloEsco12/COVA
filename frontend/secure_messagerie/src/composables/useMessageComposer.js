@@ -1,3 +1,13 @@
+// ===== Composable Header =====
+// Composable: useMessageComposer
+// Author: Valentin Masurelle
+// Date: 2025-11-26
+// Role: Gestion de la composition de messages (texte, pièces jointes, états reply/forward/edit).
+// Usage:
+//  - Fournir les callbacks (onSendSuccess/onSendError/onAfterSend) et helpers (scrollToBottom, formatFileSize).
+//  - Récupérer les refs retournées pour binder l'UI (messageInput, pendingAttachments, flags).
+//  - sendMessage orchestre l'envoi avec message optimiste, reset du champ et gestion des erreurs.
+//  - startReply/startForward/startEdit basculent le contexte du composer sans toucher à l'UI extérieure.
 import { computed, nextTick, reactive, ref } from 'vue'
 import { api } from '@/utils/api'
 import { mapOptimisticAttachments } from '@/utils/messageContent'
