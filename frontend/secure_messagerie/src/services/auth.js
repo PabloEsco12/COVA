@@ -1,14 +1,18 @@
+// Service d'authentification : persistance locale, diffusion d'evenements et appels API
 import { api } from '@/utils/api'
 import { broadcastProfileUpdate } from '@/utils/profile'
 
 const SESSION_STORAGE_KEY = 'securechat.session'
 
+// --- Evenements et persistance de session ---
 function emitSessionEvent(name, detail = {}) {
+  // Simplifie la diffusion d'un changement de session via CustomEvent
   if (typeof window === 'undefined') return
   window.dispatchEvent(new CustomEvent(name, { detail }))
 }
 
 function persistLegacyKeys(session) {
+  // Repousse les champs attendus par d'anciens composants (compatibilite ascendante)
   try {
     const { tokens, user } = session
     if (tokens?.access_token) {
@@ -41,6 +45,7 @@ function persistLegacyKeys(session) {
 }
 
 export function persistSession(session) {
+  // Stocke la session courante et notifie l'application du changement de token
   try {
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session))
     persistLegacyKeys(session)
@@ -53,6 +58,7 @@ export function persistSession(session) {
 }
 
 export function loadSession() {
+  // Charge la session brute depuis le storage (ou null en cas d'absence/erreur)
   try {
     const raw = localStorage.getItem(SESSION_STORAGE_KEY)
     if (!raw) return null
@@ -64,6 +70,7 @@ export function loadSession() {
 }
 
 export function clearSession() {
+  // Purge totale des traces de session et notification globale
   try {
     localStorage.removeItem(SESSION_STORAGE_KEY)
     localStorage.removeItem('access_token')
@@ -79,7 +86,9 @@ export function clearSession() {
   emitSessionEvent('cova:session-clear')
 }
 
+// --- Flux d'authentification ---
 export async function registerAccount({ email, password, displayName }) {
+  // Cree un compte et renvoie le payload de session (tokens + user)
   const payload = {
     email,
     password,
@@ -90,6 +99,7 @@ export async function registerAccount({ email, password, displayName }) {
 }
 
 export async function loginWithPassword({ email, password, totpCode }) {
+  // Login classique + support TOTP; persiste la session obtenue
   const { data } = await api.post('/auth/login', {
     email,
     password,
@@ -99,6 +109,7 @@ export async function loginWithPassword({ email, password, totpCode }) {
 }
 
 export async function refreshSession(refreshToken) {
+  // Rafraichit le token d'acces a partir du refresh token fourni ou stocke
   const token = refreshToken ?? localStorage.getItem('refresh_token')
   if (!token) {
     throw new Error('No refresh token available')
@@ -108,6 +119,7 @@ export async function refreshSession(refreshToken) {
 }
 
 export async function logout(refreshToken) {
+  // Deconnexion serveur + reset presence, toujours suivi d'un nettoyage local
   const token = refreshToken ?? localStorage.getItem('refresh_token')
   try {
     if (token) {
@@ -120,10 +132,12 @@ export async function logout(refreshToken) {
 }
 
 export async function resendConfirmationEmail(email) {
+  // Renvoie l'email de confirmation pour un compte non valide
   await api.post('/auth/resend-confirmation', { email })
 }
 
 export async function logoutAll() {
+  // Deconnexion de tous les devices puis remise a zero de la session locale
   try {
     await api.post('/auth/logout-all')
     await setPresenceStatus('Hors ligne', 'offline')
@@ -132,12 +146,15 @@ export async function logoutAll() {
   }
 }
 
+// --- Acces aux infos de session ---
 export function getCurrentUserFromCache() {
+  // Retourne l'utilisateur memorise sans requete reseau
   const session = loadSession()
   return session?.user ?? null
 }
 
 export function getAccessToken() {
+  // Lecture securisee du token d'acces (evite crash en mode SSR)
   try {
     return localStorage.getItem('access_token')
   } catch {
@@ -145,7 +162,9 @@ export function getAccessToken() {
   }
 }
 
+// --- Verification et expiration de token ---
 function decodeJwtPayload(token) {
+  // Decode la charge utile du JWT pour extraire exp/claims sans verifier la signature
   if (!token) return null
   try {
     const [, payload = ''] = token.split('.')
@@ -166,10 +185,12 @@ export function isAccessTokenExpired(token = null) {
   if (!payload?.exp) return false
   const now = Math.floor(Date.now() / 1000)
   // Petite marge de sécurité de 30s
+  // Ajout d'une marge pour couvrir d'eventuels delais reseau ou decalages d'horloge
   return payload.exp <= now - 30
 }
 
 export function hasStoredSession() {
+  // Indique si des artefacts de session sont presentes pour conditionner le bootstrap
   try {
     return Boolean(
       localStorage.getItem(SESSION_STORAGE_KEY) ||
@@ -181,7 +202,9 @@ export function hasStoredSession() {
   }
 }
 
+// --- Presence / statut utilisateur ---
 export async function setPresenceStatus(message, statusCode) {
+  // Met a jour le statut distant puis diffuse localement pour synchroniser l'UI
   try {
     await api.put('/me/profile', { status_message: message || null })
     broadcastProfileUpdate({

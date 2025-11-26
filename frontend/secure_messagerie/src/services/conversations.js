@@ -1,13 +1,16 @@
+// Service conversations : creation, messages, reactions, invites et pieces jointes
 import { api } from '@/utils/api'
 
 const CONVERSATIONS_BASE = '/conversations'
 
+// --- Gestion des conversations ---
 export async function fetchConversations() {
   const { data } = await api.get(CONVERSATIONS_BASE)
   return data
 }
 
 export async function createConversation({ title, participantIds = [], type = 'direct' }) {
+  // Cree une conversation directe ou groupee en normalisant les participants
   const { data } = await api.post(CONVERSATIONS_BASE, {
     title: title || null,
     participant_ids: participantIds,
@@ -23,6 +26,7 @@ export async function fetchMessages(conversationId, { limit } = {}) {
 }
 
 export async function sendMessage(conversationId, { content, messageType = 'text', attachments = [] }) {
+  // Transforme les pieces jointes en upload_token attendus par l'API
   const normalized = Array.isArray(attachments)
     ? attachments.map((item) => ({
         upload_token: item.upload_token || item.uploadToken || item,
@@ -49,6 +53,7 @@ export async function deleteConversation(conversationId) {
   await api.delete(`${CONVERSATIONS_BASE}/${conversationId}`)
 }
 
+// --- Pin, reactions et membres ---
 export async function pinMessage(conversationId, messageId) {
   const { data } = await api.post(`${CONVERSATIONS_BASE}/${conversationId}/messages/${messageId}/pin`)
   return data
@@ -72,6 +77,7 @@ export async function updateConversationMember(conversationId, memberId, payload
   return data
 }
 
+// --- Invitations ---
 export async function listConversationInvites(conversationId) {
   const { data } = await api.get(`${CONVERSATIONS_BASE}/${conversationId}/invites`)
   return data
@@ -91,7 +97,9 @@ export async function acceptConversationInvite(token) {
   return data
 }
 
+// --- Pieces jointes et edition de messages ---
 export async function uploadAttachment(conversationId, file, { encryption, onUploadProgress } = {}) {
+  // Envoie une piece jointe (multipart) en conservant eventuellement les metadonnees de chiffrement
   const formData = new FormData()
   formData.append('file', file)
   if (encryption) {
@@ -105,6 +113,7 @@ export async function uploadAttachment(conversationId, file, { encryption, onUpl
 }
 
 export async function editConversationMessage(conversationId, messageId, { content }) {
+  // Mise a jour du contenu textuel d'un message existant
   const { data } = await api.patch(`${CONVERSATIONS_BASE}/${conversationId}/messages/${messageId}`, { content })
   return data
 }
@@ -115,6 +124,7 @@ export async function deleteConversationMessage(conversationId, messageId) {
 }
 
 export async function searchConversationMessages(conversationId, { query, limit = 50 } = {}) {
+  // Recherche plein texte de messages dans une conversation avec limite de resultats
   const params = {
     q: query,
     limit,

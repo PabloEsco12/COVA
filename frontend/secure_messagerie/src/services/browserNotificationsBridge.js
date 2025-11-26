@@ -1,9 +1,12 @@
+// Bridge WebSocket pour convertir les evenements serveur en notifications navigateur
 import { buildWsUrl } from '@/utils/realtime'
 
 const PREF_KEY = 'notif_browser'
 
+// --- Gestion des notifications push cote navigateur ---
 class BrowserNotificationsBridge {
   constructor() {
+    // Installe les ecouteurs pour suivre token/prefs, puis ouvre un WS si possible
     if (typeof window === 'undefined') return
     this.socket = null
     this.reconnectTimer = null
@@ -25,6 +28,7 @@ class BrowserNotificationsBridge {
   }
 
   readToken() {
+    // Recupere le token d'acces stocke par le service auth
     try {
       return localStorage.getItem('access_token')
     } catch {
@@ -33,6 +37,7 @@ class BrowserNotificationsBridge {
   }
 
   readPreference() {
+    // Preference utilisateur (1/0) pour activer la notification navigateur
     try {
       return localStorage.getItem(PREF_KEY) === '1'
     } catch {
@@ -41,6 +46,7 @@ class BrowserNotificationsBridge {
   }
 
   handleStorage(event) {
+    // Synchronise les changements provenant d'autres onglets (token ou preference)
     if (event.key === 'access_token') {
       this.handleSessionUpdate({ detail: { token: event.newValue || null } })
     } else if (event.key === PREF_KEY) {
@@ -49,12 +55,14 @@ class BrowserNotificationsBridge {
   }
 
   handlePrefBroadcast(event) {
+    // Reception d'un CustomEvent interne pour aligner la preference entre composants
     if (event?.detail && typeof event.detail.enabled === 'boolean') {
       this.enabled = event.detail.enabled
     }
   }
 
   handleSessionUpdate(event) {
+    // Ouvre ou reouvre le WS lorsqu'un token change
     const nextToken = event?.detail?.token || this.readToken()
     if (nextToken === this.token) return
     this.token = nextToken
@@ -62,11 +70,13 @@ class BrowserNotificationsBridge {
   }
 
   handleSessionClear() {
+    // Nettoie la connexion des que la session est supprimee
     this.token = null
     this.disposeSocket()
   }
 
   scheduleReconnect() {
+    // Backoff exponentiel (limite a 20s) pour retenter une connexion stable
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
     }
@@ -78,6 +88,7 @@ class BrowserNotificationsBridge {
   }
 
   disposeSocket() {
+    // Ferme proprement la socket et annule les timers associes
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
@@ -93,6 +104,7 @@ class BrowserNotificationsBridge {
   }
 
   connect(force = false) {
+    // Etablit la connexion WS vers le pont notifications (ou force le refresh)
     if (!this.token) {
       this.disposeSocket()
       return
@@ -123,6 +135,7 @@ class BrowserNotificationsBridge {
   }
 
   handleMessage(event) {
+    // Parse les evenements WS et redispatche un CustomEvent exploitable par l'UI
     if (!event?.data) return
     let data
     try {
@@ -137,6 +150,7 @@ class BrowserNotificationsBridge {
   }
 
   maybeTriggerBrowserNotification(payload) {
+    // Affiche une notification native si l'utilisateur l'a autorisee
     if (!this.enabled) return
     if (typeof Notification === 'undefined') return
     if (Notification.permission !== 'granted') return
@@ -165,6 +179,7 @@ class BrowserNotificationsBridge {
   }
 
   normalizePayload(payload) {
+    // Uniformise les attributs attendus par la notification native selon le type d'evenement
     if (payload?.type === 'message.received') {
       return {
         title: payload.sender || 'Nouveau message',

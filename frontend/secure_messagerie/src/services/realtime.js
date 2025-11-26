@@ -10,23 +10,27 @@ import { buildWsUrl } from '@/utils/realtime'
  * Retourne un objet compatible WebSocket pour .close() et expose .send(data) en plus.
  */
 export function createConversationSocket(conversationId, { token, onEvent, onOpen, onError, onClose } = {}) {
+  // Point d'entree unique pour ouvrir une socket conversation avec reconnexion/heartbeat
   const url = new URL(buildWsUrl(`conversations/${conversationId}`, token ? { token } : undefined))
 
+  // Etat runtime de la socket
   let socket = null
   let closedManually = false
 
-  // Reco
+  // Parametrage de la reco exponentielle
   let retry = 0
   const minDelay = 800
   const maxDelay = 20000
 
-  // Heartbeat
+  // Timers de heartbeat (ping/pong)
   let heartbeatTimer = null
   let heartbeatTimeout = null
   const HEARTBEAT_INTERVAL = 30000 // 30s
   const HEARTBEAT_DEADLINE = 15000 // 15s
 
+  // --- Gestion du heartbeat ---
   function clearHeartbeat() {
+    // Coupe les timers pour eviter les faux positifs lors des reconnections
     if (heartbeatTimer) {
       clearInterval(heartbeatTimer)
       heartbeatTimer = null
@@ -38,6 +42,7 @@ export function createConversationSocket(conversationId, { token, onEvent, onOpe
   }
 
   function startHeartbeat() {
+    // Envoie periodiquement un ping et ferme si aucun pong n'arrive avant la deadline
     clearHeartbeat()
     heartbeatTimer = setInterval(() => {
       if (!socket || socket.readyState !== WebSocket.OPEN) return
@@ -57,6 +62,7 @@ export function createConversationSocket(conversationId, { token, onEvent, onOpe
   }
 
   function handleMessage(evt) {
+    // Parse le payload JSON et transmet a l'abonne en fournissant l'event brut
     if (heartbeatTimeout) {
       clearTimeout(heartbeatTimeout)
       heartbeatTimeout = null
@@ -71,7 +77,9 @@ export function createConversationSocket(conversationId, { token, onEvent, onOpe
     }
   }
 
+  // --- Connexion / reconnexion ---
   function connect() {
+    // (Re)ouverture de la socket avec callbacks et backoff exponentiel
     if (closedManually) return
 
     socket = new WebSocket(url.toString())
@@ -99,6 +107,7 @@ export function createConversationSocket(conversationId, { token, onEvent, onOpe
 
   connect()
 
+  // Interface exposee: mimique WebSocket avec helpers pour close/send/raw
   return {
     send(data) {
       try {
