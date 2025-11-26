@@ -1,4 +1,12 @@
+<!--
+  ===== Component Header =====
+  Component: ContactSection
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Regroupe et affiche une categorie de contacts.
+-->
 <template>
+  <!-- Section listant une categorie de contacts -->
   <section
     v-show="section.contacts && section.contacts.length"
     class="contact-section"
@@ -27,6 +35,7 @@
 </template>
 
 <script setup>
+// ===== Props du groupe de contacts =====
 defineProps({
   section: {
     type: Object,

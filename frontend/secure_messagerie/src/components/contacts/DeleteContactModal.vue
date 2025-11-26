@@ -1,4 +1,12 @@
+<!--
+  ===== Component Header =====
+  Component: DeleteContactModal
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Confirmation de suppression d'un contact.
+-->
 <template>
+  <!-- Fenetre modale de confirmation de suppression -->
   <transition name="fade">
     <div
       v-if="showDeleteModal"
@@ -66,6 +74,7 @@
 <script setup>
 import { computed } from 'vue'
 
+// ===== Props de la modale de suppression =====
 const props = defineProps({
   showDeleteModal: {
     type: Boolean,
@@ -85,8 +94,10 @@ const props = defineProps({
   },
 })
 
+// ===== Evenements emis vers le parent =====
 defineEmits(['close-delete-modal', 'confirm-delete'])
 
+// ===== Formatage des affichages =====
 const displayName = computed(() => {
   if (!props.deleteTarget) return ''
   return (

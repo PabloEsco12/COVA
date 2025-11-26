@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: SidebarInsights
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Carte d'informations securite/activite dans la sidebar.
+-->
 <template>
   <section class="sidebar-insights mb-4">
     <div class="insights-header">
@@ -44,6 +51,7 @@
 </template>
 
 <script setup>
+// ===== Props et emissions =====
 defineProps({
   formattedToday: {
     type: String,

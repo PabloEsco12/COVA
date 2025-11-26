@@ -1,4 +1,12 @@
+<!--
+  ===== Component Header =====
+  Component: ContactDetailsModal
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Modal d'affichage detaille d'un contact.
+-->
 <template>
+  <!-- Modal affichant les informations completes d'un contact -->
   <transition name="fade">
     <div v-if="detailContact" class="modal-overlay" @click.self="$emit('close-details-modal')">
       <div class="modal-card detail-card">
@@ -65,6 +73,7 @@
 <script setup>
 import { computed } from 'vue'
 
+// ===== Props et interactions =====
 const props = defineProps({
   detailContact: {
     type: Object,
@@ -72,8 +81,10 @@ const props = defineProps({
   },
 })
 
+// ===== Evenements emis au parent =====
 defineEmits(['close-details-modal', 'open-conversation'])
 
+// ===== Donnees derivees pour l'affichage =====
 const displayName = computed(() => {
   if (!props.detailContact) return ''
   return (

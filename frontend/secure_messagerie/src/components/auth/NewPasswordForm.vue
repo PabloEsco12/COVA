@@ -1,6 +1,8 @@
 <!-- src/components/auth/NewPasswordForm.vue -->
 <template>
+  <!-- ===== Formulaire de definition de nouveau mot de passe ===== -->
   <div class="reset-card animate__animated animate__fadeInUp">
+    <!-- Bloc d'introduction avec branding -->
     <div class="card-brand">
       <img src="@/assets/logo_COVA.png" alt="Logo COVA" class="brand-logo" />
       <div>
@@ -9,11 +11,13 @@
       </div>
     </div>
 
+    <!-- Rappel sur les exigences de securite -->
     <p class="card-intro">
       Pour protéger vos échanges sensibles, choisissez un mot de passe robuste que vous n'utilisez nulle part
       ailleurs. Il sera effectif immédiatement après validation.
     </p>
 
+    <!-- Formulaire de saisie des mots de passe avec indicateur de robustesse -->
     <form @submit.prevent="handleNewPassword" class="reset-form">
       <div class="form-field">
         <label for="password" class="form-label">Nouveau mot de passe</label>
@@ -77,12 +81,14 @@
       </button>
     </form>
 
+    <!-- Aide memoire sur les bonnes pratiques -->
     <ul class="guidelines">
       <li><i class="bi bi-dot"></i>8 caractères minimum, 12 et plus idéalement.</li>
       <li><i class="bi bi-dot"></i>Incluez majuscules, minuscules, chiffres et symboles.</li>
       <li><i class="bi bi-dot"></i>Évitez les informations personnelles ou évidentes.</li>
     </ul>
 
+    <!-- Feedback visuel apres soumission -->
     <transition name="fade-slide">
       <p v-if="error" class="feedback feedback--error">
         <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
@@ -97,6 +103,7 @@
       </p>
     </transition>
 
+    <!-- Liens d'action secondaires -->
     <div class="action-links">
       <router-link to="/login" class="action-link">Retourner à la connexion</router-link>
       <a class="action-link" href="mailto:support@covamessagerie.be">Besoin d'aide ? Contactez-nous</a>
@@ -110,6 +117,7 @@ import { computed, ref } from 'vue'
 import { api } from '@/utils/api'
 import { useRoute } from 'vue-router'
 
+// ===== Etats reactivs =====
 const password = ref('')
 const password2 = ref('')
 const error = ref('')
@@ -119,6 +127,7 @@ const showPassword = ref(false)
 const showPasswordConfirm = ref(false)
 const route = useRoute()
 
+// ===== Calculs derives pour la jauge de securite =====
 const passwordScore = computed(() => evaluateStrength(password.value))
 const strengthPercent = computed(() => `${(passwordScore.value / 5) * 100}%`)
 const strengthLevel = computed(() => {
@@ -147,6 +156,7 @@ const strengthLabel = computed(() => {
 })
 const isSubmitDisabled = computed(() => loading.value || !password.value || !password2.value)
 
+// ===== Evaluation basique de robustesse =====
 function evaluateStrength(value) {
   if (!value) {
     return 0
@@ -164,6 +174,7 @@ function evaluateStrength(value) {
   return Math.min(score, 5)
 }
 
+// ===== Soumission du nouveau mot de passe =====
 async function handleNewPassword() {
   // Valide le token de reset et enregistre le nouveau mot de passe.
   error.value = ''
@@ -207,6 +218,7 @@ async function handleNewPassword() {
 }
 </script>
 
+<!-- ===== Styles pour la page nouveau mot de passe ===== -->
 <style scoped src="@/assets/styles/new-password.css"></style>
 
 

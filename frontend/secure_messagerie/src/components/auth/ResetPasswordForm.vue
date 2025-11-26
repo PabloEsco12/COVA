@@ -1,6 +1,8 @@
 <!-- src/components/auth/ResetPasswordForm.vue -->
 <template>
+  <!-- ===== Parcours de demande de reinitialisation ===== -->
   <div class="auth-grid">
+    <!-- Colonne gauche: illustration rassurante -->
     <section class="auth-illustration">
       <div class="auth-illustration__overlay"></div>
       <div class="auth-illustration__content">
@@ -43,7 +45,9 @@
       </div>
     </section>
 
+    <!-- Colonne droite: formulaire de demande -->
     <section class="auth-card">
+      <!-- Titre et rappel du contexte -->
       <div class="auth-card__brand">
         <img src="@/assets/logo_COVA.png" alt="Logo COVA" class="auth-card__logo" />
         <div>
@@ -52,11 +56,13 @@
         </div>
       </div>
 
+      <!-- Explication rapide de la procedure -->
       <p class="auth-card__intro">
         Saisissez l'adresse e-mail professionnelle associée à votre espace COVA.
         Nous vous adresserons un lien sécurisé pour définir un nouveau mot de passe.
       </p>
 
+      <!-- Conseils pour guider l'utilisateur avant l'envoi -->
       <div class="reset-guidelines">
         <div class="reset-guidelines__item">
           <span class="reset-guidelines__icon"><i class="bi bi-shield-check"></i></span>
@@ -74,6 +80,7 @@
         </div>
       </div>
 
+      <!-- Formulaire de saisie de l'email a reinitialiser -->
       <form @submit.prevent="handleReset" class="auth-form">
         <div class="input-field">
           <span class="input-field__icon"><i class="bi bi-envelope-fill"></i></span>
@@ -94,6 +101,7 @@
         </button>
       </form>
 
+      <!-- Retour en cas d'erreur serveur -->
       <div
         v-if="error"
         class="alert alert-danger text-center animate__animated animate__shakeX mt-3"
@@ -101,6 +109,7 @@
         {{ error }}
       </div>
 
+      <!-- Confirmation si le mail a ete envoye -->
       <div
         v-if="success"
         class="alert alert-success text-center animate__animated animate__fadeInUp mt-3"
@@ -108,6 +117,7 @@
         {{ success }}
       </div>
 
+      <!-- Raccourci retour connexion -->
       <p class="auth-card__footer">
         Vous vous souvenez de vos identifiants ?
         <router-link to="/login">Retourner à la connexion</router-link>
@@ -117,14 +127,17 @@
 </template>
 
 <script setup>
+// ===== Logique de demande de reset =====
 import { ref } from 'vue'
 import { api } from '@/utils/api'
 
+// ===== Etats reactivs =====
 const email = ref('')
 const error = ref('')
 const success = ref('')
 const loading = ref(false)
 
+// ===== Soumission du formulaire de reset =====
 async function handleReset() {
   error.value = ''
   success.value = ''
@@ -145,4 +158,5 @@ async function handleReset() {
 </script>
 
 <!-- on réutilise ton css -->
+<!-- ===== Styles pour la page de reset ===== -->
 <style scoped src="@/assets/styles/reset-password.css"></style>

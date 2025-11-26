@@ -1,6 +1,8 @@
 <!-- src/components/auth/LoginTotpForm.vue -->
 <template>
+  <!-- ===== Etape de verification TOTP apres saisie du mot de passe ===== -->
   <section class="auth-card">
+    <!-- Bandeau rappel du contexte de verification -->
     <div class="auth-card__brand">
       <img src="@/assets/logo_COVA.png" alt="Logo COVA" class="auth-card__logo" />
       <div>
@@ -9,11 +11,13 @@
       </div>
     </div>
 
+    <!-- Rappel de l'adresse concernee pour eviter les erreurs de compte -->
     <div class="auth-context" v-if="userEmail">
       <i class="bi bi-envelope"></i>
       <span>{{ userEmail }}</span>
     </div>
 
+    <!-- Formulaire de saisie et validation du code TOTP -->
     <form @submit.prevent="handleTotp" class="auth-form">
       <div class="input-field">
         <span class="input-field__icon"><i class="bi bi-shield-lock-fill"></i></span>
@@ -49,6 +53,7 @@
       </button>
     </form>
 
+    <!-- Affichage des erreurs de code ou de serveur -->
     <div
       v-if="error"
       class="alert alert-danger text-center animate__animated animate__shakeX mt-3"
@@ -66,15 +71,18 @@ import { useRouter } from 'vue-router'
 import { backendBase } from '@/utils/api'
 import { normalizeAvatarUrl } from '@/utils/profile'
 
+// ===== Etats reactivs =====
 const code = ref('')
 const error = ref('')
 const loading = ref(false)
 const userEmail = ref('')
 const router = useRouter()
 
+// ===== Donnees temporaires issues du step password =====
 const pendingKey = 'pending_totp'
 let pendingAuth = null
 
+// ===== Lifecycle: initialisation du contexte TOTP =====
 onMounted(() => {
   // Récupère les credentials stockés lors du step password, sinon retour login.
   const raw = sessionStorage.getItem(pendingKey)
@@ -95,6 +103,7 @@ onMounted(() => {
   }
 })
 
+// ===== Flux de validation TOTP =====
 async function handleTotp() {
   error.value = ''
   if (!pendingAuth) {
@@ -156,10 +165,12 @@ async function handleTotp() {
   }
 }
 
+// ===== Annulation de la verification =====
 function cancelTotp() {
   sessionStorage.removeItem(pendingKey)
   router.push('/login')
 }
 </script>
 
+<!-- ===== Styles du step TOTP ===== -->
 <style scoped src="@/assets/styles/login-totp.css"></style>

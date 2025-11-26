@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: ContactsToolbar
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Barre de recherche et filtres pour la liste de contacts.
+-->
 <template>
   <div class="toolbar card mb-3">
     <div class="search-group">
@@ -26,6 +33,7 @@
 </template>
 
 <script setup>
+// ===== Props de la toolbar (recherche + filtres) =====
 defineProps({
   searchTerm: {
     type: String,
@@ -41,6 +49,7 @@ defineProps({
   },
 })
 
+// ===== Evenements emis vers la page parente =====
 defineEmits(['update:search-term', 'update:status-filter'])
 </script>
 

@@ -1,12 +1,22 @@
-﻿<template>
+﻿<!--
+  ===== Component Header =====
+  Component: Dashboard
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Layout principal du dashboard avec header et sidebar.
+-->
+<template>
   <div class="dashboard-layout d-flex" :class="{ 'dashboard-layout-dark': isDark }">
+    <!-- Barre laterale et toggle theme -->
     <Sidebar :is-dark="isDark" @toggle-dark="toggleTheme" />
     <div class="flex-grow-1 d-flex flex-column min-vh-100">
+      <!-- Header global -->
       <DashboardHeader :is-dark="isDark" @toggle-dark="toggleTheme" />
       <main
         class="flex-grow-1 px-3 py-4 main-content"
         :class="{ 'main-content-dark': isDark }"
       >
+        <!-- Zone de rendu des routes de dashboard -->
         <router-view />
       </main>
     </div>
@@ -14,16 +24,19 @@
 </template>
 
 <script setup>
+// ===== Imports =====
 import Sidebar from './Sidebar.vue'
 import DashboardHeader from './DashboardHeader.vue'
 import { useRouter } from 'vue-router'
 import { onMounted, ref } from 'vue'
 import { hasStoredSession } from '@/services/auth'
 
+// ===== Router et etat de theme =====
 const router = useRouter()
 
 const isDark = ref(document.body.classList.contains('dark-mode'))
 
+// ===== Application du theme clair/sombre =====
 const applyTheme = (dark) => {
   isDark.value = dark
   document.body.classList.toggle('dark-mode', dark)
@@ -39,6 +52,7 @@ const toggleTheme = () => {
   applyTheme(!isDark.value)
 }
 
+// ===== Verification de session + chargement du theme persiste =====
 onMounted(() => {
   if (!hasStoredSession()) {
     router.push('/login')
@@ -57,6 +71,7 @@ onMounted(() => {
 })
 </script>
 
+<!-- ===== Styles du layout dashboard ===== -->
 <style scoped>
 .dashboard-layout {
   min-height: 100vh; /* allow the page to grow with the content */

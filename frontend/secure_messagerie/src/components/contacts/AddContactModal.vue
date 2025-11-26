@@ -1,4 +1,12 @@
+<!--
+  ===== Component Header =====
+  Component: AddContactModal
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Modal de creation de contact (invitation interne/externe).
+-->
 <template>
+  <!-- Fenetre modale pour ajouter un contact -->
   <transition name="fade">
     <div v-if="showAddModal" class="modal-overlay" @click.self="closeAddModal">
       <div class="modal-card">
@@ -129,6 +137,7 @@
 import { computed, ref, watch, defineProps, defineEmits, nextTick } from 'vue'
 import { suggestOrganizationMembers } from '@/services/organization'
 
+// ===== Props et etats reactivs =====
 const props = defineProps({
   showAddModal: {
     type: Boolean,
@@ -164,13 +173,16 @@ const props = defineProps({
   },
 })
 
+// ===== Evenements emis vers le parent =====
 const emit = defineEmits(['close-add-modal', 'submit-add', 'update:add-email', 'update:add-alias'])
 
+// ===== Refs et modeles locaux =====
 const addEmailInput = ref(null)
 
 const localAddEmail = ref(props.addEmail)
 const localAddAlias = ref(props.addAlias)
 
+// ===== Synchronisation des props vers l'etat local =====
 watch(
   () => props.addEmail,
   (val) => {
@@ -193,6 +205,7 @@ watch(
   },
 )
 
+// ===== Validation email et suggestions d'utilisateurs internes =====
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const emailIsValid = computed(() => emailRegex.test(localAddEmail.value))
 const emailExists = computed(() =>
@@ -214,12 +227,14 @@ function closeAddModal() {
   emit('close-add-modal')
 }
 
+// ===== Submission et mise a jour des modeles parents =====
 function submitAdd() {
   emit('update:add-email', localAddEmail.value)
   emit('update:add-alias', localAddAlias.value)
   emit('submit-add')
 }
 
+// ===== Accessibilite: focus automatique sur le champ email =====
 function focusEmail() {
   nextTick(() => {
     addEmailInput.value?.focus()
@@ -232,6 +247,7 @@ function roleLabel(role) {
   return 'Membre'
 }
 
+// ===== Debounce de l'autocompletion pour limiter les appels API =====
 let debounceTimer = null
 async function fetchSuggestions() {
   if (!localAddEmail.value.trim()) {

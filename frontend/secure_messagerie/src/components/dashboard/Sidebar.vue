@@ -1,4 +1,11 @@
-﻿<template>
+﻿<!--
+  ===== Component Header =====
+  Component: Sidebar
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Barre laterale principale du dashboard.
+-->
+<template>
   <nav :class="['sidebar d-flex flex-column p-3', isDark ? 'sidebar-dark' : 'sidebar-light']">
     <router-link
       to="/dashboard"
@@ -71,6 +78,7 @@ const STATUS_LABELS = {
   offline: 'Hors ligne',
 }
 
+// ===== Props, emissions et navigation =====
 const props = defineProps({
   isDark: Boolean
 })
@@ -80,6 +88,7 @@ defineEmits(['toggle-dark'])
 const { isDark } = toRefs(props)
 const router = useRouter()
 
+// ===== Etats reactivs =====
 const userId = Number(localStorage.getItem('user_id') || 0)
 const unreadCount = ref(0)
 const pendingContacts = ref(readPendingContactsFromCache())
@@ -114,6 +123,7 @@ const lastAuditText = computed(() => {
   return relative || (ip ? `IP ${ip}` : '')
 })
 
+// ===== Liens rapides et sections derivees =====
 const quickLinks = computed(() => [
   {
     to: '/dashboard/messages',
@@ -736,6 +746,7 @@ function formatRelativeTime(dateString) {
   return date.toISOString()
 }
 </script>
+<!-- ===== Styles de la sidebar principale ===== -->
 <style src="@/assets/styles/sidebar.css"></style>
 
 

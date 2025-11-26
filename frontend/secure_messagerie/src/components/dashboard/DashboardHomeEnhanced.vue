@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: DashboardHomeEnhanced
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Vue d'accueil du dashboard (stats, securite, contacts).
+-->
 <template>
   <div class="container py-4">
     <div v-if="loading && !overview" class="card border-0 shadow-sm loading-card">
@@ -255,8 +262,10 @@ import { useRouter } from 'vue-router'
 import { api, backendBase } from '@/utils/api'
 import { computeAvatarInitials, normalizeAvatarUrl } from '@/utils/profile'
 
+// ===== Navigation =====
 const router = useRouter()
 
+// ===== Etats reactivs principaux =====
 const loading = ref(true)
 const refreshing = ref(false)
 const error = ref('')
@@ -264,6 +273,7 @@ const apiOk = ref(false)
 
 const overview = ref(null)
 
+// ===== Infos utilisateur pour le hero =====
 const pseudo = ref(localStorage.getItem('pseudo') || 'Utilisateur')
 const avatarUrl = ref(normalizeAvatarUrl(localStorage.getItem('avatar_url'), { baseUrl: backendBase }))
 const heroInitials = computed(() =>
@@ -274,6 +284,7 @@ const heroInitials = computed(() =>
 )
 const greeting = ref('Bonjour')
 
+// ===== Valeurs par defaut pour eviter les undefined en rendu =====
 const defaultStats = {
   unread_messages: 0,
   conversations: 0,
@@ -301,6 +312,7 @@ const organizationMembership = computed(() => organization.value?.membership ?? 
 const canManageOrganization = computed(() => Boolean(organizationMembership.value?.can_manage_admins))
 const organizationRoleBadgeClass = computed(() => badgeClassForRole(organizationMembership.value?.role))
 
+// ===== Cartes indicateurs principales =====
 const tiles = computed(() => {
   const snapshot = stats.value
   return [
@@ -362,6 +374,7 @@ onBeforeUnmount(() => {
   }
 })
 
+// ===== Rappel principal vers l'API dashboard =====
 async function fetchOverview(options = {}) {
   const silent = options.silent ?? false
   if (silent) {
@@ -438,6 +451,7 @@ function goToConversation(id) {
   router.push({ path: '/dashboard/messages', query: { conversation: id } })
 }
 
+// ===== Maj du hero en cas de changement de profil global =====
 function handleProfileUpdate(event) {
   const payload = event?.detail || {}
   if (Object.prototype.hasOwnProperty.call(payload, 'display_name')) {
@@ -544,6 +558,7 @@ function extractErrorMessage(err) {
 }
 </script>
 
+<!-- ===== Styles de la page d'accueil dashboard ===== -->
 <style scoped>
 .loading-card {
   max-width: 480px;

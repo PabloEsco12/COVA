@@ -1,6 +1,8 @@
 ﻿<!-- src/components/auth/LoginForm.vue -->
 <template>
+  <!-- ===== Formulaire de connexion principale ===== -->
   <section class="auth-card">
+    <!-- Bandeau marque et contexte -->
     <div class="auth-card__brand">
       <img src="@/assets/logo_COVA.png" alt="Logo COVA" class="auth-card__logo" />
       <div>
@@ -9,6 +11,7 @@
       </div>
     </div>
 
+    <!-- Formulaire de saisie email + mot de passe -->
     <form @submit.prevent="handleLogin" class="auth-form">
       <div class="input-field">
         <span class="input-field__icon"><i class="bi bi-envelope-fill"></i></span>
@@ -46,6 +49,7 @@
       </button>
     </form>
 
+    <!-- Bloc d'alertes en cas d'erreur serveur ou credentials invalides -->
     <div
       v-if="error"
       class="auth-alert animate__animated animate__shakeX mt-3"
@@ -68,6 +72,7 @@
       </div>
     </div>
 
+    <!-- Carte pour renvoyer un email de confirmation -->
     <div v-if="showResend" class="resend-card mt-3">
       <p class="resend-card__text">
         Vous n'avez pas reçu l'e-mail de confirmation ? Cliquez ci-dessous pour en recevoir un nouveau.
@@ -87,6 +92,7 @@
       <p v-if="resendError" class="resend-card__error">{{ resendError }}</p>
     </div>
 
+    <!-- Redirection vers l'inscription -->
     <p class="auth-card__footer">
       Pas encore de compte ?
       <router-link to="/register">Rejoindre la plateforme</router-link>
@@ -102,6 +108,7 @@ import { clearSession, getAccessToken, isAccessTokenExpired, loginWithPassword, 
 import { useRouter, useRoute } from 'vue-router'
 import { normalizeAvatarUrl } from '@/utils/profile'
 
+// ===== Etats reactivs =====
 const email = ref('')
 const password = ref('')
 const error = ref('')
@@ -111,9 +118,12 @@ const showResend = ref(false)
 const resendLoading = ref(false)
 const resendSuccess = ref(false)
 const resendError = ref('')
+
+// ===== Navigation et routing =====
 const router = useRouter()
 const route = useRoute()
 
+// ===== Cartographie des raisons de deconnexion =====
 const logoutReasons = {
   'session-expired': {
     title: 'Votre session a expiré.',
@@ -125,6 +135,7 @@ const logoutReasons = {
   },
 }
 
+// ===== Lifecycle: verification de session existante =====
 onMounted(() => {
   // Redirige si une session valide existe déjà.
   const token = getAccessToken()
@@ -138,6 +149,7 @@ onMounted(() => {
   }
 })
 
+// ===== Surveillance du parametre reason pour afficher le contexte =====
 watch(
   () => route.query.reason,
   (reason) => {
@@ -150,12 +162,13 @@ watch(
   { immediate: true },
 )
 
+// ===== Helpers erreurs =====
 function setError(message, hint = '') {
   error.value = message
   errorHint.value = hint
 }
 
-
+// ===== Gestion du motif de deconnexion =====
 function applyLogoutReason(reason) {
   const payload = logoutReasons[reason]
   if (!payload) return
@@ -163,6 +176,7 @@ function applyLogoutReason(reason) {
   showResend.value = false
 }
 
+// ===== Nettoyage de l'URL apres affichage du message =====
 function clearReasonQuery() {
   try {
     const nextQuery = { ...route.query }
@@ -173,6 +187,7 @@ function clearReasonQuery() {
   }
 }
 
+// ===== Flux principal de connexion =====
 async function handleLogin() {
   // Authentifie, stocke l'avatar/pseudo et gère les cas TOTP ou erreurs serveur.
   setError('')
@@ -259,6 +274,7 @@ async function handleLogin() {
   }
 }
 
+// ===== Renvoi de l'email de confirmation =====
 async function handleResend() {
   // Renvoie un email de confirmation pour les comptes non validés.
   if (!email.value) {
@@ -280,4 +296,5 @@ async function handleResend() {
 }
 </script>
 
+<!-- ===== Styles du formulaire de connexion ===== -->
 <style scoped src="@/assets/styles/login.css"></style>

@@ -1,7 +1,9 @@
 <script setup>
+// ===== Formulaire d'inscription COVA =====
 import { ref } from 'vue'
 import { registerAccount, resendConfirmationEmail } from '@/services/auth'
 
+// ===== Etats reactivs =====
 const pseudo = ref('')
 const email = ref('')
 const password = ref('')
@@ -15,6 +17,7 @@ const resendSuccessMessage = ref('')
 const resendError = ref('')
 const requiresConfirmation = ref(false)
 
+// ===== Soumission du formulaire d'inscription =====
 async function handleRegister() {
   error.value = ''
   success.value = ''
@@ -56,6 +59,7 @@ async function handleRegister() {
   }
 }
 
+// ===== Renvoi du mail de confirmation apres inscription =====
 async function handleResend() {
   if (!requiresConfirmation.value || !lastRegisteredEmail.value) {
     resendError.value = 'Aucune inscription en attente de confirmation.'
@@ -77,7 +81,9 @@ async function handleResend() {
 </script>
 
 <template>
+  <!-- ===== Formulaire d'inscription utilisateur ===== -->
   <section class="auth-card">
+    <!-- En-tete avec logo et promesse d'onboarding -->
     <div class="auth-card__brand">
       <img src="@/assets/logo_COVA.png" alt="Logo COVA" class="auth-card__logo" />
       <div>
@@ -86,11 +92,13 @@ async function handleResend() {
       </div>
     </div>
 
+    <!-- Explication rapide des etapes -->
     <p class="auth-card__intro">
       Renseignez vos informations professionnelles pour générer vos identifiants chiffrés.
       Vous recevrez un e-mail de confirmation afin d'activer votre compte.
     </p>
 
+    <!-- Formulaire d'inscription avec validations de base -->
     <form @submit.prevent="handleRegister" class="auth-form">
       <div class="input-field">
         <span class="input-field__icon"><i class="bi bi-person-fill"></i></span>
@@ -133,6 +141,7 @@ async function handleResend() {
         <small class="input-field__hint">8 caractères minimum, combinez lettres, chiffres et symboles.</small>
       </div>
 
+      <!-- Rappel legal et securite -->
       <div class="auth-legal">
         En créant un compte, vous acceptez la charte de sécurité et de confidentialité COVA.
       </div>
@@ -143,10 +152,12 @@ async function handleResend() {
       </button>
     </form>
 
+    <!-- Bloc d'affichage des erreurs serveur -->
     <div v-if="error" class="alert alert-danger text-center mt-3">
       {{ error }}
     </div>
 
+    <!-- Retour visuel en cas d'inscription reussie -->
     <div v-if="success" class="auth-success mt-3">
       <div class="auth-success__icon">
         <i class="bi bi-check2-circle"></i>
@@ -154,6 +165,7 @@ async function handleResend() {
       <div class="auth-success__body">
         <p class="auth-success__title">{{ success }}</p>
         <p v-if="successSubtitle" class="auth-success__subtitle">{{ successSubtitle }}</p>
+        <!-- Gestion du renvoi de confirmation apres inscription -->
         <div v-if="requiresConfirmation && lastRegisteredEmail" class="resend-confirm">
           <p class="resend-confirm__text">
             Vous n'avez rien reçu ? Vérifiez vos spams ou renvoyez l'e-mail en un clic.
@@ -173,6 +185,7 @@ async function handleResend() {
       </div>
     </div>
 
+    <!-- Redirection vers la connexion -->
     <p class="auth-card__footer">
       Déjà inscrit ?
       <router-link to="/login">Revenir à la connexion</router-link>
@@ -180,4 +193,5 @@ async function handleResend() {
   </section>
 </template>
 
+<!-- ===== Styles du formulaire d'inscription ===== -->
 <style scoped src="@/assets/styles/auth.css"></style>

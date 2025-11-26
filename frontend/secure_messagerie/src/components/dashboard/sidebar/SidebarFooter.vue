@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: SidebarFooter
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Zone basse de la sidebar (statut reseau et toggle theme).
+-->
 <template>
   <div class="sidebar-footer mt-auto pt-4">
     <div class="connection-status mb-3">
@@ -20,6 +27,7 @@
 </template>
 
 <script setup>
+// ===== Props et evenements =====
 defineProps({
   isOnline: {
     type: Boolean,

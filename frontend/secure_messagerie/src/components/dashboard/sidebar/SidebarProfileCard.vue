@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: SidebarProfileCard
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Carte profil compacte dans la sidebar.
+-->
 <template>
   <section class="sidebar-profile mb-4">
     <div class="profile-avatar">
@@ -32,6 +39,7 @@
 </template>
 
 <script setup>
+// ===== Props et emits =====
 defineProps({
   pseudo: {
     type: String,

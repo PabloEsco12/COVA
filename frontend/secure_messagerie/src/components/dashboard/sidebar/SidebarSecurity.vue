@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: SidebarSecurity
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Resume securite et dernier audit dans la sidebar.
+-->
 <template>
   <section class="sidebar-section mt-4">
     <p class="sidebar-section-title">Sécurité & confidentialit\u00e9</p>
@@ -53,6 +60,7 @@
 </template>
 
 <script setup>
+// ===== Props =====
 defineProps({
   securitySettings: {
     type: Object,

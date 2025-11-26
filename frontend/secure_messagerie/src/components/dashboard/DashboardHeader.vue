@@ -1,4 +1,11 @@
-﻿<template>
+﻿<!--
+  ===== Component Header =====
+  Component: DashboardHeader
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Barre superieure du dashboard (theme, notifications, profil).
+-->
+<template>
   <header
     :class="[
       'header-shell d-flex align-items-center justify-content-between px-4 py-3',
@@ -51,6 +58,7 @@ import { api, backendBase } from '@/utils/api'
 import { logout as revokeSession } from '@/services/auth'
 import { computeAvatarInitials, normalizeAvatarUrl } from '@/utils/profile'
 
+// ===== Props et emissions =====
 const props = defineProps({
   isDark: {
     type: Boolean,
@@ -61,6 +69,7 @@ const props = defineProps({
 const { isDark } = toRefs(props)
 const emit = defineEmits(['toggle-dark'])
 
+// ===== Etats de l'utilisateur et du header =====
 const pseudo = ref('Utilisateur')
 const avatarUrl = ref(normalizeAvatarUrl(localStorage.getItem('avatar_url'), { baseUrl: backendBase }))
 const isOnline = ref(typeof navigator !== 'undefined' ? navigator.onLine : true)
@@ -76,6 +85,7 @@ const formattedTime = computed(() =>
 )
 let clockTimer = null
 
+// ===== Cycle de vie: initialisation et nettoyage =====
 onMounted(async () => {
   pseudo.value = localStorage.getItem('pseudo') || 'Utilisateur'
   avatarUrl.value = normalizeAvatarUrl(localStorage.getItem('avatar_url'), { baseUrl: backendBase })
@@ -124,6 +134,7 @@ onBeforeUnmount(() => {
   }
 })
 
+// ===== Actions utilisateur =====
 async function handleLogout() {
   try {
     await revokeSession()
@@ -134,6 +145,7 @@ async function handleLogout() {
   }
 }
 
+// ===== Gestion avatar et profil =====
 function onAvatarError() {
   avatarUrl.value = null
   try {
@@ -141,6 +153,7 @@ function onAvatarError() {
   } catch {}
 }
 
+// ===== Mise a jour du profil via event global =====
 function handleProfileUpdate(event) {
   const payload = event?.detail || {}
   if (Object.prototype.hasOwnProperty.call(payload, 'display_name')) {
@@ -167,6 +180,7 @@ function handleProfileUpdate(event) {
   }
 }
 
+// ===== Etat reseau pour badge de securite =====
 function updateNetworkStatus() {
   if (typeof navigator !== 'undefined') {
     isOnline.value = navigator.onLine
@@ -174,6 +188,7 @@ function updateNetworkStatus() {
 }
 </script>
 
+<!-- ===== Styles du header ===== -->
 <style scoped>
 .theme-toggle {
   transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;

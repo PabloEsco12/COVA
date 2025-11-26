@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: ContactsPage
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Page principale de gestion des contacts (listing, creation, suppression).
+-->
 <template>
   <div class="contacts-page">
     <!-- Header -->
@@ -156,16 +163,18 @@ import {
   updateContactStatus,
 } from '@/services/contacts'
 
+// ===== Etats reactivs principaux =====
 const contacts = ref([])
 const loading = ref(true)
 const loadError = ref('')
 
+// ===== Filtres et recherche =====
 const searchTerm = ref('')
 const statusFilter = ref('all')
 
 const feedback = reactive({ type: 'success', message: '' })
 
-// ajout
+// ===== Ajout de contact =====
 const showAddModal = ref(false)
 const addEmail = ref('')
 const addAlias = ref('')
@@ -174,27 +183,28 @@ const modalError = ref('')
 const modalSuccess = ref('')
 const addContactModalRef = ref(null)
 
-// suppression
+// ===== Suppression de contact =====
 const showDeleteModal = ref(false)
 const deleteTarget = ref(null)
 const deleteBusy = ref(false)
 const deleteError = ref('')
 
-// détails
+// ===== Consultation detaillee =====
 const detailContact = ref(null)
 
-// alias
+// ===== Edition d'alias =====
 const editingAliasFor = ref(null)
 const aliasDraft = ref('')
 const aliasSaving = ref(false)
 const aliasInputRefs = new Map()
 
-// divers
+// ===== Etats divers pour l'UI =====
 const highlightContactId = ref(null)
 const busyMap = reactive({})
 
 const router = useRouter()
 
+// ===== Validation email et detection de doublons =====
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const normalizedEmail = computed(() => (addEmail.value || '').trim())
 const normalizedEmailLower = computed(() => normalizedEmail.value.toLowerCase())
@@ -206,6 +216,7 @@ const existingContact = computed(() => {
 })
 const emailExists = computed(() => !!existingContact.value)
 
+// ===== Classement et statistiques =====
 const statusOrder = {
   accepted: 0,
   pending: 1,
@@ -219,6 +230,7 @@ const counts = computed(() => ({
   total: contacts.value.length,
 }))
 
+// ===== Notification globale du nombre de demandes en attente =====
 function emitPendingContactCount(value) {
   if (typeof window === 'undefined') return
   const normalized = Math.max(0, Number(value) || 0)
@@ -237,6 +249,7 @@ watch(
   { immediate: true },
 )
 
+// ===== Donnees pour les filtres rapides =====
 const filterChips = computed(() => [
   { value: 'all', label: 'Tous', count: counts.value.total },
   { value: 'accepted', label: 'Actifs', count: counts.value.accepted },
@@ -244,6 +257,7 @@ const filterChips = computed(() => [
   { value: 'blocked', label: 'Bloqués', count: counts.value.blocked },
 ])
 
+// ===== Normalisation des contacts (avatar + tri) =====
 const normalizedContacts = computed(() => {
   return contacts.value
     .map((contact) => ({
@@ -259,6 +273,7 @@ const normalizedContacts = computed(() => {
 
 const searchLower = computed(() => searchTerm.value.trim().toLowerCase())
 
+// ===== Recherche plein texte sur email/alias/display name =====
 const filteredContacts = computed(() => {
   const lookup = searchLower.value
   if (!lookup) return normalizedContacts.value
@@ -276,12 +291,14 @@ const filteredContacts = computed(() => {
   })
 })
 
+// ===== Regroupement par statut =====
 const groupedContacts = computed(() => ({
   accepted: filteredContacts.value.filter((c) => c.status === 'accepted'),
   pending: filteredContacts.value.filter((c) => c.status === 'pending'),
   blocked: filteredContacts.value.filter((c) => c.status === 'blocked'),
 }))
 
+// ===== Structure des sections affichées dans l'UI =====
 const sectionsToDisplay = computed(() => {
   if (statusFilter.value === 'all') {
     return [

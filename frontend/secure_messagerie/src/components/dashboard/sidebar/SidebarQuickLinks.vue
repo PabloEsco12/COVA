@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: SidebarQuickLinks
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Raccourcis rapides dans la sidebar.
+-->
 <template>
   <section class="sidebar-section quick-links">
     <p class="sidebar-section-title">Raccourcis sécurisés</p>
@@ -28,6 +35,7 @@
 </template>
 
 <script setup>
+// ===== Props =====
 defineProps({
   links: {
     type: Array,

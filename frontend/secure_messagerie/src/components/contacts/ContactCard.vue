@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: ContactCard
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Carte affichant un contact avec actions contextuelles.
+-->
 <template>
   <article
     class="contact-card card"
@@ -160,6 +167,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 
+// ===== Props et options d'affichage =====
 const props = defineProps({
   contact: {
     type: Object,
@@ -189,6 +197,7 @@ const props = defineProps({
   },
 })
 
+// ===== Evenements envoyes au parent =====
 defineEmits([
   'open-details',
   'start-alias-edit',
@@ -210,6 +219,7 @@ watch(
   },
 )
 
+// ===== Donnees derivees pour l'affichage =====
 const displayName = computed(() => {
   return (
     (props.contact.alias && props.contact.alias.trim()) ||
