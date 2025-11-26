@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: RenameDeviceModal
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Modale pour nommer ou renommer un appareil.
+-->
 <template>
   <!-- fond -->
   <transition name="fade">
@@ -61,6 +68,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 
+// ===== Props et emissions =====
 const props = defineProps({
   show: {
     type: Boolean,
@@ -82,8 +90,10 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'confirm'])
 
+// ===== Etat local =====
 const name = ref(props.initialName)
 
+// ===== Synchronisation nom selon l'ouverture ou changement de prop =====
 watch(
   () => props.show,
   (visible) => {
@@ -107,4 +117,5 @@ function confirm() {
 }
 </script>
 
+<!-- ===== Styles de la modale rename ===== -->
 <style scoped src="@/assets/styles/devices.css"></style>

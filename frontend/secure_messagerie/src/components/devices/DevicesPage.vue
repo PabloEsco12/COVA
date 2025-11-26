@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: DevicesPage
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Page de gestion des appareils (listing, sync, revocation).
+-->
 <template>
   <div class="devices-page">
     <DevicesToolbar
@@ -617,4 +624,5 @@ function extractError(err, fallback = 'Erreur inconnue.') {
   return detail ? String(detail) : fallback
 }
 </script>
+<!-- ===== Styles de la page appareils ===== -->
 <style scoped src="@/assets/styles/devices.css"></style>

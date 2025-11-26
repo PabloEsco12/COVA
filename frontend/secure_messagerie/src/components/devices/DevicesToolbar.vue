@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: DevicesToolbar
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Barre d'actions principales pour la gestion des appareils.
+-->
 <template>
   <header class="page-header">
     <div>
@@ -44,6 +51,7 @@
 </template>
 
 <script setup>
+// ===== Props et emissions =====
 defineProps({
   loading: Boolean,
   registering: Boolean,
@@ -52,4 +60,5 @@ defineProps({
 defineEmits(['logout-everywhere', 'manual-sync', 'rename-current'])
 </script>
 
+<!-- ===== Styles de la toolbar appareils ===== -->
 <style scoped src="@/assets/styles/devices.css"></style>

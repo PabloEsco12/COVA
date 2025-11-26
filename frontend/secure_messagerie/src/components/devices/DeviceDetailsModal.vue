@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: DeviceDetailsModal
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Modale d'inspection detaillee d'un appareil.
+-->
 <template>
   <transition name="fade">
     <div v-if="show" class="modal-backdrop"></div>
@@ -14,6 +21,7 @@
             <i class="bi bi-x-lg"></i>
           </button>
         </header>
+        <!-- Corps detaille affiche uniquement si device fournit -->
         <div class="modal-body" v-if="device">
           <div class="modal-device-heading">
             <div :class="['device-avatar', device.iconClass]">
@@ -70,6 +78,7 @@
 </template>
 
 <script setup>
+// ===== Props et emissions =====
 defineProps({
   show: Boolean,
   device: Object,
@@ -81,4 +90,5 @@ defineProps({
 defineEmits(['close', 'revoke'])
 </script>
 
+<!-- ===== Styles de la modale ===== -->
 <style scoped src="@/assets/styles/devices.css"></style>

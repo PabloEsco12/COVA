@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: DevicesSummary
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Synthese rapide des appareils (total, activite, risques).
+-->
 <template>
   <section class="security-summary card">
     <div class="summary-grid">
@@ -23,6 +30,7 @@
 </template>
 
 <script setup>
+// ===== Props =====
 defineProps({
   summary: {
     type: Object,
@@ -31,4 +39,5 @@ defineProps({
 })
 </script>
 
+<!-- ===== Styles du resume appareils ===== -->
 <style scoped src="@/assets/styles/devices.css"></style>

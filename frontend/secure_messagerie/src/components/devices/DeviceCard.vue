@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: DeviceCard
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Carte d'appareil avec metadonnees et actions.
+-->
 <template>
   <article
     class="device-card card"
@@ -51,6 +58,7 @@
         </li>
       </ul>
 
+      <!-- Actions: details ou revocation -->
       <div class="device-actions d-flex flex-wrap gap-2 mt-3">
         <button class="btn btn-outline-secondary btn-sm" type="button" @click="$emit('details', device)">
           <i class="bi bi-info-circle me-1"></i>
@@ -75,6 +83,7 @@
 </template>
 
 <script setup>
+// ===== Props et emissions =====
 defineProps({
   device: {
     type: Object,
@@ -88,4 +97,5 @@ defineProps({
 defineEmits(['details', 'revoke'])
 </script>
 
+<!-- ===== Styles de la carte device ===== -->
 <style scoped src="@/assets/styles/devices.css"></style>

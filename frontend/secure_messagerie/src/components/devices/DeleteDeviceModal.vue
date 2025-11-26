@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: DeleteDeviceModal
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Modale de confirmation de deconnexion d'un appareil.
+-->
 <template>
   <!-- fond -->
   <transition name="fade">
@@ -52,6 +59,7 @@
 </template>
 
 <script setup>
+// ===== Props et emissions =====
 defineProps({
   show: {
     type: Boolean,
@@ -73,4 +81,5 @@ defineProps({
 defineEmits(['close', 'confirm'])
 </script>
 
+<!-- ===== Styles de la modale ===== -->
 <style scoped src="@/assets/styles/devices.css"></style>

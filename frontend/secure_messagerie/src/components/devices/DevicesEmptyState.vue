@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: DevicesEmptyState
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Bloc d'absence d'appareils avec action d'enregistrement.
+-->
 <template>
   <section class="empty-state card">
     <div class="card-body text-center">
@@ -18,10 +25,12 @@
 </template>
 
 <script setup>
+// ===== Props et emissions =====
 defineProps({
   registering: Boolean,
 })
 defineEmits(['manual-sync'])
 </script>
 
+<!-- ===== Styles de l'etat vide ===== -->
 <style scoped src="@/assets/styles/devices.css"></style>
