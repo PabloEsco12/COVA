@@ -1,3 +1,10 @@
+<!--
+  ===== Component Header =====
+  Component: IconEcosystem
+  Author: Valentin Masurelle
+  Date: 2025-11-26
+  Role: Icône SVG "ecosystem".
+-->
 <template>
   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="20" fill="currentColor">
     <path
