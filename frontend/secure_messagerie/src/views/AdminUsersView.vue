@@ -42,7 +42,7 @@
               <input v-model.trim="form.displayName" type="text" class="form-control" placeholder="Nom visible" />
             </div>
             <div class="mb-3">
-              <label class="form-label small text-muted">Role</label>
+              <label class="form-label small text-muted">Rôle</label>
               <select v-model="form.role" class="form-select">
                 <option value="member">Membre</option>
                 <option value="support">Support</option>
