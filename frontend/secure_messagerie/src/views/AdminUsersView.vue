@@ -23,7 +23,7 @@
           <div class="card-body">
             <h5 class="card-title d-flex align-items-center gap-2 mb-3">
               <i class="bi bi-person-plus-fill text-primary"></i>
-              Creer un compte
+              Créer un compte
             </h5>
 
             <div v-if="formError" class="alert alert-warning py-2">{{ formError }}</div>
@@ -94,7 +94,7 @@
                     <tr>
                       <th>Email</th>
                       <th>Nom</th>
-                      <th>Role</th>
+                      <th>Rôle</th>
                       <th class="text-end">Actions</th>
                     </tr>
                   </thead>
@@ -240,7 +240,7 @@ function isDefaultAdmin(member) {
 async function removeMember(member) {
   member.error = ''
   if (member.isDefaultAdmin) {
-    member.error = 'Admin principal protege.'
+    member.error = 'Admin principal protégé.'
     return
   }
   member.busy = true
