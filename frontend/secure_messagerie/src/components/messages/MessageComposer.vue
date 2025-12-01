@@ -18,7 +18,7 @@
       <p class="mb-0 text-muted">{{ blockedInfo.message }}</p>
     </div>
     <router-link to="/dashboard/contacts" class="btn btn-outline-primary btn-sm">
-      GÃ©rer les contacts
+      Gérer les contacts
     </router-link>
   </div>
 
