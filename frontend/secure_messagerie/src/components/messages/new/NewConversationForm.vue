@@ -242,6 +242,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/utils/api'
+import { memberUserId, normalizeConversation } from '@/modules/messages/mappers'
 
 const router = useRouter()
 
@@ -251,12 +252,17 @@ const error = ref('')
 
 const contacts = ref([])
 const excludedContacts = ref(0)
+const existingConversations = ref([])
+const existingConversationsLoaded = ref(false)
+const existingConversationsLoading = ref(false)
+let existingConversationsPromise = null
 const search = ref('')
 const selection = ref([])
 
 const title = ref('')
 const conversationType = ref('group')
 const initialMessage = ref('')
+const currentUserId = ref(localStorage.getItem('user_id') || null)
 
 const typeOptions = [
   {
@@ -314,6 +320,32 @@ const selectedType = computed(
   () => typeOptions.find((option) => option.value === conversationType.value) || typeOptions[0],
 )
 
+const directConversationByUserId = computed(() => {
+  const map = new Map()
+  const selfId = currentUserId.value ? String(currentUserId.value) : null
+  existingConversations.value.forEach((conv) => {
+    if (conv.type !== 'direct' || !Array.isArray(conv.members)) return
+    const other = conv.members.find((member) => {
+      const userId = memberUserId(member)
+      return userId && (!selfId || userId !== selfId)
+    })
+    const otherId = memberUserId(other)
+    if (otherId && !map.has(otherId)) {
+      map.set(String(otherId), conv)
+    }
+  })
+  return map
+})
+
+const existingDirectConversation = computed(() => {
+  if (conversationType.value !== 'direct' || selection.value.length !== 1) {
+    return null
+  }
+  const targetId = selection.value[0] ? String(selection.value[0]) : null
+  if (!targetId) return null
+  return directConversationByUserId.value.get(targetId) || null
+})
+
 const selectionWarning = computed(() => {
   if (!selection.value.length) {
     return 'Sélectionnez au moins un contact pour activer la création.'
@@ -323,6 +355,9 @@ const selectionWarning = computed(() => {
   }
   if (conversationType.value === 'group' && selection.value.length < 2) {
     return 'Un groupe collaboratif nécessite au moins deux participants en plus de vous.'
+  }
+  if (existingDirectConversation.value) {
+    return 'Une conversation directe existe deja avec ce contact. Ouverture du fil existant.'
   }
   return ''
 })
@@ -394,6 +429,18 @@ async function submit() {
   submitting.value = true
   error.value = ''
   try {
+    if (conversationType.value === 'direct') {
+      await loadExistingConversations({ force: true })
+      const targetId = selection.value[0] ? String(selection.value[0]) : null
+      const existing = targetId ? directConversationByUserId.value.get(targetId) : null
+      if (existing?.id) {
+        await router.push({
+          path: '/dashboard/messages',
+          query: { conversation: existing.id },
+        })
+        return
+      }
+    }
     const payload = {
       title: title.value.trim() || null,
       participant_ids:
@@ -434,8 +481,35 @@ function extractError(err, fallback) {
   return fallback
 }
 
+async function loadExistingConversations({ force = false } = {}) {
+  if (existingConversationsLoading.value) {
+    await existingConversationsPromise
+    return
+  }
+  if (existingConversationsLoaded.value && !force) return
+  existingConversationsLoading.value = true
+  existingConversationsPromise = (async () => {
+    try {
+      const { data } = await api.get('/conversations/')
+      const list = Array.isArray(data)
+        ? data
+            .map((item) => normalizeConversation(item, { selfId: currentUserId.value }))
+            .filter(Boolean)
+        : []
+      existingConversations.value = list
+    } catch (err) {
+      console.warn('Unable to load conversations list', err)
+    } finally {
+      existingConversationsLoading.value = false
+      existingConversationsLoaded.value = true
+    }
+  })()
+  await existingConversationsPromise
+  existingConversationsPromise = null
+}
+
 onMounted(async () => {
-  await fetchContacts()
+  await Promise.all([fetchContacts(), loadExistingConversations()])
 })
 </script>
 
