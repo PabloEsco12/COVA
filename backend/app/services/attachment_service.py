@@ -5,7 +5,7 @@
 # Date    : 2025-05-04
 #
 # Description:
-# - Gere l'upload, le scan antivirus et l'emission de jetons d'upload/telechargement.
+# - Gere l'upload, le scan antivirus et l'emission de jetons d'upload/téléchargement.
 # - Stockage via ObjectStorage et liens presignes.
 # - Controle la taille/type via settings.
 ############################################################

@@ -75,7 +75,7 @@ export function useComposerInteractions({
     return [
       {
         id: 'search',
-        label: 'RǸsultats',
+        label: 'Résultats',
         items: emojiCatalog.filter((emoji) => emoji.toLowerCase().includes(term)),
       },
     ]
@@ -91,16 +91,16 @@ export function useComposerInteractions({
     if (conv.blockedByOther) {
       return {
         state: 'blocked_by_other',
-        title: 'Conversation bloqu�e par le contact',
+        title: 'Conversation bloquée par le contact',
         message:
-          `${conv.displayName || 'Ce contact'} a bloqu� cette conversation. Vous ne pouvez plus r�pondre tant que le contact ne vous a pas d�bloqu�.`,
+          `${conv.displayName || 'Ce contact'} a bloqué cette conversation. Vous ne pouvez plus répondre tant que le contact ne vous a pas débloqué.`,
       }
     }
     if (conv.blockedByMe) {
       return {
         state: 'blocked_by_me',
-        title: 'Vous avez bloquǸ ce contact',
-        message: `DǸbloquez ${conv.displayName || 'ce contact'} depuis la section Contacts pour reprendre l�?TǸchange.`,
+        title: 'Vous avez bloqué ce contact',
+        message: `Débloquez ${conv.displayName || 'ce contact'} depuis la section Contacts pour reprendre l’échange.`,
       }
     }
     return null
@@ -306,7 +306,7 @@ function togglePicker() {
       return
     }
     if (hasAttachmentInProgress.value) {
-      attachmentError.value = 'SǸlectionnez une conversation avant d\'ajouter un fichier.'
+      attachmentError.value = 'Sélectionnez une conversation avant d\'ajouter un fichier.'
       return
     }
     if (pendingAttachments.value.some((entry) => entry.status === 'error')) {
@@ -392,8 +392,8 @@ function togglePicker() {
         applyConversationBlockDetail(detail)
         messageError.value =
           detail.reason === 'blocked_by_other'
-            ? 'Ce contact a bloquǸ cette conversation.'
-            : 'Vous avez bloquǸ cette conversation.'
+            ? 'Ce contact a bloqué cette conversation.'
+            : 'Vous avez bloqué cette conversation.'
       } else {
         messageError.value = extractError(err, "Impossible d'envoyer le message.")
       }

@@ -12,7 +12,7 @@
 # Points de vigilance:
 # - Toujours commit/flush dans les routes après usage pour persister.
 # - Respecter les verrous TOTP (locked_until) et les quiet hours de notifications.
-# - Les tokens sont signes avec les secrets configurees dans settings.
+# - Les tokens sont signés avec les secrets configurés dans settings.
 #
 # Dependances principales:
 # - SQLAlchemy AsyncSession
