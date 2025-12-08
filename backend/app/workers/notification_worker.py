@@ -251,7 +251,7 @@ class NotificationWorker:
                             {brand_logo_markup}
                             <div style="text-align:left;">
                               <p style="margin:0;font-size:0.82rem;color:#475569;letter-spacing:0.08em;text-transform:uppercase;">COVA Messagerie</p>
-                              <p style="margin:0;font-size:1.35rem;font-weight:700;color:#0f172a;">Activation sÃ©curisÃ©e</p>
+                              <p style="margin:0;font-size:1.35rem;font-weight:700;color:#0f172a;">Activation sécurisée</p>
                             </div>
                           </div>
                         </td>

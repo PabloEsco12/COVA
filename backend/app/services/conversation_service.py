@@ -1356,10 +1356,10 @@ class ConversationService:
     def _require_owner(self, membership: ConversationMember) -> None:
         """Leve une 403 si le membre n'est pas owner."""
         if membership.role != ConversationMemberRole.OWNER:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Action reservee au proprietaire.")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Action réservée au propriétaire.")
 
     async def _get_primary_membership(self, user_id: uuid.UUID) -> OrganizationMembership:
-        """Recupere la premiere appartenance organisationnelle d'un utilisateur (necessaire pour creer une conversation)."""
+        """Récupère la première appartenance organisationnelle d'un utilisateur (nécessaire pour créer une conversation)."""
         stmt = select(OrganizationMembership).where(OrganizationMembership.user_id == user_id)
         result = await self.session.execute(stmt)
         membership = result.scalar_one_or_none()
