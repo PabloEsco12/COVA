@@ -844,7 +844,7 @@ const connectionStatusLabel = computed(() => {
 
     case 'connected':
 
-      return 'Canal temps réel actif'
+      return 'Canal temps rï¿½el actif'
 
     case 'connecting':
 
@@ -992,22 +992,22 @@ function generateCallId() {
 // Ajoute une entree systeme dans le flux lorsqu'un appel change d'etat
 function addLocalCallLog(summary) {
   const direction = summary.initiator ? 'sortant' : 'entrant'
-  const kindLabel = summary.kind === 'video' ? 'vidéo' : 'audio'
+  const kindLabel = summary.kind === 'video' ? 'vidÃ©o' : 'audio'
   const outcomeMap = {
-    hangup: 'terminé',
-    decline: 'refusé',
-    canceled: 'annulé',
-    busy: 'occupé',
+    hangup: 'terminÃ©',
+    decline: 'refusÃ©',
+    canceled: 'annulÃ©',
+    busy: 'occupÃ©',
     failed: 'interrompu',
-    ended: 'terminé',
+    ended: 'terminÃ©',
   }
-  const outcome = outcomeMap[summary.reason] || 'terminé'
+  const outcome = outcomeMap[summary.reason] || 'terminÃ©'
   const content = `Appel ${kindLabel} ${direction} ${outcome} - ${summary.remote || 'participant'}`
   messages.value.push({
     id: generateLocalId(),
     conversationId: selectedConversationId.value,
     authorId: null,
-    displayName: 'Système',
+    displayName: 'SystÃ¨me',
     avatarUrl: null,
     content,
     createdAt: new Date(),

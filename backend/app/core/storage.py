@@ -30,7 +30,7 @@ from ..config import settings
 
 
 class ObjectStorage:
-    """Fin wrapper boto3 pour upload et generation de liens presignes."""
+    """Fin wrapper boto3 pour upload et generation de liens présignés."""
 
     def __init__(
         self,
@@ -120,7 +120,7 @@ class ObjectStorage:
 
 @lru_cache()
 def get_storage() -> ObjectStorage | None:
-    """Instancie le stockage objet si toutes les variables requises sont presentes."""
+    """Instancie le stockage objet si toutes les variables requises sont présentes."""
     if not settings.STORAGE_BUCKET:
         return None
     required = [settings.STORAGE_ACCESS_KEY, settings.STORAGE_SECRET_KEY]
