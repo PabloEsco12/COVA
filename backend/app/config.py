@@ -5,8 +5,8 @@
 # Date   : 2025-05-04
 #
 # Description:
-# - Parametrage central de l'application via BaseSettings.
-# - Charge depuis .env(.local/.dev/.prod/.docker), non sensible a la casse.
+# - Paramétrage central de l'application via BaseSettings.
+# - Chargé depuis .env(.local/.dev/.prod/.docker), non sensible à la casse.
 # - Typage fort pour DB, JWT, SMTP, Storage, AV, CORS, etc.
 ############################################################
 """
@@ -21,7 +21,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Typed configuration sourced from environment variables."""
+    """Configuration typée chargée depuis les variables d'environnement."""
 
     model_config = SettingsConfigDict(
         env_file=(".env", ".env.local", ".env.dev", ".env.prod", ".env.docker"),
@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60)
     REFRESH_TOKEN_EXPIRE_MINUTES: int = Field(default=60 * 24 * 30)
 
-    # SMTP / Notifications (optional)
+    # SMTP / Notifications (Email)
     SMTP_HOST: str | None = None
     SMTP_PORT: int = 465
     SMTP_USERNAME: str | None = None
@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     PUBLIC_BASE_URL: str = "http://localhost:8000"
     FRONTEND_ORIGIN: str = "http://localhost:5176"
 
-    # Single-tenant organisation defaults
+    # Organisation / Admin
     DEFAULT_ORG_NAME: str = "COVA Messages"
     DEFAULT_ORG_SLUG: str = "cova-messages"
     DEFAULT_ADMIN_EMAIL: str = "covamessages3@gmail.com"
@@ -63,7 +63,7 @@ class Settings(BaseSettings):
     AVATAR_MAX_BYTES: int = 2_000_000
     AVATAR_MAX_SIZE: int = 512
 
-    # Object storage (attachments)
+    # Stockage d'objets (pièces jointes)
     STORAGE_ENDPOINT: str | None = None
     STORAGE_PUBLIC_ENDPOINT: str | None = None
     STORAGE_ACCESS_KEY: str | None = None
@@ -95,7 +95,7 @@ class Settings(BaseSettings):
     # CORS / Frontend
     BACKEND_CORS_ORIGINS: List[str] = Field(default_factory=list)
 
-    # Redis (pour temps reel ulterieur)
+    # Redis (pour temps réel ultérieur)
     REDIS_URL: str | None = None
 
 

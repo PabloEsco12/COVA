@@ -32,7 +32,7 @@ async def activate_totp(
     current_user: UserAccount = Depends(get_current_user),
     security: SecurityService = Depends(get_security_service),
 ) -> TotpActivateResponse:
-    """Demarre l'activation TOTP et retourne secret + QR code base64."""
+    """Démarre l'activation TOTP et retourne secret + QR code base64."""
     enrollment = await security.start_totp_enrollment(current_user)
     await security.session.commit()
     return TotpActivateResponse(
@@ -48,11 +48,11 @@ async def confirm_totp(
     current_user: UserAccount = Depends(get_current_user),
     security: SecurityService = Depends(get_security_service),
 ) -> TotpConfirmResponse:
-    """Valide le code TOTP fourni et genere les codes de recuperation."""
+    """Valide le code TOTP fourni et génère les codes de récupération."""
     recovery_codes = await security.confirm_totp(current_user, payload.code)
     await security.session.commit()
     return TotpConfirmResponse(
-        message="Double authentification activee.",
+        message="Double authentification activée.",
         recovery_codes=recovery_codes,
     )
 
@@ -62,7 +62,7 @@ async def deactivate_totp(
     current_user: UserAccount = Depends(get_current_user),
     security: SecurityService = Depends(get_security_service),
 ) -> TotpDeactivateResponse:
-    """Desactive la double authentification TOTP pour l'utilisateur."""
+    """Désactive la double authentification TOTP pour l'utilisateur."""
     await security.deactivate_totp(current_user)
     await security.session.commit()
-    return TotpDeactivateResponse(message="Double authentification desactivee.")
+    return TotpDeactivateResponse(message="Double authentification désactivée.")

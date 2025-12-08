@@ -12,6 +12,9 @@
 
 from __future__ import annotations
 
+import uuid
+from datetime import datetime, timezone
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from .db.session import get_session
-from app.models import UserAccount  # type: ignore[import]
+from app.models import SessionToken, UserAccount  # type: ignore[import]
 from .core.security import decode_token
 from .core.redis import get_redis, RealtimeBroker
 from .core.storage import get_storage, ObjectStorage
@@ -48,13 +51,41 @@ async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_session),
 ) -> UserAccount:
+    current_session_id = None
     try:
         payload = decode_token(token)
         user_id = payload.get("sub")
+        session_id = payload.get("sid")
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
-    if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    if not user_id or not session_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session invalide ou expirée. Veuillez vous reconnecter.",
+        )
+    try:
+        user_uuid = uuid.UUID(str(user_id))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
+
+    # Si le token porte un identifiant de session, on vérifie qu'elle n'est pas révoquée/expirée.
+    try:
+        session_uuid = uuid.UUID(str(session_id))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session") from exc
+    stmt_session = select(SessionToken).where(SessionToken.id == session_uuid)
+    session_result = await db.execute(stmt_session)
+    session = session_result.scalar_one_or_none()
+    now = datetime.now(timezone.utc)
+    if (
+        session is None
+        or session.user_id != user_uuid
+        or session.revoked_at is not None
+        or (session.expires_at and session.expires_at < now)
+    ):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired or revoked")
+    session.last_activity_at = now
+    current_session_id = session.id
 
     stmt = (
         select(UserAccount)
@@ -64,12 +95,17 @@ async def get_current_user(
             selectinload(UserAccount.totp_secret),
             selectinload(UserAccount.notification_preferences),
         )
-        .where(UserAccount.id == user_id)
+        .where(UserAccount.id == user_uuid)
     )
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Inactive or unknown user")
+    # Expose l'ID de session courant pour les routes qui veulent l'exclure d'une révocation globale.
+    try:
+        setattr(user, "current_session_id", current_session_id)
+    except Exception:
+        pass
     return user
 
 

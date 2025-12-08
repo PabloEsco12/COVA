@@ -10,7 +10,7 @@ export async function fetchConversations() {
 }
 
 export async function createConversation({ title, participantIds = [], type = 'direct' }) {
-  // Cree une conversation directe ou groupee en normalisant les participants
+  // Crée une conversation directe ou groupée en normalisant les participants
   const { data } = await api.post(CONVERSATIONS_BASE, {
     title: title || null,
     participant_ids: participantIds,

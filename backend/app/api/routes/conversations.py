@@ -6,15 +6,15 @@
 
 #
 # Description:
-# - Cree/edite/supprime des conversations et leurs membres/invitations.
-# - Gere les messages (liste, search, post, edit, delete, pin, reactions) et PJ.
-# - Controle d'acces via ConversationService (membership/roles).
-# - Commit explicite apres chaque mutation.
+# - Crée/édite/supprime des conversations et leurs membres/invitations.
+# - Gère les messages (liste, search, post, edit, delete, pin, reactions) et PJ.
+# - Contrôle d'accès via ConversationService (membership/roles).
+# - Commit explicite après chaque mutation.
 #
 # Points de vigilance:
-# - Respecter les etats de conversation (archived) et roles owner pour operations sensibles.
-# - Toujours verifier le membership avant d'acceder aux messages.
-# - Parser les metadonnees de chiffrement PJ avec prudence (JSON).
+# - Respecter les états de conversation (archived) et rôles owner pour opérations sensibles.
+# - Toujours vérifier le membership avant d'accéder aux messages.
+# - Parser les métadonnées de chiffrement PJ avec prudence (JSON).
 ############################################################
 """
 

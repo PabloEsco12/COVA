@@ -83,6 +83,39 @@ def describe_ip(raw_ip: str) -> tuple[str, str | None]:
     return "Adresse publique", None
 
 
+def parse_user_agent(ua: str | None) -> tuple[str | None, str | None]:
+    """Extrait un navigateur et un OS lisible a partir d'un user-agent brut."""
+    if not ua:
+        return None, None
+    ua_lower = ua.lower()
+    browser = None
+    os_label = None
+
+    if "chrome" in ua_lower and "edg" not in ua_lower and "opr" not in ua_lower:
+        browser = "Chrome"
+    elif "edg" in ua_lower:
+        browser = "Edge"
+    elif "firefox" in ua_lower:
+        browser = "Firefox"
+    elif "safari" in ua_lower and "chrome" not in ua_lower:
+        browser = "Safari"
+    elif "opr" in ua_lower or "opera" in ua_lower:
+        browser = "Opera"
+
+    if "windows" in ua_lower:
+        os_label = "Windows"
+    elif "mac os" in ua_lower or "macos" in ua_lower:
+        os_label = "macOS"
+    elif "android" in ua_lower:
+        os_label = "Android"
+    elif "iphone" in ua_lower or "ipad" in ua_lower or "ios" in ua_lower:
+        os_label = "iOS"
+    elif "linux" in ua_lower:
+        os_label = "Linux"
+
+    return browser, os_label
+
+
 def build_login_alert_payload(
     *,
     user: UserAccount,
@@ -103,6 +136,8 @@ def build_login_alert_payload(
     profile = user.profile
     tz_pref = timezone_pref or (profile.timezone if profile else None)
 
+    browser, os_label = parse_user_agent(user_agent)
+
     return {
         "type": "security.login_alert",
         "login_time": login_time.astimezone(timezone.utc).isoformat(),
@@ -110,6 +145,8 @@ def build_login_alert_payload(
         "ip_label": ip_label,
         "approx_location": location_hint,
         "user_agent": user_agent or "",
+        "agent_browser": browser,
+        "agent_os": os_label,
         "session_id": str(session_id),
         "timezone": tz_pref,
         "security_url": security_url,
@@ -322,21 +359,24 @@ class AuthService:
         *,
         user_agent: str | None = None,
         ip_address: str | None = None,
+        timezone_pref: str | None = None,
     ) -> AuthResult:
         """Cree une session, genere les tokens JWT et alerte l'utilisateur si necessaire."""
         now = datetime.now(timezone.utc)
-        access_token = create_access_token({"sub": str(user.id)})
+        session_id = uuid.uuid4()
+        access_token = create_access_token({"sub": str(user.id), "sid": str(session_id)})
         refresh_token_value = token_urlsafe(24)
         refresh_expires = now + timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
 
         session_token = SessionToken(
-            id=uuid.uuid4(),
+            id=session_id,
             user_id=user.id,
             created_at=now,
             expires_at=refresh_expires,
             last_activity_at=now,
             ip_address=ip_address,
             user_agent=user_agent,
+            access_token_jti=str(session_id),
             refresh_token_jti=refresh_token_value,
         )
         refresh_token = RefreshToken(
@@ -369,6 +409,7 @@ class AuthService:
             login_time=now,
             ip_address=ip_address,
             user_agent=user_agent,
+            timezone_pref=timezone_pref,
         )
         return AuthResult(user=user, access_token=access_token, refresh_token=refresh_token_value, refresh_expires_at=refresh_expires)
 
@@ -422,23 +463,30 @@ class AuthService:
             )
         await self._log("auth.logout", user_id=str(token.user_id), metadata={"session_id": token.session_id})
 
-    async def revoke_all_tokens(self, user: UserAccount) -> int:
-        """Revoque tous les tokens actifs d'un utilisateur et retourne le nombre de tokens touches."""
+    async def revoke_all_tokens(self, user: UserAccount, keep_session_id: uuid.UUID | None = None) -> int:
+        """Revoque tous les tokens actifs d'un utilisateur et retourne le nombre de tokens touches.
+
+        keep_session_id permet de laisser actif le device/session courant (bouton 'logout all').
+        """
         now = datetime.now(timezone.utc)
         result = await self.session.execute(
             select(RefreshToken).where(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None))
         )
         tokens = result.scalars().all()
+        revoked_count = 0
         for token in tokens:
+            if keep_session_id and token.session_id == keep_session_id:
+                continue
             token.revoked_at = now
+            revoked_count += 1
             if token.session_id is not None:
                 await self.session.execute(
                     update(SessionToken)
                     .where(SessionToken.id == token.session_id)
                     .values(revoked_at=now)
                 )
-        await self._log("auth.logout_all", user_id=str(user.id), metadata={"revoked": len(tokens)})
-        return len(tokens)
+        await self._log("auth.logout_all", user_id=str(user.id), metadata={"revoked": revoked_count})
+        return revoked_count
 
     async def resend_confirmation_email(self, email: str) -> str:
         """Genere un nouveau jeton de confirmation pour un email non confirme et envoie la notification."""
@@ -603,6 +651,7 @@ class AuthService:
         login_time: datetime,
         ip_address: str | None,
         user_agent: str | None,
+        timezone_pref: str | None = None,
     ) -> None:
         """Planifie l'envoi d'une alerte de connexion si les preferences l'autorisent."""
         if not self.notifications:
@@ -616,6 +665,7 @@ class AuthService:
             login_time=login_time,
             ip_address=ip_address,
             user_agent=user_agent,
+            timezone_pref=timezone_pref,
         )
         await self.notifications.enqueue_notification(
             organization_id=None,
@@ -636,10 +686,11 @@ class AuthService:
         login_time: datetime,
         ip_address: str | None,
         user_agent: str | None,
+        timezone_pref: str | None = None,
     ) -> dict:
         """Assemble les donnees de l'alerte de connexion en injectant les preferences utilisateur."""
         profile = user.profile
-        timezone_pref = profile.timezone if profile else None
+        timezone_pref = timezone_pref or (profile.timezone if profile else None)
 
         return build_login_alert_payload(
             user=user,

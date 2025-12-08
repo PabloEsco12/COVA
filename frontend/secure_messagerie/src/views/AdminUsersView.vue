@@ -1,7 +1,7 @@
 <!--
   Vue: AdminUsersView
-  Role: creation/suppression de comptes par un superadmin.
-  Simplicite: formulaire de creation + tableau de membres avec action supprimer.
+  Rôle: création/suppression de comptes par un superadmin.
+  Simplicité: formulaire de création + tableau de membres avec action supprimer.
 -->
 <template>
   <div class="p-4 admin-users-view">

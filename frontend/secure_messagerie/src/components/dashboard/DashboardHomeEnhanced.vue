@@ -10,7 +10,7 @@
     <div v-if="loading && !overview" class="card border-0 shadow-sm loading-card">
       <div class="card-body text-center py-5">
         <div class="spinner-border text-primary mb-3" role="status"></div>
-        <p class="text-muted mb-0">Chargement du tableau de bord securise...</p>
+        <p class="text-muted mb-0">Chargement du tableau de bord sécurisé...</p>
       </div>
     </div>
 
@@ -214,7 +214,7 @@
             <div class="card">
               <div class="card-header bg-white d-flex align-items-center">
                 <i class="bi bi-list-check me-2 text-primary"></i>
-                <strong>Actions recommandees</strong>
+                <strong>Actions recommandées</strong>
               </div>
               <div class="card-body">
                 <p v-if="recommendations.length === 0" class="text-muted small mb-0">
@@ -231,7 +231,7 @@
             <div class="card">
               <div class="card-header bg-white d-flex align-items-center">
                 <i class="bi bi-activity me-2 text-primary"></i>
-                <strong>Etat du compte</strong>
+                <strong>État du compte</strong>
               </div>
               <div class="card-body small text-muted">
                 <div class="d-flex align-items-center justify-content-between mb-2">
@@ -239,7 +239,7 @@
                   <span>
                     {{ stats.devices_total }} total
                     <span v-if="stats.devices_at_risk > 0" class="text-danger">
-                      · {{ stats.devices_at_risk }} a risque
+                      · {{ stats.devices_at_risk }} à risque
                     </span>
                   </span>
                 </div>

@@ -5,8 +5,8 @@
 # Date    : 2025-05-12
 #
 # Description:
-# - Endpoints d'inscription/confirmation, login (avec TOTP), refresh et revocation.
-# - Commit explicite de la session apres chaque mutation.
+# - Endpoints d'inscription/confirmation, login (avec TOTP), refresh et révocation.
+# - Commit explicite de la session après chaque mutation.
 # - Les tokens renvoient l'expiration en secondes pour le frontend.
 #
 # Points de vigilance:
@@ -149,6 +149,7 @@ async def login(
         user,
         user_agent=request.headers.get("user-agent"),
         ip_address=request.client.host if request.client else None,
+        timezone_pref=payload.timezone,
     )
     await service.session.commit()
     return _build_auth_session(auth_result)
@@ -176,6 +177,7 @@ async def logout_all(
     service: AuthService = Depends(get_auth_service),
 ) -> LogoutAllResponse:
     """Revoque toutes les sessions de l'utilisateur courant."""
-    revoked = await service.revoke_all_tokens(current_user)
+    current_session_id = getattr(current_user, "current_session_id", None)
+    revoked = await service.revoke_all_tokens(current_user, keep_session_id=current_session_id)
     await service.session.commit()
     return LogoutAllResponse(revoked_count=revoked)

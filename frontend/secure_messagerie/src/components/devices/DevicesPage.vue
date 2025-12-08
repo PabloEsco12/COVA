@@ -319,10 +319,11 @@ async function logoutEverywhere() {
   error.value = ''
   try {
     await api.post('/auth/logout-all')
-    setSuccessMessage('Toutes les sessions sont invalidées.')
+    await removeOtherDevices()
+    setSuccessMessage('Toutes les sessions sont invalidees.')
     await loadDevices()
   } catch (err) {
-    error.value = extractError(err, 'Impossible de déconnecter les autres appareils.')
+    error.value = extractError(err, 'Impossible de deconnecter les autres appareils.')
   } finally {
     logoutBusy.value = false
   }
@@ -548,8 +549,8 @@ function fromBase64(str) {
 }
 
 function formatDate(dateLike) {
-  if (!dateLike) return ''
-  const d = new Date(dateLike)
+  const d = coerceDate(dateLike)
+  if (!d) return ''
   return d.toLocaleString('fr-FR', {
     year: 'numeric',
     month: 'short',
@@ -560,9 +561,9 @@ function formatDate(dateLike) {
 }
 
 function formatRelative(dateLike) {
-  if (!dateLike) return ''
+  const d = coerceDate(dateLike)
+  if (!d) return ''
   const now = new Date()
-  const d = new Date(dateLike)
   const diff = d.getTime() - now.getTime()
   const sec = Math.round(diff / 1000)
   const abs = Math.abs(sec)
@@ -588,6 +589,27 @@ function formatRelative(dateLike) {
     return rtf.format(value, unit)
   }
   return formatDate(dateLike)
+}
+
+function coerceDate(dateLike) {
+  if (!dateLike) return null
+  if (dateLike instanceof Date && !Number.isNaN(dateLike.getTime())) {
+    return dateLike
+  }
+
+  const attempt = (value) => {
+    const parsed = new Date(value)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+
+  if (typeof dateLike === 'string') {
+    const normalized = dateLike.replace(' ', 'T')
+    const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(normalized)
+    const utcCandidate = hasTz ? normalized : `${normalized}Z`
+    return attempt(utcCandidate) || attempt(normalized)
+  }
+
+  return attempt(dateLike)
 }
 
 function mapTrust(level) {
@@ -622,6 +644,21 @@ function extractError(err, fallback = 'Erreur inconnue.') {
   const detail =
     (Array.isArray(data?.detail) && data.detail[0]) || data?.message || data?.error || err?.message
   return detail ? String(detail) : fallback
+}
+
+async function removeOtherDevices() {
+  const currentId = localDeviceId.value
+  if (!currentId) return
+  // charge la liste la plus recente avant nettoyage
+  await loadDevices()
+  const others = devices.value.filter((d) => d.id !== currentId)
+  for (const device of others) {
+    try {
+      await api.delete(`/me/devices/${encodeURIComponent(device.id)}`)
+    } catch (err) {
+      console.warn('Unable to delete device', device.id, err)
+    }
+  }
 }
 </script>
 <!-- ===== Styles de la page appareils ===== -->

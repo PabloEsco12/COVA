@@ -69,7 +69,7 @@
             @click="$emit('revoke', device)"
           >
             <span v-if="revoking === device.id" class="spinner-border spinner-border-sm me-1"></span>
-            Deconnecter
+            Déconnecter
           </button>
         </footer>
       </div>

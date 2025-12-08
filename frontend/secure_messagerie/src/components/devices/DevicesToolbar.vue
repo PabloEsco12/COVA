@@ -25,7 +25,7 @@
       >
         <span v-if="logoutBusy" class="spinner-border spinner-border-sm me-2"></span>
         <span v-else class="me-2"><i class="bi bi-shield-x"></i></span>
-        Deconnecter tous les appareils
+        Déconnecter tous les appareils
       </button>
       <button
         class="btn btn-outline-secondary"

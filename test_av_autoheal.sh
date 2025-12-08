@@ -19,12 +19,12 @@ scan_rc=$?
 if [ $scan_rc -eq 0 ] || [ $scan_rc -eq 1 ]; then
   INFO "Resultat clamdscan (0=clean,1=infecte) rc=$scan_rc"
 else
-  WARN "clamdscan a echoue (rc=$scan_rc) — clamd probablement non pret (rate-limit CDN ?)"
+  WARN "clamdscan a echoue (rc=$scan_rc) ï¿½ clamd probablement non pret (rate-limit CDN ?)"
 fi
 set -e
 
 if [ "${1:-}" = "--autoheal" ]; then
-  INFO "Test autoheal : on tue le backend pour verifier le restart"
+  INFO "Test autoheal : on tue le backend pour vÃ©rifier le restart"
   docker exec securechat_backend kill 1 || true
   sleep 10
   docker compose -f docker-compose.prod.yml ps

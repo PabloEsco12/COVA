@@ -6,13 +6,12 @@ import { clearSession, hasStoredSession } from '@/services/auth'
 
 // ---- Construction des URLs backend ----
 // Garantit que l'URL de base se termine toujours par "/api" peu importe la configuration fournie.
-// Normalize API base so it always ends with '/api' (no trailing slash after)
 const raw = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').toString().replace(/\/+$/, '')
 const apiBase = raw.endsWith('/api') ? raw : `${raw}/api`
 const backendBase = apiBase.replace(/\/api$/, '')
 
 // ---- Client Axios partage ----
-// Utilise partout dans l'app pour eviter de repeter la configuration commune.
+// Utilisé partout dans l'app pour éviter de répéter la configuration commune.
 const api = axios.create({ baseURL: apiBase })
 const AUTH_EXEMPT_ENDPOINTS = [
   '/auth/login',
@@ -40,7 +39,7 @@ function normalizeRequestedPath(config) {
 }
 
 // ---- Exemptions d'auth ----
-// Permet de laisser passer les endpoints publics sans forcer un token, meme si un ancien token est stocke.
+// Permet de laisser passer les endpoints publics sans forcer un token, même si un ancien token est stocké.
 function isAuthExemptRequest(config) {
   const rawPath = normalizeRequestedPath(config)
   if (!rawPath) return false
@@ -56,7 +55,6 @@ function isAuthExemptRequest(config) {
 
 // ---- Intercepteur requete ----
 // Injecte silencieusement le token s'il existe dans le localStorage sans bloquer la requete en cas d'erreur.
-// Attach token automatically if present (non-blocking)
 api.interceptors.request.use((config) => {
   try {
     const token = localStorage.getItem('access_token')

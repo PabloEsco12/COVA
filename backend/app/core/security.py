@@ -5,9 +5,9 @@
 # Date   : 2025-05-04
 #
 # Description:
-# - Hash/verification de mot de passe via passlib (bcrypt).
-# - Generation/decodage de JWT signes (algorithme/secret dans settings).
-# - Expirations gerees en UTC.
+# - Hash/vérification de mot de passe via passlib (bcrypt).
+# - génération/décodage de JWT signés (algorithme/secret dans settings).
+# - Expirations gérées en UTC.
 ############################################################
 """
 
@@ -30,12 +30,12 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def get_password_hash(password: str) -> str:
-    """Genere un hash bcrypt pour un mot de passe."""
+    """Génère un hash bcrypt pour un mot de passe."""
     return pwd_context.hash(password)
 
 
 def create_access_token(subject: str | Dict[str, Any], expires_minutes: int | None = None) -> str:
-    """Cree un JWT signe pour un sujet (sub ou dict), avec expiration en minutes."""
+    """Crée un JWT signé pour un sujet (sub ou dict), avec expiration en minutes."""
     if expires_minutes is None:
         expires_minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
     expires_delta = timedelta(minutes=expires_minutes)
@@ -50,7 +50,7 @@ def create_access_token(subject: str | Dict[str, Any], expires_minutes: int | No
 
 
 def decode_token(token: str) -> dict[str, Any]:
-    """Decode et valide un JWT, leve ValueError si invalide."""
+    """Décode et valide un JWT, lève ValueError si invalide."""
     try:
         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
         return payload

@@ -68,6 +68,7 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str
     totp_code: str | None = Field(default=None, min_length=6, max_length=8)
+    timezone: str | None = Field(default=None, max_length=64)
 
 
 class RefreshRequest(BaseModel):

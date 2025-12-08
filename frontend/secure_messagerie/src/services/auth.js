@@ -4,7 +4,7 @@ import { broadcastProfileUpdate } from '@/utils/profile'
 
 const SESSION_STORAGE_KEY = 'securechat.session'
 
-// --- Evenements et persistance de session ---
+// --- Evénements et persistance de session ---
 function emitSessionEvent(name, detail = {}) {
   // Simplifie la diffusion d'un changement de session via CustomEvent
   if (typeof window === 'undefined') return
@@ -33,7 +33,7 @@ function persistLegacyKeys(session) {
     } else {
       localStorage.removeItem('user_display_name')
     }
-    // Backward compatibility for components still expecting pseudo
+    // Rétrocompatibilité pour les composants qui attendent encore pseudo
     if (displayName) {
       localStorage.setItem('pseudo', displayName)
     } else {
@@ -100,10 +100,13 @@ export async function registerAccount({ email, password, displayName }) {
 
 export async function loginWithPassword({ email, password, totpCode }) {
   // Login classique + support TOTP; persiste la session obtenue
+  const timezone =
+    typeof Intl !== 'undefined' && Intl.DateTimeFormat ? Intl.DateTimeFormat().resolvedOptions().timeZone : null
   const { data } = await api.post('/auth/login', {
     email,
     password,
     totp_code: totpCode || undefined,
+    timezone: timezone || undefined,
   })
   return persistSession(data)
 }
