@@ -1,4 +1,4 @@
-﻿<!--
+<!--
   ===== Component Header =====
   Component: MessageComposer
   Author: Valentin Masurelle
@@ -146,7 +146,7 @@
             class="msg-icon-btn"
             @click="triggerAttachmentPicker"
             :disabled="hasAttachmentInProgress || isEditingMessage"
-            aria-label="Ajouter une piÃ¨ce jointe"
+            aria-label="Ajouter une pi\u00e8ce jointe"
           >
             <i class="bi bi-paperclip"></i>
           </button>

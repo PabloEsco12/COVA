@@ -844,11 +844,11 @@ const connectionStatusLabel = computed(() => {
 
     case 'connected':
 
-      return 'Canal temps r�el actif'
+      return 'Canal temps r\u00e9el actif'
 
     case 'connecting':
 
-      return 'Connexion???'
+      return 'Connexion en cours...'
 
     case 'error':
 
@@ -992,22 +992,23 @@ function generateCallId() {
 // Ajoute une entree systeme dans le flux lorsqu'un appel change d'etat
 function addLocalCallLog(summary) {
   const direction = summary.initiator ? 'sortant' : 'entrant'
-  const kindLabel = summary.kind === 'video' ? 'vidéo' : 'audio'
+  // Use escaped accents to avoid encoding glitches in call logs
+  const kindLabel = summary.kind === 'video' ? 'vid\u00e9o' : 'audio'
   const outcomeMap = {
-    hangup: 'terminé',
-    decline: 'refusé',
-    canceled: 'annulé',
-    busy: 'occupé',
+    hangup: 'termin\u00e9',
+    decline: 'refus\u00e9',
+    canceled: 'annul\u00e9',
+    busy: 'occup\u00e9',
     failed: 'interrompu',
-    ended: 'terminé',
+    ended: 'termin\u00e9',
   }
-  const outcome = outcomeMap[summary.reason] || 'terminé'
+  const outcome = outcomeMap[summary.reason] || 'termin\u00e9'
   const content = `Appel ${kindLabel} ${direction} ${outcome} - ${summary.remote || 'participant'}`
   messages.value.push({
     id: generateLocalId(),
     conversationId: selectedConversationId.value,
     authorId: null,
-    displayName: 'Système',
+    displayName: 'Syst\u00e8me',
     avatarUrl: null,
     content,
     createdAt: new Date(),
@@ -1056,6 +1057,9 @@ function extractError(err, fallback) {
 </script>
 
 <style src="@/assets/styles/messages.css"></style>
+
+
+
 
 
 

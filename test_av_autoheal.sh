@@ -19,7 +19,7 @@ scan_rc=$?
 if [ $scan_rc -eq 0 ] || [ $scan_rc -eq 1 ]; then
   INFO "Resultat clamdscan (0=clean,1=infecte) rc=$scan_rc"
 else
-  WARN "clamdscan a echoue (rc=$scan_rc) � clamd probablement non pret (rate-limit CDN ?)"
+  WARN "clamdscan a echoue (rc=$scan_rc)  clamd probablement non pret (rate-limit CDN ?)"
 fi
 set -e
 
