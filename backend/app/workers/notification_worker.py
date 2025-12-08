@@ -212,10 +212,10 @@ class NotificationWorker:
 
             Si le bouton ne fonctionne pas, copiez/collez ce lien dans votre navigateur (lien API : {backend_link}).
 
-            Ce lien est valable 30 minutes. Si vous n'Ãªtes pas Ã  l'origine de cette demande, ignorez simplement ce message.
+            Ce lien est valable 30 minutes. Si vous n'êtes pas à l'origine de cette demande, ignorez simplement ce message.
 
-            Ã€ trÃ¨s vite en toute sÃ©rÃ©nitÃ©,
-            L'Ã©quipe COVA
+            À très vite en toute sérénité,
+            L'équipe COVA
             """.strip()
         )
 
@@ -287,10 +287,10 @@ class NotificationWorker:
                           <p style="margin:0 0 12px;">Rappels utiles :</p>
                           <ul style="padding-left:18px;margin:0 0 12px;">
                             <li>Le lien expire dans 30 minutes.</li>
-                            <li>Connectez-vous ensuite avec la mÃªme adresse e-mail.</li>
-                            <li>Ignorez ce message si vous n'Ãªtes pas Ã  l'origine de la demande.</li>
+                            <li>Connectez-vous ensuite avec la même adresse e-mail.</li>
+                            <li>Ignorez ce message si vous n'êtes pas à l'origine de la demande.</li>
                           </ul>
-                          <p style="margin:0;">Ã€ trÃ¨s vite sur la plateforme,<br><strong>L'Ã©quipe COVA</strong></p>
+                          <p style="margin:0;">À très vite sur la plateforme,<br><strong>L'équipe COVA</strong></p>
                         </td>
                       </tr>
                       <tr>
@@ -330,19 +330,19 @@ class NotificationWorker:
             f"""
             Bonjour {recipient_name or '!' },
 
-            Nous avons recu une demande pour reinitialiser votre mot de passe COVA.
-            Pour continuer en toute securite :
+            Nous avons reçu une demande pour réinitialiser votre mot de passe COVA.
+            Pour continuer en toute sécurité :
 
             1. Cliquez sur le bouton ou copiez le lien suivant : {frontend_link}
-            2. Choisissez un nouveau mot de passe robuste (12 caracteres minimum, chiffres + lettres + caracteres speciaux).
+            2. Choisissez un nouveau mot de passe robuste (12 caractères minimum, chiffres + lettres + caractères spéciaux).
             3. Validez avant 30 minutes afin de garantir la protection de votre compte.
 
-            Si vous n'etes pas a l'origine de cette demande, ignorez cet e-mail et contactez immediatement votre responsable securite.
+            Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail et contactez immédiatement votre responsable sécurité.
 
             (Lien API : {api_link})
 
-            A tres vite, en toute securite.
-            L'equipe COVA
+            À très vite, en toute sécurité.
+            L'équipe COVA
             """.strip()
         )
 
@@ -353,7 +353,7 @@ class NotificationWorker:
             <head>
               <meta charset="UTF-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>Reinitialisation du mot de passe COVA</title>
+              <title>Réinitialisation du mot de passe COVA</title>
             </head>
             <body style="margin:0;padding:0;background:#f5f7fb;font-family:'Segoe UI',Roboto,Arial,sans-serif;color:#0f172a;">
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f7fb;padding:32px 0;">
@@ -368,7 +368,7 @@ class NotificationWorker:
                             </div>
                             <div style="text-align:left;">
                               <p style="margin:0;font-size:0.85rem;color:#475569;letter-spacing:0.08em;text-transform:uppercase;">COVA Messagerie</p>
-                              <p style="margin:0;font-size:1.35rem;font-weight:700;color:#0f172a;">RÃ©initialisation sÃ©curisÃ©e</p>
+                              <p style="margin:0;font-size:1.35rem;font-weight:700;color:#0f172a;">Réinitialisation sécurisée</p>
                             </div>
                           </div>
                         </td>
@@ -376,7 +376,7 @@ class NotificationWorker:
                       <tr>
                         <td style="padding:0 32px 8px;font-size:1rem;line-height:1.5;color:#1e293b;">
                           <p style="margin:0 0 12px;">Bonjour {recipient_name or ''},</p>
-                          <p style="margin:0 0 18px;">Nous avons reÃ§u une demande pour rÃ©initialiser votre mot de passe <strong>COVA</strong>. Pour protÃ©ger l'accÃ¨s Ã  vos conversations, veuillez choisir un nouveau secret en cliquant sur le bouton ci-dessous.</p>
+                          <p style="margin:0 0 18px;">Nous avons reçu une demande pour réinitialiser votre mot de passe <strong>COVA</strong>. Pour protéger l'accès à vos conversations, veuillez choisir un nouveau secret en cliquant sur le bouton ci-dessous.</p>
                         </td>
                       </tr>
                       <tr>
@@ -404,15 +404,15 @@ class NotificationWorker:
                           <p style="margin:0 0 12px;">Pour votre tranquillite :</p>
                           <ul style="padding-left:18px;margin:0 0 12px;">
                             <li>Le lien est valable pendant 30 minutes.</li>
-                            <li>Choisissez un mot de passe unique, comprenant au moins 12 caractÃ¨res.</li>
-                            <li>Si vous n'Ãªtes pas Ã  l'origine de cette demande, ignorez cet e-mail et signalez-le Ã  votre Ã©quipe sÃ©curitÃ©.</li>
+                            <li>Choisissez un mot de passe unique, comprenant au moins 12 caractères.</li>
+                            <li>Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail et signalez-le à votre équipe sécurité.</li>
                           </ul>
-                          <p style="margin:0;">Ã€ trÃ¨s vite en toute sÃ©curitÃ©,<br><strong>L'Ã©quipe COVA</strong></p>
+                          <p style="margin:0;">À très vite en toute sécurité,<br><strong>L'équipe COVA</strong></p>
                         </td>
                       </tr>
                       <tr>
                         <td style="background:#f8fafc;padding:18px 32px;text-align:center;font-size:0.78rem;color:#9ca3af;">
-                          Message gÃ©nÃ©rÃ© automatiquement par COVA. Merci de ne pas rÃ©pondre Ã  cet e-mail.
+                          Message généré automatiquement par COVA. Merci de ne pas répondre à cet e-mail.
                         </td>
                       </tr>
                     </table>
@@ -427,7 +427,7 @@ class NotificationWorker:
         await send_email(
             self.settings,
             to=to_email,
-            subject="RÃ©initialisez votre mot de passe",
+            subject="Réinitialisez votre mot de passe",
             text_body=text_body,
             html_body=html_body,
         )
@@ -464,8 +464,8 @@ class NotificationWorker:
 
         ip_address = payload.get("ip_address") or "Non disponible"
         ip_label = payload.get("ip_label") or ""
-        approx_location = payload.get("approx_location") or ip_label or "Non determinee"
-        user_agent = (payload.get("user_agent") or "").strip() or "Non renseigne"
+        approx_location = payload.get("approx_location") or ip_label or "Non déterminée"
+        user_agent = (payload.get("user_agent") or "").strip() or "Non renseigné"
         user_agent = user_agent[:180]
         agent_browser = payload.get("agent_browser") or None
         agent_os = payload.get("agent_os") or None
@@ -499,20 +499,20 @@ class NotificationWorker:
             [
                 f"{name_txt},",
                 "",
-                "Une connexion vient d'etre verifiee sur votre compte COVA.",
+                "Une connexion vient d'être vérifiée sur votre compte COVA.",
                 "",
-                "Details :",
+                "Détails :",
                 *details_lines,
                 "",
-                "Si vous etes a l'origine de cette connexion, aucune action supplementaire n'est necessaire.",
-                "Si vous ne reconnaissez pas cette activite :",
-                f"1. reinitialisez votre mot de passe : {reset_url}",
-                f"2. revoquez les sessions inconnues : {devices_url}",
-                f"3. Activez ou verifiez la double authentification : {security_url}",
+                "Si vous êtes à l'origine de cette connexion, aucune action supplémentaire n'est nécessaire.",
+                "Si vous ne reconnaissez pas cette activité :",
+                f"1. réinitialisez votre mot de passe : {reset_url}",
+                f"2. révoquez les sessions inconnues : {devices_url}",
+                f"3. Activez ou vérifiez la double authentification : {security_url}",
                 "",
-                "Cet e-mail automatique protege l'integrite de vos echanges chiffes sur COVA.",
+                "Cet e-mail automatique protège l'intégrité de vos échanges chiffrés sur COVA.",
                 "",
-                "Equipe COVA",
+                "Équipe COVA",
             ]
         )
 
@@ -569,7 +569,7 @@ class NotificationWorker:
                         <tr>
                           <td style="padding:32px 32px 12px;font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif;">
                             <p style="margin:0 0 16px;font-size:16px;color:#0f172a;">{name_html},</p>
-                            <p style="margin:0;font-size:15px;color:#334155;">Une connexion vient d'etre validee sur votre compte <strong>COVA</strong>. Voici les informations importantes :</p>
+                            <p style="margin:0;font-size:15px;color:#334155;">Une connexion vient d'être validée sur votre compte <strong>COVA</strong>. Voici les informations importantes :</p>
                           </td>
                         </tr>
                         <tr>
@@ -596,12 +596,12 @@ class NotificationWorker:
                             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;border-radius:12px;">
                               <tr>
                                 <td style="padding:20px 24px;">
-                                  <p style="margin:0 0 12px;font-size:15px;color:#e2e8f0;font-weight:600;">Vous n'etes pas a l'origine de cette connexion ?</p>
-                                  <p style="margin:0 0 12px;font-size:14px;color:#cbd5f5;">Pour proteger vos conversations chiffrees, nous vous recommandons :</p>
+                                  <p style="margin:0 0 12px;font-size:15px;color:#e2e8f0;font-weight:600;">Vous n'êtes pas à l'origine de cette connexion ?</p>
+                                  <p style="margin:0 0 12px;font-size:14px;color:#cbd5f5;">Pour protéger vos conversations chiffrées, nous vous recommandons :</p>
                                   <ul style="margin:0;padding-left:20px;color:#e2e8f0;font-size:14px;line-height:1.6;">
-                                    <li>reinitialisez votre mot de passe depuis <a href="{html.escape(reset_url)}" style="color:#38bdf8;">la page dediee</a>.</li>
-                                    <li>revoquez les sessions inconnues via <a href="{html.escape(devices_url)}" style="color:#38bdf8;">vos appareils</a>.</li>
-                                    <li>Activez ou controlez votre double authentification dans <a href="{html.escape(security_url)}" style="color:#38bdf8;">les parametres</a>.</li>
+                                    <li>réinitialisez votre mot de passe depuis <a href="{html.escape(reset_url)}" style="color:#38bdf8;">la page dédiée</a>.</li>
+                                    <li>révoquez les sessions inconnues via <a href="{html.escape(devices_url)}" style="color:#38bdf8;">vos appareils</a>.</li>
+                                    <li>Activez ou contrôlez votre double authentification dans <a href="{html.escape(security_url)}" style="color:#38bdf8;">les paramètres</a>.</li>
                                   </ul>
                                 </td>
                               </tr>
@@ -628,7 +628,7 @@ class NotificationWorker:
         await send_email(
             self.settings,
             to=to_email,
-            subject="[COVA] Nouvelle connexion detectee",
+            subject="[COVA] Nouvelle connexion détectée",
             text_body=text_body,
             html_body=html_body,
         )

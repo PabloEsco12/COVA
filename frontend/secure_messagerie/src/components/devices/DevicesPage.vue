@@ -320,10 +320,10 @@ async function logoutEverywhere() {
   try {
     await api.post('/auth/logout-all')
     await removeOtherDevices()
-    setSuccessMessage('Toutes les sessions sont invalidees.')
+    setSuccessMessage('Toutes les sessions sont invalidées.')
     await loadDevices()
   } catch (err) {
-    error.value = extractError(err, 'Impossible de deconnecter les autres appareils.')
+    error.value = extractError(err, 'Impossible de déconnecter les autres appareils.')
   } finally {
     logoutBusy.value = false
   }

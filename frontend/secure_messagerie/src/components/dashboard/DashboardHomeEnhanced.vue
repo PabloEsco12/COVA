@@ -188,7 +188,7 @@
                   <div>
                     <div class="fw-semibold">Double authentification</div>
                     <div class="text-muted small">
-                      {{ security.totp_enabled ? 'Activee' : 'Non activee' }}
+                      {{ security.totp_enabled ? 'Activée' : 'Non activée' }}
                     </div>
                   </div>
                 </div>
