@@ -259,7 +259,7 @@ class NotificationWorker:
                       <tr>
                         <td style="padding:0 32px 8px;font-size:1rem;line-height:1.5;color:#1e293b;">
                           <p style="margin:0 0 12px;">Bonjour {safe_name_html or ''},</p>
-                          <p style="margin:0 0 18px;">Merci d'avoir crÃ©Ã© un compte sur <strong>COVA</strong>. Pour activer votre accÃ¨s, confirmez votre adresse e-mail via le bouton ci-dessous.</p>
+                          <p style="margin:0 0 18px;">Merci d'avoir créé un compte sur <strong>COVA</strong>. Pour activer votre accès, confirmez votre adresse e-mail via le bouton ci-dessous.</p>
                         </td>
                       </tr>
                       <tr>
