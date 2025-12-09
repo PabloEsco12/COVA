@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = Field(default="HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60)
     REFRESH_TOKEN_EXPIRE_MINUTES: int = Field(default=60 * 24 * 30)
+    MESSAGE_ENCRYPTION_ENABLED: bool = False
+    MESSAGE_RSA_PUBLIC_KEY: str | None = None
+    MESSAGE_RSA_PRIVATE_KEY: str | None = None
 
     # SMTP / Notifications (Email)
     SMTP_HOST: str | None = None

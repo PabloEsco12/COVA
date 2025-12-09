@@ -59,6 +59,7 @@ class Message(Base):
     encryption_scheme: Mapped[str] = mapped_column(String(32), nullable=False)
     encryption_metadata: Mapped[dict | None] = mapped_column(JSONB)
     signature: Mapped[bytes | None] = mapped_column(LargeBinary)
+    search_text: Mapped[str | None] = mapped_column(Text)
     is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
@@ -99,6 +100,11 @@ class Message(Base):
         Index(
             "ix_messages_fulltext",
             func.to_tsvector("simple", func.coalesce(func.convert_from(ciphertext, "UTF8"), "")),
+            postgresql_using="gin",
+        ),
+        Index(
+            "ix_messages_search_text",
+            func.to_tsvector("simple", func.coalesce(search_text, "")),
             postgresql_using="gin",
         ),
     )

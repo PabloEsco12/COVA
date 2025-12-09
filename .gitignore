@@ -78,3 +78,8 @@ Thumbs.db
 # Documents internes
 README_professeurs.md
 readme.proffesseurs
+
+# RSA message keys
+message_private.pem
+message_public.pem
+

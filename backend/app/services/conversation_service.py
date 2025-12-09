@@ -18,11 +18,16 @@
 
 from __future__ import annotations
 
-import uuid
-import secrets
-from datetime import datetime, timezone, timedelta
+import base64
 import contextlib
+import os
+import secrets
+import uuid
+from datetime import datetime, timezone, timedelta
 
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -77,6 +82,11 @@ class ConversationService:
         self.realtime = realtime_broker
         self.storage = storage_service
         self.attachment_decoder = attachment_decoder
+        self._rsa_public_key = self._load_rsa_public_key()
+        self._rsa_private_key = self._load_rsa_private_key()
+        self._encryption_enabled = bool(
+            settings.MESSAGE_ENCRYPTION_ENABLED and self._rsa_public_key and self._rsa_private_key
+        )
 
     # --- Listes & creations de conversations ---
     async def list_conversations(self, user: UserAccount) -> list[Conversation]:
@@ -585,7 +595,7 @@ class ConversationService:
         ts_query = func.plainto_tsquery("simple", term)
         text_vector = func.to_tsvector(
             "simple",
-            func.coalesce(func.convert_from(Message.ciphertext, "UTF8"), ""),
+            func.coalesce(Message.search_text, ""),
         )
         stmt = (
             select(Message)
@@ -677,14 +687,19 @@ class ConversationService:
         pos_result = await self.session.execute(pos_stmt)
         next_position = pos_result.scalar_one()
 
+        ciphertext, encryption_scheme, encryption_metadata = self._encrypt_content(
+            conversation_id=conversation_id, content=content
+        )
+
         message = Message(
             conversation_id=conversation_id,
             author_id=author.id,
             type=message_type,
             stream_position=next_position,
-            ciphertext=content.encode("utf-8"),
-            encryption_scheme="plaintext",
-            encryption_metadata={"encoding": "utf-8"},
+            ciphertext=ciphertext,
+            encryption_scheme=encryption_scheme,
+            encryption_metadata=encryption_metadata,
+            search_text=content,
             reply_to_message_id=reply_to_message.id if reply_to_message else None,
             forward_from_message_id=forward_source.id if forward_source else None,
         )
@@ -776,7 +791,11 @@ class ConversationService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Message supprimé.")
         if message.author_id != user.id and membership.role != ConversationMemberRole.OWNER:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Action non autorisée.")
-        message.ciphertext = content.encode("utf-8")
+        ciphertext, scheme, metadata = self._encrypt_content(conversation_id=conversation_id, content=content)
+        message.ciphertext = ciphertext
+        message.encryption_scheme = scheme
+        message.encryption_metadata = metadata
+        message.search_text = content
         message.edited_at = datetime.now(timezone.utc)
         await self.session.flush()
         await self._log(
@@ -1144,9 +1163,82 @@ class ConversationService:
 
     def _extract_plaintext(self, message: Message) -> str:
         """Extrait du texte lisible depuis le champ ciphertext (utilise pour previsualisation)."""
-        if isinstance(message.ciphertext, (bytes, bytearray, memoryview)):
-            return bytes(message.ciphertext).decode("utf-8", errors="ignore")
-        return str(message.ciphertext or "")
+        if message.encryption_scheme == "rsa-oaep-aesgcm":
+            with contextlib.suppress(Exception):
+                return self._decrypt_ciphertext(message)
+        return self._decode_plaintext(message.ciphertext)
+
+    def _decode_plaintext(self, ciphertext: object) -> str:
+        """Decode un message en clair UTF-8 ou renvoie une representation texte."""
+        if isinstance(ciphertext, (bytes, bytearray, memoryview)):
+            return bytes(ciphertext).decode("utf-8", errors="ignore")
+        return str(ciphertext or "")
+
+    def _encrypt_content(self, *, conversation_id: uuid.UUID, content: str) -> tuple[bytes, str, dict]:
+        """Chiffre le contenu si la cle est configuree, sinon retourne du plaintext encode."""
+        if not self._encryption_enabled:
+            return content.encode("utf-8"), "plaintext", {"encoding": "utf-8"}
+
+        aes_key = AESGCM.generate_key(bit_length=256)
+        nonce = os.urandom(12)
+        aad = str(conversation_id).encode("utf-8")
+
+        aesgcm = AESGCM(aes_key)
+        ciphertext = aesgcm.encrypt(nonce, content.encode("utf-8"), aad)
+
+        encrypted_key = self._rsa_public_key.encrypt(
+            aes_key,
+            padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None),
+        )
+
+        metadata = {
+            "nonce": base64.b64encode(nonce).decode("ascii"),
+            "enc_key": base64.b64encode(encrypted_key).decode("ascii"),
+            "aad": base64.b64encode(aad).decode("ascii"),
+            "encoding": "utf-8",
+            "algo": "aes-256-gcm",
+        }
+        return ciphertext, "rsa-oaep-aesgcm", metadata
+
+    def _decrypt_ciphertext(self, message: Message) -> str:
+        """Dechiffre un message avec schema rsa-oaep-aesgcm."""
+        metadata = message.encryption_metadata or {}
+        enc_key_b64 = metadata.get("enc_key")
+        nonce_b64 = metadata.get("nonce")
+        aad_b64 = metadata.get("aad")
+        if not enc_key_b64 or not nonce_b64 or not self._rsa_private_key:
+            return self._decode_plaintext(message.ciphertext)
+
+        encrypted_key = base64.b64decode(enc_key_b64)
+        nonce = base64.b64decode(nonce_b64)
+        aad = base64.b64decode(aad_b64) if aad_b64 else None
+
+        aes_key = self._rsa_private_key.decrypt(
+            encrypted_key,
+            padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None),
+        )
+        aesgcm = AESGCM(aes_key)
+        plaintext = aesgcm.decrypt(nonce, bytes(message.ciphertext), aad)
+        encoding = metadata.get("encoding") or "utf-8"
+        return plaintext.decode(encoding, errors="ignore")
+
+    def _load_rsa_public_key(self):
+        pem = settings.MESSAGE_RSA_PUBLIC_KEY
+        if not pem:
+            return None
+        try:
+            return serialization.load_pem_public_key(pem.encode("utf-8"))
+        except Exception:
+            return None
+
+    def _load_rsa_private_key(self):
+        pem = settings.MESSAGE_RSA_PRIVATE_KEY
+        if not pem:
+            return None
+        try:
+            return serialization.load_pem_private_key(pem.encode("utf-8"), password=None)
+        except Exception:
+            return None
 
     async def get_block_states(
         self,
