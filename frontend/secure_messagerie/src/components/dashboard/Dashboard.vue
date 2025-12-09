@@ -3,15 +3,15 @@
   Component: Dashboard
   Author: Valentin Masurelle
   Date: 2025-11-26
-  Role: Layout principal du dashboard avec header et sidebar.
+  Role: Layout principal du dashboard avec header, sidebar et footer.
 -->
 <template>
   <div class="dashboard-layout d-flex" :class="{ 'dashboard-layout-dark': isDark }">
-    <!-- Barre laterale et toggle theme -->
-    <Sidebar :is-dark="isDark" @toggle-dark="toggleTheme" />
-    <div class="flex-grow-1 d-flex flex-column min-vh-100">
-      <!-- Header global -->
-      <DashboardHeader :is-dark="isDark" @toggle-dark="toggleTheme" />
+<!-- Barre laterale et toggle theme -->
+<Sidebar :is-dark="isDark" @toggle-dark="toggleTheme" />
+<div class="flex-grow-1 d-flex flex-column min-vh-100">
+  <!-- Header global -->
+  <DashboardHeader :is-dark="isDark" @toggle-dark="toggleTheme" />
       <main
         class="flex-grow-1 px-3 py-4 main-content"
         :class="{ 'main-content-dark': isDark }"
@@ -19,6 +19,7 @@
         <!-- Zone de rendu des routes de dashboard -->
         <router-view />
       </main>
+      <DashboardFooter :is-dark="isDark" />
     </div>
   </div>
 </template>
@@ -27,6 +28,7 @@
 // ===== Imports =====
 import Sidebar from './Sidebar.vue'
 import DashboardHeader from './DashboardHeader.vue'
+import DashboardFooter from './DashboardFooter.vue'
 import { useRouter } from 'vue-router'
 import { onMounted, ref } from 'vue'
 import { hasStoredSession } from '@/services/auth'

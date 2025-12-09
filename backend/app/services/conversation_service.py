@@ -1445,7 +1445,7 @@ class ConversationService:
         return int(count or 0) > 0
 
     def _require_owner(self, membership: ConversationMember) -> None:
-        """Leve une 403 si le membre n'est pas owner."""
+        """Lève une 403 si le membre n'est pas owner."""
         if membership.role != ConversationMemberRole.OWNER:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Action réservée au propriétaire.")
 
@@ -1459,7 +1459,7 @@ class ConversationService:
         return membership
 
     async def _get_default_workspace(self, membership: OrganizationMembership) -> Workspace | None:
-        """Renvoie le premier workspace lie a l'appartenance, ou None si absent."""
+        """Renvoie le premier workspace lié à l'appartenance, ou None si absent."""
         stmt = (
             select(Workspace)
             .join(WorkspaceMembership, WorkspaceMembership.workspace_id == Workspace.id)
@@ -1470,7 +1470,7 @@ class ConversationService:
         return result.scalars().first()
 
     async def _log(self, user: UserAccount, action: str, *, resource_id: str | None = None, metadata: dict | None = None) -> None:
-        """Facade vers AuditService pour tracer les evenements conversation/messagerie."""
+        """Facade vers AuditService pour tracer les événements conversation/messagerie."""
         if self.audit:
             await self.audit.record(
                 action,
