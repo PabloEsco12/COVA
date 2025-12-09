@@ -35,26 +35,26 @@ from .audit_service import AuditService
 
 
 class OrganizationService:
-    """Regroupe les operations courantes sur les organisations et les memberships."""
+    """Regroupe les opérations courantes sur les organisations et les memberships."""
 
     def __init__(self, session: AsyncSession, audit_service: AuditService | None = None) -> None:
-        """Injecte la session SQLAlchemy et eventuellement le service d'audit."""
+        """Injecte la session SQLAlchemy et éventuellement le service d'audit."""
         self.session = session
         self.audit = audit_service
 
     def _is_primary_admin(self, membership: OrganizationMembership) -> bool:
-        """Detecte si le membership correspond a l'admin par defaut configure dans les settings."""
+        """Détecte si le membership correspond à l'admin par défaut configuré dans les settings."""
         admin_email = (settings.DEFAULT_ADMIN_EMAIL or "").strip().lower()
         user_email = (membership.user.email if membership.user else "").lower()
         return bool(admin_email) and user_email == admin_email
 
     def _slugify(self, value: str) -> str:
-        """Genere un slug en minuscules (alphanumerique avec tirets)."""
+        """Génère un slug en minuscules (alphanumérique avec tirets)."""
         slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
         return slug or uuid.uuid4().hex[:12]
 
     async def _ensure_default_org(self) -> Organization:
-        """Cree ou met a jour l'organisation par defaut selon la configuration."""
+        """Crée ou met à jour l'organisation par défaut selon la configuration."""
         desired_name = (settings.DEFAULT_ORG_NAME or "Default Organization").strip()
         desired_slug = self._slugify(settings.DEFAULT_ORG_SLUG or desired_name or "default-org")
 
@@ -71,7 +71,7 @@ class OrganizationService:
         return organization
 
     async def _ensure_default_workspace(self, organization: Organization) -> Workspace:
-        """Garanti l'existence du workspace 'general' pour l'organisation donnee."""
+        """Garantit l'existence du workspace 'general' pour l'organisation donnée."""
         stmt = select(Workspace).where(
             Workspace.organization_id == organization.id,
             Workspace.slug == "general",
@@ -89,11 +89,11 @@ class OrganizationService:
         return workspace
 
     async def _normalize_membership(self, membership: OrganizationMembership) -> OrganizationMembership:
-        """Reassocie le membership a l'organisation/workspace par defaut et ajuste le role si besoin."""
+        """Réassocie le membership à l'organisation/workspace par défaut et ajuste le rôle si besoin."""
         changed = False
         default_org = await self._ensure_default_org()
         if membership.organization_id != default_org.id:
-            # Re-use an existing default-org membership if present to avoid uniqueness errors.
+            # Réutiliser un membership existant pour l'organisation par défaut si présent afin d'éviter les erreurs d'unicité.
             existing_stmt = select(OrganizationMembership).where(
                 OrganizationMembership.organization_id == default_org.id,
                 OrganizationMembership.user_id == membership.user_id,
@@ -112,9 +112,9 @@ class OrganizationService:
             membership.role = desired_role
             changed = True
 
-        # ensure a workspace membership exists for the default workspace
+        # S'assurer qu'il existe une appartenance à l'espace de travail par défaut.
         default_workspace = await self._ensure_default_workspace(default_org)
-        # Avoid autoflush issues by querying directly instead of relying on relationship state
+        # Éviter les problèmes d'autoflush en interrogeant directement au lieu de se fier à l'état de la relation
         with self.session.no_autoflush:
             ws_stmt = select(WorkspaceMembership.id).where(
                 WorkspaceMembership.workspace_id == default_workspace.id,
@@ -134,7 +134,7 @@ class OrganizationService:
         return membership
 
     async def get_membership_for_user(self, user_id: uuid.UUID) -> OrganizationMembership:
-        """Retourne (ou cree) le membership d'un utilisateur en s'assurant des defaults."""
+        """Retourne (ou crée) le membership d'un utilisateur en s'assurant des defaults."""
         stmt = (
             select(OrganizationMembership)
             .options(
@@ -151,7 +151,7 @@ class OrganizationService:
         user = await self.session.get(UserAccount, user_id)
         if user is None:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Utilisateur non rattache a une organisation."
+                status_code=status.HTTP_403_FORBIDDEN, detail="Utilisateur non rattaché à une organisation."
             )
 
         organization = await self._ensure_default_org()
@@ -182,7 +182,7 @@ class OrganizationService:
         return await self._normalize_membership(membership)
 
     async def list_members(self, organization_id: uuid.UUID) -> list[OrganizationMembership]:
-        """Liste les membres d'une organisation (ordre role puis date d'arrivee)."""
+        """Liste les membres d'une organisation (ordre rôle puis date d'arrivée)."""
         stmt = (
             select(OrganizationMembership)
             .options(joinedload(OrganizationMembership.user).joinedload(UserAccount.profile))
@@ -198,7 +198,7 @@ class OrganizationService:
         query: str | None = None,
         limit: int = 10,
     ) -> list[OrganizationMembership]:
-        """Recherche des membres par email/nom d'affichage, limitee en taille."""
+        """Recherche des membres par email/nom d'affichage, limitée en taille."""
         size = max(1, min(limit, 50))
         stmt = (
             select(OrganizationMembership)
@@ -247,12 +247,12 @@ class OrganizationService:
         membership_id: uuid.UUID,
         role: OrganizationRole,
     ) -> OrganizationMembership:
-        """Met a jour le role d'un membre en respectant les contraintes de l'admin principal."""
+        """Met à jour le rôle d'un membre en respectant les contraintes de l'admin principal."""
         actor_membership = await self.get_membership_for_user(actor.id)
         if not self.can_manage_admins(actor_membership):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Vous n'avez pas les droits suffisants pour gerer les administrateurs.",
+                detail="Vous n'avez pas les droits suffisants pour gérer les administrateurs.",
             )
 
         target = await self.get_membership_by_id(membership_id)
@@ -262,7 +262,7 @@ class OrganizationService:
         if role in {OrganizationRole.ADMIN, OrganizationRole.OWNER} and not target_is_primary_admin:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Seul le compte administrateur principal peut avoir un role administrateur.",
+                detail="Seul le compte administrateur principal peut avoir un rôle administrateur.",
             )
         if target_is_primary_admin and role not in {OrganizationRole.ADMIN, OrganizationRole.OWNER}:
             raise HTTPException(
@@ -272,12 +272,12 @@ class OrganizationService:
         if target.role == OrganizationRole.OWNER:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Le proprietaire ne peut pas changer de role via cette operation.",
+                detail="Le propriétaire ne peut pas changer de rôle via cette opération.",
             )
         if role == OrganizationRole.OWNER:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="La promotion en proprietaire doit se faire par un transfert dedie.",
+                detail="La promotion en propriétaire doit se faire par un transfert dédié.",
             )
         if target.role == role:
             return target
@@ -296,10 +296,10 @@ class OrganizationService:
 
     @staticmethod
     def is_admin_role(role: OrganizationRole) -> bool:
-        """Indique si le role est de type administrateur ou proprietaire."""
+        """Indique si le rôle est de type administrateur ou propriétaire."""
         return role in {OrganizationRole.OWNER, OrganizationRole.ADMIN}
 
     @staticmethod
     def can_manage_admins(membership: OrganizationMembership) -> bool:
-        """Verifie si un membership peut gerer les roles admin/owner."""
+        """Vérifie si un membership peut gérer les rôles admin/owner."""
         return membership.role in {OrganizationRole.OWNER, OrganizationRole.ADMIN}

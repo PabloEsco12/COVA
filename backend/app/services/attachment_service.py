@@ -36,7 +36,7 @@ CHUNK_SIZE = 1024 * 1024
 
 @dataclass
 class AttachmentDescriptor:
-    """Payload issu du jeton d'upload, necessaire pour persister la piece jointe."""
+    """Payload issu du jeton d'upload, nécessaire pour persister la pièce jointe."""
 
     storage_key: str
     storage_url: str
@@ -48,10 +48,10 @@ class AttachmentDescriptor:
 
 
 class AttachmentService:
-    """Gere le flux d'upload, les controles antivirus et l'emission de jetons d'upload."""
+    """Gère le flux d'upload, les contrôles antivirus et l'émission de jetons d'upload."""
 
     def __init__(self, storage: ObjectStorage, scanner: AntivirusScanner | None = None) -> None:
-        """Initialise le service avec le stockage objet et, si present, un scanner antivirus."""
+        """Initialise le service avec le stockage objet et, si présent, un scanner antivirus."""
         self.storage = storage
         self.scanner = scanner
 
@@ -136,7 +136,7 @@ class AttachmentService:
         conversation_id: uuid.UUID,
         user_id: uuid.UUID,
     ) -> AttachmentDescriptor:
-        """Decode et valide un jeton d'upload pour recuperer les metadonnees du fichier."""
+        """Décode et valide un jeton d'upload pour récupérer les métadonnées du fichier."""
         try:
             payload = jwt.decode(
                 upload_token,

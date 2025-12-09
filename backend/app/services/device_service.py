@@ -5,8 +5,8 @@
 # Date    : 2025-05-04
 #
 # Description:
-# - Inscription/synchronisation des appareils et mise a jour des sessions associees.
-# - Decode les metadonnees base64 (push_token) et derive un trust_level.
+# - Inscription/synchronisation des appareils et mise  à jour des sessions associées.
+# - écode les métadonnées base64 (push_token) et dérive un trust_level.
 # - Audit optionnel via AuditService.
 ############################################################
 """
@@ -28,7 +28,7 @@ from .audit_service import AuditService
 
 
 class DeviceService:
-    """Encapsule le cycle de vie des appareils et leurs sessions associees."""
+    """Encapsule le cycle de vie des appareils et leurs sessions associées."""
 
     def __init__(self, session: AsyncSession, audit_service: AuditService | None = None) -> None:
         """Injecte la session SQLAlchemy et le service d'audit."""
@@ -158,7 +158,7 @@ class DeviceService:
         }
 
     def _merge_metadata(self, existing: dict | None, push_token: str, metadata: dict[str, Any]) -> dict[str, Any]:
-        """Fusionne metadonnees deja stockees avec les nouvelles informations."""
+        """Fusionne métadonnées déjà stockées avec les nouvelles informations."""
         base = dict(existing or {})
         base["push_token"] = push_token
         base["metadata"] = metadata
@@ -185,7 +185,7 @@ class DeviceService:
         return trust
 
     def _sanitize(self, value: str | None, *, limit: int) -> str | None:
-        """Nettoie une chaine (trim + longueur max) et retourne None si vide."""
+        """Nettoie une chaîne (trim + longueur max) et retourne None si vide."""
         if value is None:
             return None
         cleaned = value.strip()

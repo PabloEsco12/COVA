@@ -42,7 +42,7 @@ class AuditService:
         user_agent: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        """Enregistre un evenement d'audit avec contexte optionnel (ressource, IP, user agent)."""
+        """Enregistre un événement d'audit avec contexte optionnel (ressource, IP, user agent)."""
         details = jsonable_encoder(metadata) if metadata is not None else None
         log = AuditLog(
             organization_id=organization_id,
@@ -58,7 +58,7 @@ class AuditService:
         self.session.add(log)
 
     async def recent_for_user(self, user_id: uuid.UUID, limit: int = 10) -> list[AuditLog]:
-        """Retourne les derniers evenements d'audit d'un utilisateur (ordre antichronologique)."""
+        """Retourne les derniers événements d'audit d'un utilisateur (ordre antichronologique)."""
         stmt = (
             select(AuditLog)
             .where(AuditLog.user_id == user_id)

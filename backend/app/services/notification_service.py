@@ -23,14 +23,14 @@ from app.models import NotificationChannel, NotificationPreference, OutboundNoti
 
 
 class NotificationService:
-    """Expose les operations sur les preferences et la file des notifications sortantes."""
+    """Expose les opérations sur les préférences et la file des notifications sortantes."""
 
     def __init__(self, session: AsyncSession) -> None:
         """Injecte la session async SQLAlchemy."""
         self.session = session
 
     async def list_preferences(self, user: UserAccount) -> list[NotificationPreference]:
-        """Retourne toutes les preferences d'un utilisateur."""
+        """Retourne toutes les préférences d'un utilisateur."""
         stmt = select(NotificationPreference).where(NotificationPreference.user_id == user.id)
         result = await self.session.execute(stmt)
         return result.scalars().all()
@@ -43,7 +43,7 @@ class NotificationService:
         is_enabled: bool,
         quiet_hours: dict | None,
     ) -> NotificationPreference:
-        """Cree ou met a jour une preference de notification (etat + heures creuses)."""
+        """Crée ou met à jour une préférence de notification (état + heures creuses)."""
         stmt = select(NotificationPreference).where(
             NotificationPreference.user_id == user.id,
             NotificationPreference.channel == channel,
@@ -67,7 +67,7 @@ class NotificationService:
         payload: dict,
         schedule_at: datetime | None = None,
     ) -> OutboundNotification:
-        """Mise en queue d'une notification a envoyer (horaire optionnel)."""
+        """Mise en queue d'une notification à envoyer (horaire optionnel)."""
         notification = OutboundNotification(
             organization_id=uuid.UUID(organization_id) if organization_id else None,
             user_id=uuid.UUID(user_id) if user_id else None,

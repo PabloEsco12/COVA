@@ -19,7 +19,7 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from ..config import settings
-from app.models import Base  # reuse existing metadata
+from app.models import Base  # Assure l'import des modèles pour la metadata
 
 
 def _make_async_url(url: str) -> str:

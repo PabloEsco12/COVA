@@ -174,7 +174,7 @@ async def list_messages(
     service: ConversationService = Depends(get_conversation_service),
     limit: int = 50,
 ) -> list[MessageOut]:
-    """Recupere les messages d'une conversation avec pagination simple."""
+    """Récupère les messages d'une conversation avec pagination simple."""
     membership = await service.ensure_membership(conversation_id, current_user.id)
     messages, _meta = await service.list_messages(conversation_id, limit=limit, member=membership)
     payloads = []

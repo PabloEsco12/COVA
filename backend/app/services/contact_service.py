@@ -5,9 +5,9 @@
 # Date    : 2025-05-04
 #
 # Description:
-# - Gere la creation de liens de contact, mise a jour de statut et alias.
-# - Verifie l'appartenance a la meme organisation avant de lier deux utilisateurs.
-# - Peut publier des notifications (email/realtime) si injecte.
+# - Gère la création de liens de contact, mise à jour de statut et alias.
+# - Vérifie l'appartenance à la même organisation avant de lier deux utilisateurs.
+# - Peut publier des notifications (email/réaltime) si injecté.
 #
 # Points de vigilance:
 # - Aucun commit automatique: a piloter depuis la couche route.
@@ -36,7 +36,7 @@ from ..core.redis import RealtimeBroker
 # ===============================
 
 class ContactService:
-    """Logique metier des contacts et orchestration des notifications associees."""
+    """Logique métier des contacts et orchestration des notifications associées."""
 
     def __init__(
         self,
@@ -54,7 +54,7 @@ class ContactService:
 
     # --- Lecture ---
     async def list_contacts(self, owner: UserAccount, status: ContactStatus | None = None) -> list[ContactLink]:
-        """Retourne la liste des contacts visibles d'un proprietaire, filtreable par statut."""
+        """Retourne la liste des contacts visibles d'un propriétaire, filtrable par statut."""
         stmt = (
             select(ContactLink)
             .options(selectinload(ContactLink.contact).selectinload(UserAccount.profile))
@@ -67,14 +67,14 @@ class ContactService:
 
     # --- Creation / Invitation interne ---
     async def create_contact(self, owner: UserAccount, target_email: str, alias: str | None = None) -> ContactLink:
-        """Cree une demande de contact bilaterale apres verification d'organisation commune."""
+        """Crée une demande de contact bilatérale après vérification d'organisation commune."""
         stmt_user = select(UserAccount).where(UserAccount.email == target_email.lower())
         result_user = await self.session.execute(stmt_user)
         target = result_user.scalar_one_or_none()
         if target is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
         if target.id == owner.id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Vous ne pouvez  pas vous ajouter vous-même en tant que contact.")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Vous ne pouvez pas vous ajouter vous-même en tant que contact.")
 
         # Ensure both users belong to the same organization
         org_stmt = select(OrganizationMembership.organization_id).where(OrganizationMembership.user_id == owner.id)
@@ -142,9 +142,9 @@ class ContactService:
         )
         return await self._get_contact(owner.id, owner_link.id)
 
-    # --- Mise a jour des statuts / alias ---
+    # --- Mise à jour des statuts / alias ---
     async def update_status(self, owner: UserAccount, contact_id: uuid.UUID, status_value: ContactStatus) -> ContactLink:
-        """Met a jour le statut d'un contact et synchronise le lien reciproque + notifications."""
+        """Met à jour le statut d'un contact et synchronise le lien réciproque + notifications."""
         contact = await self._get_contact(owner.id, contact_id)
         reciprocal = await self._get_contact_between(contact.contact_id, owner.id)
 
@@ -226,7 +226,7 @@ class ContactService:
         return contact
 
     async def update_alias(self, owner: UserAccount, contact_id: uuid.UUID, alias: str | None) -> ContactLink:
-        """Met a jour l'alias d'un contact pour le proprietaire."""
+        """Met à jour l'alias d'un contact pour le propriétaire."""
         contact = await self._get_contact(owner.id, contact_id)
         normalized = self._normalize_alias(alias)
         contact.alias = normalized
@@ -249,7 +249,7 @@ class ContactService:
     async def _get_contact(
         self, owner_id: uuid.UUID, contact_id: uuid.UUID, raise_not_found: bool = True
     ) -> ContactLink | None:
-        """Recupere un lien de contact pour un owner, avec option de lever une 404 sinon."""
+        """Récupère un lien de contact pour un propriétaire, avec option de lever une 404 sinon."""
         stmt = (
             select(ContactLink)
             .options(selectinload(ContactLink.contact).selectinload(UserAccount.profile))
@@ -264,7 +264,7 @@ class ContactService:
     async def _get_contact_between(
         self, owner_id: uuid.UUID, target_user_id: uuid.UUID
     ) -> ContactLink | None:
-        """Recupere un lien de contact entre deux utilisateurs si il existe."""
+        """Récupère un lien de contact entre deux utilisateurs s'il existe."""
         stmt = (
             select(ContactLink)
             .options(selectinload(ContactLink.contact).selectinload(UserAccount.profile))
@@ -293,7 +293,7 @@ class ContactService:
             )
 
     async def _notify_user_event(self, user_id: uuid.UUID, payload: dict) -> None:
-        """Publie une notification temps reel sur Redis si le broker est injecte."""
+        """Publie une notification temps réel sur Redis si le broker est injecté."""
         if not self.realtime:
             return
         await self.realtime.publish_user_event(

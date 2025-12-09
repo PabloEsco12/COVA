@@ -12,4 +12,4 @@ Depuis la racine du repo, avec les dépendances `frontend/secure_messagerie` ins
 node scripts/debug-send.js
 ```
 
-Vous pouvez adapter les identifiants ou l'URL directement dans le script si besoin.
+

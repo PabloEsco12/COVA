@@ -18,7 +18,7 @@ from .user import UserOut
 
 
 class AdminUserCreateRequest(BaseModel):
-    """Creation d'utilisateur par un administrateur."""
+    """Création d'utilisateur par un administrateur."""
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     display_name: str | None = Field(default=None, max_length=160)
@@ -27,7 +27,7 @@ class AdminUserCreateRequest(BaseModel):
 
 
 class AdminUserCreateResponse(BaseModel):
-    """Utilisateur cree et eventuel lien de confirmation."""
+    """Utilisateur créée et éventuel lien de confirmation."""
     user: UserOut
     confirmation_url: str | None = None
 

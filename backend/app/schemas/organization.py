@@ -5,8 +5,8 @@
 # Date   : 2025-05-04
 #
 # Description:
-# - Resume d'organisation, membres et droits (admin/gestion).
-# - Utilise pour lister, afficher et mettre a jour les roles.
+# - Résumé d'organisation, membres et droits (admin/gestion).
+# - Utilise pour lister, afficher et mettre à jour les roles.
 ############################################################
 """
 
@@ -21,7 +21,7 @@ from app.models import OrganizationRole
 
 
 class OrganizationMembershipInfo(BaseModel):
-    """Informations sur l'appartenance d'un utilisateur a une organisation."""
+    """Informations sur l'appartenance d'un utilisateur à une organisation."""
     id: uuid.UUID
     role: OrganizationRole
     joined_at: datetime
@@ -30,7 +30,7 @@ class OrganizationMembershipInfo(BaseModel):
 
 
 class OrganizationSummary(BaseModel):
-    """Resume d'une organisation incluant le membership courant."""
+    """Résumé d'une organisation incluant le membership courant."""
     id: uuid.UUID
     name: str
     slug: str
@@ -41,7 +41,7 @@ class OrganizationSummary(BaseModel):
 
 
 class OrganizationMemberOut(BaseModel):
-    """Representation exposee d'un membre d'organisation."""
+    """Représentation exposée d'un membre d'organisation."""
     membership_id: uuid.UUID
     user_id: uuid.UUID
     email: EmailStr
@@ -52,12 +52,12 @@ class OrganizationMemberOut(BaseModel):
 
 
 class OrganizationMemberList(BaseModel):
-    """Liste des membres avec le resume de l'organisation."""
+    """Liste des membres avec le résumé de l'organisation."""
     organization: OrganizationSummary
     members: list[OrganizationMemberOut]
 
 
 class OrganizationRoleUpdate(BaseModel):
-    """Payload de mise a jour d'un role de membre."""
+    """Payload de mise à jour d'un rôle de membre."""
     role: OrganizationRole
 

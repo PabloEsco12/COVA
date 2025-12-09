@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 
 class UserAccount(Base):
-    """Authentication and account level data."""
+    """Données d'authentification et de compte."""
 
     __tablename__ = "user_accounts"
     __table_args__ = (
@@ -90,7 +90,7 @@ class UserAccount(Base):
 
 
 class UserProfile(Base):
-    """Profile information separated from credentials."""
+    """Informations de profil séparées des informations d'identifications"""
 
     __tablename__ = "user_profiles"
 
@@ -107,7 +107,7 @@ class UserProfile(Base):
 
 
 class UserSecurityState(Base):
-    """Security posture per account (TOTP, recovery, anomalies)."""
+    """Posture de sécurité par compte (TOTP, récupération, anomalies)."""
 
     __tablename__ = "user_security_states"
 
@@ -124,7 +124,7 @@ class UserSecurityState(Base):
 
 
 class Organization(Base):
-    """Tenant organisation."""
+    """Organisation locataire."""
 
     __tablename__ = "organizations"
     __table_args__ = (
@@ -149,7 +149,7 @@ class Organization(Base):
 
 
 class OrganizationMembership(Base):
-    """Link between a user and an organisation."""
+    """Lien entre un utilisateur et une organisation."""
 
     __tablename__ = "organization_memberships"
     __table_args__ = (
@@ -178,7 +178,7 @@ class OrganizationMembership(Base):
 
 
 class Workspace(Base):
-    """Logical grouping of conversations inside an organisation."""
+    """Regroupement logique de conversations au sein d'une organisation."""
 
     __tablename__ = "workspaces"
     __table_args__ = (
@@ -204,7 +204,7 @@ class Workspace(Base):
 
 
 class WorkspaceMembership(Base):
-    """Membership by organisation member in a workspace."""
+    """Membership par membre d'organisation dans un espace de travail."""
 
     __tablename__ = "workspace_memberships"
     __table_args__ = (

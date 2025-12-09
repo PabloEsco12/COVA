@@ -10,7 +10,7 @@ const raw = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').toStri
 const apiBase = raw.endsWith('/api') ? raw : `${raw}/api`
 const backendBase = apiBase.replace(/\/api$/, '')
 
-// ---- Client Axios partage ----
+// ---- Client Axios partagé ----
 // Utilisé partout dans l'app pour éviter de répéter la configuration commune.
 const api = axios.create({ baseURL: apiBase })
 const AUTH_EXEMPT_ENDPOINTS = [

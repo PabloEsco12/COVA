@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 
 class TokenPair(BaseModel):
-    """Couple access/refresh tokens expose par l'API."""
+    """Couple access/refresh tokens exposés par l'API."""
     access_token: str
     refresh_token: str
     token_type: str = "bearer"

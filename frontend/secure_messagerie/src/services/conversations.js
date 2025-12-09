@@ -26,7 +26,7 @@ export async function fetchMessages(conversationId, { limit } = {}) {
 }
 
 export async function sendMessage(conversationId, { content, messageType = 'text', attachments = [] }) {
-  // Transforme les pieces jointes en upload_token attendus par l'API
+  // Transforme les pièces jointes en upload_token attendus par l'API
   const normalized = Array.isArray(attachments)
     ? attachments.map((item) => ({
         upload_token: item.upload_token || item.uploadToken || item,

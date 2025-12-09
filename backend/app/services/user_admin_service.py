@@ -5,9 +5,9 @@
 # Date    : 2025-11-25
 #
 # Description:
-# - Fonctions de support pour les operations d'administration (suppression).
-# - Reassigne les conversations avant suppression pour eviter les orphelins.
-# - Nettoie les avatars lies aux comptes supprimes.
+# - Fonctions de support pour les opérations d'administration (suppression).
+# - Reassigne les conversations avant suppression pour éviter les orphelins.
+# - Nettoie les avatars liés aux comptes supprimés.
 ############################################################
 """
 
@@ -27,7 +27,7 @@ MEDIA_ROOT = Path(settings.MEDIA_ROOT).resolve()
 
 
 def avatar_path_from_url(url: str | None) -> Path | None:
-    """Retourne le chemin disque correspondant a une URL d'avatar sous /static."""
+    """Retourne le chemin disque correspondant à une URL d'avatar sous /static."""
     if not url:
         return None
     parsed = urlparse(url)
@@ -40,7 +40,7 @@ def avatar_path_from_url(url: str | None) -> Path | None:
 
 
 def remove_avatar_file(url: str | None) -> None:
-    """Supprime le fichier d'avatar si present sur le disque."""
+    """Supprime le fichier d'avatar si présent sur le disque."""
     path = avatar_path_from_url(url)
     if path and path.is_file():
         try:
@@ -50,7 +50,7 @@ def remove_avatar_file(url: str | None) -> None:
 
 
 async def reassign_conversations_before_delete(db: AsyncSession, user_id: uuid.UUID) -> None:
-    """Reattribue ou supprime les conversations creees par l'utilisateur avant suppression."""
+    """Réattribue ou supprime les conversations créées par l'utilisateur avant suppression."""
     conversation_ids = (
         await db.execute(select(Conversation.id).where(Conversation.created_by == user_id))
     ).scalars().all()

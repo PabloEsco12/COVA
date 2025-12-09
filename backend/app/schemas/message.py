@@ -24,7 +24,7 @@ class ConversationUnread(BaseModel):
 
 
 class UnreadSummaryResponse(BaseModel):
-    """Synthese globale des non lus."""
+    """Synthèse globale des non lus."""
     total: int
     conversations: List[ConversationUnread]
 

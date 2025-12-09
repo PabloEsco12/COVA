@@ -117,7 +117,7 @@ class MessageUpdateRequest(BaseModel):
 
 
 class MessageOut(BaseModel):
-    """Representation complete d'un message (livraison, reactions, pieces jointes)."""
+    """Représentation complète d'un message (livraison, réactions, pièces jointes)."""
     id: uuid.UUID
     conversation_id: uuid.UUID
     stream_position: int

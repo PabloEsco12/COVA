@@ -60,7 +60,7 @@ from .attachment_service import AttachmentDescriptor, AttachmentService
 
 
 class ConversationService:
-    """Operations haut niveau sur les conversations, membres et messages."""
+    """Opérations haut niveau sur les conversations, membres et messages."""
 
     def __init__(
         self,
@@ -71,7 +71,7 @@ class ConversationService:
         storage_service: ObjectStorage | None = None,
         attachment_decoder: AttachmentService | None = None,
     ) -> None:
-        """Injecte la session et les integrations (audit, temps reel, stockage, decodeur PJ)."""
+        """Injecte la session et les intégrations (audit, temps réel, stockage, décodeur PJ)."""
         self.session = session
         self.audit = audit_service
         self.realtime = realtime_broker
@@ -80,7 +80,7 @@ class ConversationService:
 
     # --- Listes & creations de conversations ---
     async def list_conversations(self, user: UserAccount) -> list[Conversation]:
-        """Liste les conversations actives du user avec prechargement des membres/profils."""
+        """Liste les conversations actives du user avec préchargement des membres/profils."""
         stmt = (
             select(Conversation)
             .join(ConversationMember, ConversationMember.conversation_id == Conversation.id)
@@ -102,7 +102,7 @@ class ConversationService:
         participant_ids: list[uuid.UUID],
         conv_type: ConversationType,
     ) -> Conversation:
-        """Cree une conversation, ajoute l'owner et les participants valides du meme workspace/org."""
+        """Crée une conversation, ajoute l'owner et les participants valides du même workspace/org."""
         membership = await self._get_primary_membership(owner.id)
         workspace = await self._get_default_workspace(membership)
 
@@ -155,7 +155,7 @@ class ConversationService:
         topic: str | None = None,
         archived: bool | None = None,
     ) -> Conversation:
-        """Met a jour titre/sujet/archivage apres verification que l'acteur est owner."""
+        """Met à jour titre/sujet/archivage après vérification que l'acteur est owner."""
         membership = await self._get_membership(conversation_id, actor.id)
         self._require_owner(membership)
         conversation = await self.session.get(
@@ -196,13 +196,12 @@ class ConversationService:
         return await self._load_conversation_with_members(conversation_id)
 
     async def leave_conversation(self, conversation_id: uuid.UUID, user: UserAccount) -> None:
-        """Permet a un membre de quitter; transfere eventuellement le role owner si necessaire."""
+        """Permet à un membre de quitter; transfère éventuellement le rôle owner si nécessaire."""
         membership = await self._get_membership(conversation_id, user.id)
         if membership.role == ConversationMemberRole.OWNER:
             if not await self._has_other_active_owner(conversation_id, exclude_user_id=user.id):
                 replacement = await self._promote_fallback_owner(conversation_id, exclude_user_id=user.id)
                 if replacement is None:
-                    # No other active members remain; allow the conversation to end without an owner.
                     pass
                 else:
                     await self._log(
@@ -217,7 +216,7 @@ class ConversationService:
         await self._log(user, "conversation.leave", resource_id=str(conversation_id))
 
     async def delete_conversation(self, conversation_id: uuid.UUID, *, actor: UserAccount) -> None:
-        """Supprime une conversation apres verification du role owner."""
+        """Supprime une conversation après vérification du rôle owner."""
         membership = await self._get_membership(conversation_id, actor.id)
         self._require_owner(membership)
         conversation = await self.session.get(Conversation, conversation_id)
@@ -306,7 +305,7 @@ class ConversationService:
         role: ConversationMemberRole,
         expires_in_hours: int,
     ) -> ConversationInvite:
-        """Cree une invitation partageable avec role attribue et expiration configuree."""
+        """Crée une invitation partageable avec rôle attribué et expiration configurée."""
         membership = await self._get_membership(conversation_id, actor.id)
         self._require_owner(membership)
         conversation = await self.session.get(Conversation, conversation_id)
@@ -335,7 +334,7 @@ class ConversationService:
         return invite
 
     async def revoke_invite(self, conversation_id: uuid.UUID, invite_id: uuid.UUID, actor: UserAccount) -> None:
-        """Supprime une invitation specifique (owner requis)."""
+        """Supprime une invitation spécifique (owner requis)."""
         membership = await self._get_membership(conversation_id, actor.id)
         self._require_owner(membership)
         stmt = (
@@ -359,7 +358,7 @@ class ConversationService:
         )
 
     async def accept_invite(self, *, token: str, user: UserAccount) -> Conversation:
-        """Accepte une invitation via jeton et active/cree le membre avec le role attendu."""
+        """Accepte une invitation via jeton et active/crée le membre avec le rôle attendu."""
         stmt = (
             select(ConversationInvite)
             .options(selectinload(ConversationInvite.conversation))
@@ -418,7 +417,7 @@ class ConversationService:
         conversation_id: uuid.UUID,
         message_ids: list[uuid.UUID] | None = None,
     ) -> int:
-        """Marque des messages comme lus pour l'utilisateur (tous ou liste ciblee) et retourne le nombre mis a jour."""
+        """Marque des messages comme lus pour l'utilisateur (tous ou liste ciblée) et retourne le nombre mis à jour."""
         membership = await self._get_membership(conversation_id, user.id)
         stmt = select(MessageDelivery).where(MessageDelivery.member_id == membership.id)
         if message_ids:
@@ -439,7 +438,7 @@ class ConversationService:
         return updated
 
     async def _mark_delivered(self, member: ConversationMember, messages: list[Message]) -> None:
-        """Passe les livraisons d'un membre a DELIVERED lorsque les messages sont deja disponibles."""
+        """Passe les livraisons d'un membre à DELIVERED lorsque les messages sont déjà disponibles."""
         if not messages:
             return
         now = datetime.now(timezone.utc)
@@ -454,7 +453,7 @@ class ConversationService:
             await self.session.flush()
 
     def _summarize_reactions(self, message: Message, viewer: ConversationMember | None) -> list[dict]:
-        """Agrege les reactions par emoji et signale si le viewer a deja reactionne."""
+        """Agrège les réactions par emoji et signale si le viewer a déjà réagi."""
         reactions = getattr(message, "reactions", []) or []
         summary: dict[str, dict] = {}
         viewer_member_id = viewer.id if viewer else None
@@ -628,7 +627,7 @@ class ConversationService:
         reply_to_id: uuid.UUID | None = None,
         forward_message_id: uuid.UUID | None = None,
     ) -> tuple[Message, dict]:
-        """Cree un message, attache les PJ decodees, verifie les blocages et diffuse notifications."""
+        """Crée un message, attache les PJ décodées, vérifie les blocages et diffuse notifications."""
         membership = await self._get_membership(conversation_id, author.id)
         conversation = await self.session.get(Conversation, conversation_id)
         if conversation is None:
@@ -770,7 +769,7 @@ class ConversationService:
         user: UserAccount,
         content: str,
     ) -> Message:
-        """Edite le contenu d'un message (owner ou auteur), puis diffuse la mise a jour."""
+        """Édite le contenu d'un message (owner ou auteur), puis diffuse la mise à jour."""
         message = await self._load_message(message_id)
         self._ensure_message_in_conversation(message, conversation_id)
         if message.deleted_at:
@@ -799,7 +798,7 @@ class ConversationService:
         user: UserAccount,
         reason: str | None = None,
     ) -> Message:
-        """Supprime logiquement un message (owner ou auteur) et notifie les abonnes."""
+        """Supprime logiquement un message (owner ou auteur) et notifie les abonnés."""
         message = await self._load_message(message_id)
         self._ensure_message_in_conversation(message, conversation_id)
         if message.deleted_at:
@@ -820,7 +819,7 @@ class ConversationService:
         return refreshed
 
     async def _persist_attachments(self, message: Message, descriptors: list[AttachmentDescriptor]) -> None:
-        """Enregistre les metadonnees des pieces jointes associees a un message."""
+        """Enregistre les métadonnées des pièces jointes associées à un message."""
         if not descriptors:
             return
         entities: list[MessageAttachment] = []
@@ -840,7 +839,7 @@ class ConversationService:
         await self.session.flush()
 
     async def serialize_message(self, message: Message, *, viewer_membership: ConversationMember | None = None) -> dict:
-        """Prepare le payload API d'un message, incluant reactions, pins et etat de livraison."""
+        """Prépare le payload API d'un message, incluant réactions, pins et état de livraison."""
         author = message.author
         if author is None and message.author_id:
             author = await self.session.get(UserAccount, message.author_id)
@@ -938,7 +937,7 @@ class ConversationService:
         user: UserAccount,
         membership: ConversationMember | None = None,
     ) -> Message:
-        """Epingle un message (owner requis) et diffuse la mise a jour si changement."""
+        """Épingle un message (owner requis) et diffuse la mise à jour si changement."""
         membership = membership or await self._get_membership(conversation_id, user.id)
         self._require_owner(membership)
         message = await self._load_message(message_id)
@@ -969,7 +968,7 @@ class ConversationService:
         user: UserAccount,
         membership: ConversationMember | None = None,
     ) -> Message:
-        """Retire l'epingle d'un message (owner requis) et notifie si besoin."""
+        """Retire l'épingle d'un message (owner requis) et notifie si besoin."""
         membership = membership or await self._get_membership(conversation_id, user.id)
         self._require_owner(membership)
         message = await self._load_message(message_id)
@@ -1001,7 +1000,7 @@ class ConversationService:
         user: UserAccount,
         membership: ConversationMember,
     ) -> Message:
-        """Ajoute/supprime/bascule une reaction emoji pour le membre, puis diffuse l'etat."""
+        """Ajoute/supprime/bascule une réaction emoji pour le membre, puis diffuse l'état."""
         message = await self._load_message(message_id)
         self._ensure_message_in_conversation(message, conversation_id)
         stmt = select(MessageReaction).where(
@@ -1048,7 +1047,7 @@ class ConversationService:
         *,
         active_only: bool = True,
     ) -> ConversationMember:
-        """Charge l'appartenance d'un utilisateur a une conversation (optionnellement active)."""
+        """Charge l'appartenance d'un utilisateur à une conversation (optionnellement active)."""
         stmt = (
             select(ConversationMember)
             .where(
@@ -1068,7 +1067,7 @@ class ConversationService:
         return membership
 
     async def _load_message(self, message_id: uuid.UUID) -> Message:
-        """Charge un message avec toutes ses relations necessaires aux reponses API."""
+        """Charge un message avec toutes ses relations nécessaires aux réponses API."""
         stmt = (
             select(Message)
             .where(Message.id == message_id)

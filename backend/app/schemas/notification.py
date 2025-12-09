@@ -5,7 +5,7 @@
 # Date   : 2025-05-04
 #
 # Description:
-# - Preferences utilisateur (quiet hours) et notifications en file d'attente.
+# - Préférences utilisateur (quiet hours) et notifications en file d'attente.
 # - from_attributes pour hydrater depuis SQLAlchemy.
 ############################################################
 """
@@ -21,7 +21,7 @@ from app.models import NotificationChannel
 
 
 class NotificationPreferenceOut(BaseModel):
-    """Preference utilisateur pour un canal de notification."""
+    """Préférence utilisateur pour un canal de notification."""
     channel: NotificationChannel
     is_enabled: bool
     quiet_hours: dict | None = None
@@ -31,13 +31,13 @@ class NotificationPreferenceOut(BaseModel):
 
 
 class NotificationPreferenceUpdate(BaseModel):
-    """Payload de mise a jour des preferences (activation + plages de silence)."""
+    """Payload de mise à jour des préférences (activation + plages de silence)."""
     is_enabled: bool
     quiet_hours: dict | None = None
 
 
 class OutboundNotificationOut(BaseModel):
-    """Notification en file d'attente ou envoyee, exposee par l'API."""
+    """Notification en file d'attente ou envoyée, exposée par l'API."""
     id: UUID
     channel: NotificationChannel
     payload: dict

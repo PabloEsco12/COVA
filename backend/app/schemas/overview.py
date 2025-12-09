@@ -6,7 +6,7 @@
 #
 # Description:
 # - Profil, stats, securite et conversations recentes pour le dashboard.
-# - Champs prepares pour affichage direct dans l'UI.
+# - Champs préparés pour affichage direct dans l'UI.
 ############################################################
 """
 
@@ -23,7 +23,7 @@ from .organization import OrganizationSummary
 
 
 class OverviewProfile(BaseModel):
-    """Infos de profil affichees dans l'overview."""
+    """Infos de profil affichées dans l'overview."""
     email: str
     display_name: str | None = None
     avatar_url: str | None = None
@@ -33,7 +33,7 @@ class OverviewProfile(BaseModel):
 
 
 class OverviewStats(BaseModel):
-    """Statistiques generales du compte."""
+    """Statistiques générales du compte."""
     unread_messages: int = 0
     conversations: int = 0
     contacts_total: int = 0
@@ -44,7 +44,7 @@ class OverviewStats(BaseModel):
 
 
 class OverviewSecurity(BaseModel):
-    """Etat synthétique des protections de compte."""
+    """État synthétique des protections de compte."""
     totp_enabled: bool = False
     notification_login: bool = False
     has_recovery_codes: bool = False
@@ -53,7 +53,7 @@ class OverviewSecurity(BaseModel):
 
 
 class ConversationSummary(BaseModel):
-    """Resume d'une conversation pour l'aperçu rapide."""
+    """Résumé d'une conversation pour l'aperçu rapide."""
     id: uuid.UUID
     title: str | None = None
     type: ConversationType

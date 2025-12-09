@@ -48,7 +48,7 @@ class SecurityService:
         self.audit = audit_service
 
     async def get_security_snapshot(self, user: UserAccount) -> dict:
-        """Retourne l'etat courant des protections (TOTP, alertes login, verrous)."""
+        """Retourne l'état courant des protections (TOTP, alertes login, verrous)."""
         state = await self._ensure_security_state(user)
         profile = await self._ensure_profile(user)
         profile_data = dict(profile.profile_data or {})
@@ -62,7 +62,7 @@ class SecurityService:
         }
 
     async def update_security_preferences(self, user: UserAccount, *, notification_login: bool | None = None) -> dict:
-        """Met a jour les preferences de securite (ex: alerte de connexion) puis renvoie l'etat."""
+        """Met à jour les préférences de sécurité (ex: alerte de connexion) puis renvoie l'état."""
         state = await self._ensure_security_state(user)
         profile = await self._ensure_profile(user)
         profile_data = dict(profile.profile_data or {})
@@ -80,7 +80,7 @@ class SecurityService:
         return await self.get_security_snapshot(user)
 
     async def start_totp_enrollment(self, user: UserAccount) -> dict:
-        """Demarre un enrollement TOTP en generant secret, URI et QR code base64."""
+        """Démarre un enrollement TOTP en générant secret, URI et QR code base64."""
         state = await self._ensure_security_state(user)
         if state.totp_enabled and user.totp_secret and user.totp_secret.confirmed_at:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="TOTP already enabled – deactivate first.")
@@ -113,7 +113,7 @@ class SecurityService:
         }
 
     async def confirm_totp(self, user: UserAccount, code: str) -> list[str]:
-        """Verifie le code TOTP saisi, active la MFA et genere des codes de secours."""
+        """Vérifie le code TOTP saisi, active la MFA et génère des codes de secours."""
         state = await self._ensure_security_state(user)
         secret = user.totp_secret
         if secret is None:
@@ -138,7 +138,7 @@ class SecurityService:
         return recovery_codes
 
     async def deactivate_totp(self, user: UserAccount) -> None:
-        """Desactive le TOTP et nettoie les secrets/codes stockes."""
+        """Désactive le TOTP et nettoie les secrets/codes stockés."""
         state = await self._ensure_security_state(user)
         secret = user.totp_secret
         if secret is None or not secret.confirmed_at:
@@ -157,7 +157,7 @@ class SecurityService:
         await self.session.flush()
 
     async def consume_recovery_code(self, user: UserAccount, code: str) -> bool:
-        """Consomme un code de recuperation s'il est valide, retourne True si accepte."""
+        """Consomme un code de récupération s'il est valide, retourne True si accepté."""
         state = await self._ensure_security_state(user)
         codes = state.recovery_codes or []
         if code not in codes:
@@ -169,7 +169,7 @@ class SecurityService:
         return True
 
     async def _ensure_profile(self, user: UserAccount) -> UserProfile:
-        """Cree un profil utilisateur si absent pour stocker les preferences de securite."""
+        """Crée un profil utilisateur si absent pour stocker les préférences de sécurité."""
         if user.profile is None:
             user.profile = UserProfile(user_id=user.id)
             self.session.add(user.profile)
@@ -177,7 +177,7 @@ class SecurityService:
         return user.profile
 
     async def _ensure_security_state(self, user: UserAccount) -> UserSecurityState:
-        """S'assure que l'etat de securite existe pour l'utilisateur avant manipulation."""
+        """S'assure que l'état de sécurité existe pour l'utilisateur avant manipulation."""
         if user.security_state is None:
             user.security_state = UserSecurityState(user_id=user.id)
             self.session.add(user.security_state)
@@ -185,7 +185,7 @@ class SecurityService:
         return user.security_state
 
     async def _register_totp_failure(self, state: UserSecurityState) -> None:
-        """Enregistre un echec TOTP et applique un verrouillage apres plusieurs tentatives."""
+        """Enregistre un échec TOTP et applique un verrouillage après plusieurs tentatives."""
         state.failed_totp_attempts += 1
         state.last_totp_failure_at = _utcnow()
         if state.failed_totp_attempts >= 5:
@@ -193,7 +193,7 @@ class SecurityService:
             state.failed_totp_attempts = 0
 
     def _generate_qr_base64(self, provisioning_uri: str) -> str:
-        """Genere une image QR code encodee en base64 a partir de l'URI TOTP."""
+        """Génère une image QR code encodée en base64 à partir de l'URI TOTP."""
         qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_Q, border=2)
         qr.add_data(provisioning_uri)
         qr.make(fit=True)
@@ -203,7 +203,7 @@ class SecurityService:
         return base64.b64encode(buffer.getvalue()).decode("ascii")
 
     def _generate_recovery_codes(self, count: int = 8) -> list[str]:
-        """Cree une liste de codes de recuperation pseudo-aleatoires."""
+        """Crée une liste de codes de récupération pseudo-aléatoires."""
         alphabet = string.ascii_uppercase + string.digits
         codes: list[str] = []
         for _ in range(count):
@@ -212,7 +212,7 @@ class SecurityService:
         return codes
 
     async def _log(self, action: str, **metadata) -> None:
-        """Relais vers AuditService pour tracer les evenements de securite."""
+        """Relais vers AuditService pour tracer les événements de sécurité."""
         if not self.audit:
             return
         await self.audit.record(action, metadata=metadata)

@@ -5,7 +5,7 @@
 # Date   : 2025-05-04
 #
 # Description:
-# - Payload d'inscription (push_token base64) et representations d'appareil.
+# - Payload d'inscription (push_token base64) et représentations d'appareil.
 # - from_attributes pour hydrater depuis SQLAlchemy.
 ############################################################
 """

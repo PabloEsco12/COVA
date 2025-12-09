@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 
 class SecuritySettingsOut(BaseModel):
-    """Etat des reglages de securite exposes au frontend."""
+    """État des réglages de sécurité exposés au frontend."""
     totp_enabled: bool
     notification_login: bool
     last_totp_failure_at: datetime | None = None
@@ -27,7 +27,7 @@ class SecuritySettingsOut(BaseModel):
 
 
 class SecuritySettingsUpdate(BaseModel):
-    """Mise a jour partielle des preferences de securite."""
+    """Mise à jour partielle des préférences de sécurité."""
     notification_login: bool | None = Field(default=None)
 
 
@@ -50,6 +50,6 @@ class TotpConfirmResponse(BaseModel):
 
 
 class TotpDeactivateResponse(BaseModel):
-    """Message de confirmation de desactivation TOTP."""
+    """Message de confirmation de désactivation TOTP."""
     message: str
 
