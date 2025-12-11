@@ -45,7 +45,7 @@ from ...schemas.conversation import (
     MessageReactionRequest,
 )
 from ...services.attachment_service import AttachmentService
-from ...services.conversation_service import ConversationService
+from ...services.conversation import ConversationService
 from app.models import Conversation, ConversationMember, UserAccount
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])

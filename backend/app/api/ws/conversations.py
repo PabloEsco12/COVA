@@ -33,7 +33,7 @@ async def conversation_ws(
     broker: RealtimeBroker = Depends(get_realtime_broker),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Canal WS de conversation: verifie le token, presence et relaye Pub/Sub Redis."""
+    """Canal WS de conversation: vérifie le token, présence et relaye Pub/Sub Redis."""
     token = websocket.query_params.get("token")
     if not token:
         logger.warning("WS conversation rejected: missing token (conversation_id=%s)", conversation_id)
@@ -79,7 +79,7 @@ async def conversation_ws(
     presence_seen_key = f"conversation:{conversation_id}:presence:last_seen"
 
     async def build_presence_payload() -> dict | None:
-        """Construit un snapshot de presence (online/offline) pour diffusion."""
+        """Construit un snapshot de présence (online/offline) pour diffusion."""
         if redis is None:
             return None
         snapshot = await redis.hgetall(presence_seen_key)
@@ -105,7 +105,7 @@ async def conversation_ws(
         }
 
     async def broadcast_presence(include_direct: bool = False) -> None:
-        """Diffuse la presence sur le canal conversation et eventuellement au client courant."""
+        """Diffuse la présence sur le canal conversation et éventuellement au client courant."""
         if broker is None or redis is None:
             return
         payload = await build_presence_payload()
@@ -136,7 +136,7 @@ async def conversation_ws(
         await broadcast_presence()
 
     async def refresh_presence_loop() -> None:
-        """Rafraichit periodiquement le last_seen tant que la connexion reste ouverte."""
+        """Rafraîchit périodiquement le last_seen tant que la connexion reste ouverte."""
         if redis is None:
             return
         try:
@@ -147,7 +147,7 @@ async def conversation_ws(
             pass
 
     async def sender() -> None:
-        """Ecoute le pubsub Redis et pousse vers le WebSocket."""
+        """Écoute le pubsub Redis et pousse vers le WebSocket."""
         if pubsub is None:
             return
         try:

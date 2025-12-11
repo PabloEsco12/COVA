@@ -58,7 +58,7 @@ from ...schemas.user import (
     PasswordUpdateRequest,
 )
 from ...services.audit_service import AuditService
-from ...services.conversation_service import ConversationService
+from ...services.conversation import ConversationService
 from ...services.device_service import DeviceService
 from ...services.organization_service import OrganizationService
 from ...services.security_service import SecurityService

@@ -78,7 +78,7 @@ class ObjectStorage:
         content_type: str | None,
         metadata: dict[str, str] | None = None,
     ) -> None:
-        """Charge un flux binaire dans le bucket cible avec metadonnees optionnelles."""
+        """Charge un flux binaire dans le bucket cible avec métadonnées optionnelles."""
         extra_args: dict[str, str] = {}
         if content_type:
             extra_args["ContentType"] = content_type
@@ -90,7 +90,7 @@ class ObjectStorage:
             raise RuntimeError("Unable to upload attachment") from exc
 
     def generate_presigned_url(self, key: str, *, expires_in: int) -> str:
-        """Genere une URL presignee pour telecharger un objet pendant une duree limitee."""
+        """énère une URL présignée pour télécharger un objet pendant une durée limitée."""
         try:
             return self.signing_client.generate_presigned_url(
                 "get_object",
@@ -98,21 +98,21 @@ class ObjectStorage:
                 ExpiresIn=expires_in,
             )
         except (BotoCoreError, ClientError) as exc:
-            raise RuntimeError("Unable to generate download URL") from exc
+            raise RuntimeError("Unable to générer l'URL de téléchargement") from exc
 
     def object_url(self, key: str) -> str:
         """Retourne une URL interne de type s3://bucket/key."""
         return f"s3://{self.bucket}/{key}"
 
     def key_from_url(self, storage_url: str) -> str:
-        """Extrait la cle d'objet a partir d'une URL s3://bucket/key."""
+        """Extrait la clé d'objet à partir d'une URL s3://bucket/key."""
         prefix = f"s3://{self.bucket}/"
         if storage_url.startswith(prefix):
             return storage_url[len(prefix) :]
         return storage_url
 
     def generate_key(self, conversation_id: str, *, filename: str | None = None) -> str:
-        """Cree une cle unique pour une conversation, en conservant l'extension du fichier."""
+        """Crée une clé unique pour une conversation, en conservant l'extension du fichier."""
         safe_name = Path(filename or "attachment").name.replace(" ", "_")
         suffix = Path(safe_name).suffix.lower()
         return f"conversations/{conversation_id}/{uuid.uuid4()}{suffix}"

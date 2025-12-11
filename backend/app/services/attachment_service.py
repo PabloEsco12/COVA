@@ -64,6 +64,11 @@ class AttachmentService:
         encryption_metadata: dict | None = None,
     ) -> dict:
         """Stream le fichier vers le stockage, applique limites/scan, et renvoie le jeton d'upload."""
+        if not self.scanner or not self.scanner.enabled:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Antivirus indisponible, upload bloqué.",
+            )
         if not file.filename:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nom de fichier manquant.")
 
@@ -89,8 +94,7 @@ class AttachmentService:
                 os.unlink(tmp.name)
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Type de fichier non autorisé.")
 
-        if self.scanner:
-            self.scanner.scan_path(tmp.name)
+        self.scanner.scan_path(tmp.name)
 
         key = self.storage.generate_key(str(conversation_id), filename=file.filename)
         with open(tmp.name, "rb") as payload:
@@ -176,7 +180,7 @@ class AttachmentService:
         sha256_hex: str,
         encryption_metadata: dict | None,
     ) -> str:
-        """Cree un JWT court terme encapsulant les metadonnees de l'upload."""
+        """Crée un JWT court terme encapsulant les métadonnées de l'upload."""
         expires = datetime.now(timezone.utc) + timedelta(minutes=settings.ATTACHMENT_UPLOAD_TOKEN_TTL_MINUTES)
         payload = {
             "kind": "attachment_upload",

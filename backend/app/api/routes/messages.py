@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends
 
 from ...dependencies import get_conversation_service, get_current_user
 from ...schemas.message import UnreadSummaryResponse
-from ...services.conversation_service import ConversationService
+from ...services.conversation import ConversationService
 from app.models import UserAccount
 
 router = APIRouter(prefix="/messages", tags=["messages"])

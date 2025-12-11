@@ -1,4 +1,4 @@
-"""Provision an organisation and administrator account from the CLI."""
+"""Fournir un compte d'organisation et d'administrateur à partir de l'interface CLI."""
 
 from __future__ import annotations
 

@@ -1,9 +1,4 @@
-"""
-Facade vers les implémentations d'authentification placées dans app.services.auth.
-Conserve les imports historiques (AuthService, quiet_hours_active, etc.).
-"""
-
-from .auth.auth_service import (
+from .auth_service import (
     AuthResult,
     AuthService,
     DEFAULT_TIMEZONE,

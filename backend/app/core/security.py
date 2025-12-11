@@ -46,13 +46,19 @@ def create_access_token(subject: str | Dict[str, Any], expires_minutes: int | No
         to_encode["sub"] = str(subject)
     expire = datetime.now(timezone.utc) + expires_delta
     to_encode["exp"] = expire
-    return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    signing_key = settings.JWT_SECRET_KEY
+    if settings.JWT_ALGORITHM.upper().startswith("RS") and settings.JWT_PRIVATE_KEY:
+        signing_key = settings.JWT_PRIVATE_KEY
+    return jwt.encode(to_encode, signing_key, algorithm=settings.JWT_ALGORITHM)
 
 
 def decode_token(token: str) -> dict[str, Any]:
     """Décode et valide un JWT, lève ValueError si invalide."""
+    verify_key = settings.JWT_SECRET_KEY
+    if settings.JWT_ALGORITHM.upper().startswith("RS") and settings.JWT_PUBLIC_KEY:
+        verify_key = settings.JWT_PUBLIC_KEY
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        payload = jwt.decode(token, verify_key, algorithms=[settings.JWT_ALGORITHM])
         return payload
     except JWTError as exc:
         raise ValueError("Invalid token") from exc

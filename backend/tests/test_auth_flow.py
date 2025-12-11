@@ -1,6 +1,5 @@
-"""Example integration test for FastAPI v2 auth.
-
-The test is skipped by default; configure DATABASE_URL before enabling.
+"""Exemple de test d'intégration pour l'authentification FastAPI v2.
+Le test est ignoré par défaut ; configurez DATABASE_URL avant de l'activer..
 """
 
 import os

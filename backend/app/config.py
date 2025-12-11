@@ -29,7 +29,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    PROJECT_NAME: str = "Secure Messaging API v2"
+    PROJECT_NAME: str = "Cova Messaging API v2"
     API_V1_PREFIX: str = "/api"
 
     # Database
@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     # JWT / Security
     JWT_SECRET_KEY: str = Field(..., min_length=32)
     JWT_ALGORITHM: str = Field(default="HS256")
+    JWT_PRIVATE_KEY: str | None = None  # Utilisé si algorithme asymétrique (ex: RS256)
+    JWT_PUBLIC_KEY: str | None = None   # Utilisé si algorithme asymétrique (ex: RS256)
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60)
     REFRESH_TOKEN_EXPIRE_MINUTES: int = Field(default=60 * 24 * 30)
     MESSAGE_ENCRYPTION_ENABLED: bool = False

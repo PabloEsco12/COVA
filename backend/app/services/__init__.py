@@ -8,7 +8,7 @@ Infos utiles:
 
 from .auth_service import AuthService
 from .contact_service import ContactService
-from .conversation_service import ConversationService
+from .conversation import ConversationService
 from .audit_service import AuditService
 from .notification_service import NotificationService
 from .device_service import DeviceService

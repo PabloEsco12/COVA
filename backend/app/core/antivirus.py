@@ -30,7 +30,7 @@ except ImportError:  # pragma: no cover - optional dependency
 
 
 class AntivirusScanner:
-    """Wrapper autour de ClamAV. Desactive si la configuration est absente."""
+    """Wrapper autour de ClamAV. Désactive si la configuration est absente."""
 
     def __init__(self, host: str | None, port: int) -> None:
         self.host = host
@@ -42,7 +42,10 @@ class AntivirusScanner:
     # --- Section: Connexion et client ---
     def _ensure_client(self):
         if not self.enabled:
-            return None
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Antivirus non configuré ou module clamd absent.",
+            )
         if self._client is None:
             self._client = clamd.ClamdNetworkSocket(host=self.host, port=self.port)  # type: ignore[attr-defined]
         return self._client
@@ -50,15 +53,15 @@ class AntivirusScanner:
     # --- Section: Scan des fichiers ---
     def scan_path(self, path: str) -> None:
         client = self._ensure_client()
-        if not client:
-            return
         try:
             result = client.scan(path)
-        except Exception as exc:  # pragma: no cover - network errors
-            # Si le scanner est indisponible, on journalise et on degrade gracieusement
-            self.logger.warning("Antivirus indisponible, scan ignore pour %s : %s", path, exc)
-            self.enabled = False
-            return
+        except Exception as exc:  
+            # Si le scanner est indisponible, on bloque l'upload
+            self.logger.warning("Antivirus indisponible pour %s : %s", path, exc)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Antivirus indisponible, upload bloqué.",
+            ) from exc
         if not result:
             return
         _, (status_label, signature) = next(iter(result.items()))

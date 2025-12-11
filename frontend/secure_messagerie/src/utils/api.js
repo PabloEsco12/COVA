@@ -1,5 +1,5 @@
 // ===== API Utility =====
-// Point central pour preparer les appels HTTP (URLs normalisees, token, redirections) afin d'offrir un comportement coherent partout.
+// Point central pour préparer les appels HTTP (URLs normalisees, token, redirections) afin d'offrir un comportement coherent partout.
 import axios from 'axios'
 import router from '@/router'
 import { clearSession, hasStoredSession } from '@/services/auth'
@@ -22,7 +22,7 @@ const AUTH_EXEMPT_ENDPOINTS = [
 ]
 
 // ---- Normalisation des chemins ----
-// Convertit une URL relative/absolue en chemin canonique (sans query/hash) pour comparer avec les endpoints proteges.
+// Convertit une URL relative/absolue en chemin canonique (sans query/hash) pour comparer avec les endpoints protégés.
 function normalizeRequestedPath(config) {
   const target = config?.url || ''
   if (!target) return ''

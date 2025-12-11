@@ -31,7 +31,7 @@ from .services.audit_service import AuditService
 from .services.notification_service import NotificationService
 from .services.auth_service import AuthService
 from .services.contact_service import ContactService
-from .services.conversation_service import ConversationService
+from .services.conversation import ConversationService
 from .services.security_service import SecurityService
 from .services.device_service import DeviceService
 from .services.attachment_service import AttachmentService
